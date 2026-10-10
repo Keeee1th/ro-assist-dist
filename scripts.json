@@ -12,14 +12,14 @@
       "id": "assist",
       "name": "RO 助手",
       "channel": "stable",
-      "version": "2.38.62",
+      "version": "2.38.63",
       "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js"
     },
     {
       "id": "assist-exp",
       "name": "RO 助手（实验版）",
       "channel": "exp",
-      "version": "2.38.62",
+      "version": "2.38.63",
       "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js"
     },
     {

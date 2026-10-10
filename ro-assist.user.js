@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         仙境传说 · 原站插件模式（游戏助手）
 // @namespace    dsh.ro-plugin
-// @version      2.38.62
+// @version      2.38.63
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js
 // @description  在 post.lastro.cn / game.lastro.cn 原站以插件模式启动《仙境的传说》ROBrowser 客户端并连接原服务器；数据自动走本地镜像（127.0.0.1:8973）避免加载卡死，支持自动登录。PC 版直接打开 https://post.lastro.cn/ro/api.html 或备用线路 https://game.lastro.cn/ro/api.html?69.8；手机版打开 https://post.lastro.cn/?r=mn/index（登录页可选择平台与线路）。 新增私有本机客户端入口匹配（环回主机 127.0.0.1 / localhost，端口以页面自身 origin 为准、不写死）。
@@ -705,7 +705,7 @@
   }
   var LS_KEY = "dsh_ro_plugin_v1";
   var VERSION_RE = /\?([0-9.]+)/;
-  var VER = "2.38.62"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
+  var VER = "2.38.63"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
   try { window.__dshCombinedActive = true; } catch (e) {} // V2.30.0 防双浮层让位旗标：独立版词条色脚本见旗标即让位
   // ==================== 统一采集器注册表（dsh-collect v1 · 内部命名空间，不新增 window 全局）====================
   // 五方法：register 注册 / sample 采集 / query 查询 / refresh 刷新 / release 释放
@@ -1383,6 +1383,91 @@
   }
 
   var version = (location.href.match(VERSION_RE) || [null, "69.32"])[1];
+
+  // 固定清单只提供寻址/版本提示：失败静默，不跳转、不下载其它脚本、不进入周期巡检。
+  var LASTRO_MANIFEST_URL = "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/scripts.json";
+  var manifestBusy = false, manifestStarted = false, manifestStartAt = Date.now() + 10000;
+  var manifestNoticeMemory = {};
+  function manifestSelf() {
+    var info = null, meta = "";
+    try { if (typeof GM_info !== "undefined") { info = GM_info.script || null; meta = GM_info.scriptMetaStr || ""; } } catch (e) {}
+    var hit = String(meta).match(/^\/\/\s*@updateURL\s+(\S+)/m) || String(meta).match(/^\/\/\s*@downloadURL\s+(\S+)/m);
+    var nameHit = String(meta).match(/^\/\/\s*@name\s+(.+)$/m);
+    var url = (info && (info.updateURL || info.downloadURL)) || (hit && hit[1]) || "";
+    var name = (info && info.name) || (nameHit && nameHit[1]) || "";
+    var exp = /实验版/.test(name) || /-exp\.user\.js(?:[?#]|$)/.test(url);
+    var known = exp || /仙境传说.*游戏助手/.test(name) || /\/ro-assist\.user\.js(?:[?#]|$)/.test(url);
+    return { id: known ? (exp ? "assist-exp" : "assist") : null, channel: known ? (exp ? "exp" : "stable") : null, url: url, version: (info && info.version) || VER };
+  }
+  function manifestVersionCmp(a, b) {
+    if (!/^\d{1,6}(?:\.\d{1,6}){1,3}$/.test(String(a)) || !/^\d{1,6}(?:\.\d{1,6}){1,3}$/.test(String(b))) return null;
+    var x = String(a).split("."), y = String(b).split(".");
+    for (var i = 0; i < 4; i++) { var d = Number(x[i] || 0) - Number(y[i] || 0); if (d) return d > 0 ? 1 : -1; }
+    return 0;
+  }
+  function manifestDecision(m, mine) {
+    if (!mine || (mine.id !== "assist" && mine.id !== "assist-exp")) return null;
+    if (!m || m.schema !== 1 || m.kind !== "lastro-script-manifest" || !m.feed || !Array.isArray(m.scripts)) return null;
+    var rows = m.scripts.filter(function (s) { return s && s.id === mine.id; });
+    if (rows.length !== 1) return null;
+    var entry = rows[0], want = mine.id === "assist-exp" ? m.feed.assistExp : m.feed.assist;
+    if (entry.channel !== mine.channel || (entry.status && entry.status !== "published") || entry.url !== want) return null;
+    var cmp = manifestVersionCmp(entry.version, mine.version);
+    if (cmp == null || typeof want !== "string" || want.length > 2048 || want !== want.trim() || /[?#]/.test(want) || /^https:\/\/[^/]*:/i.test(want)) return null;
+    try {
+      var u = new URL(want), filename = mine.id === "assist-exp" ? "ro-assist-exp.user.js" : "ro-assist.user.js";
+      // 清单不是任意下载入口：只接受现有分发服务上 Keeee1th 名下的脚本；新主机须显式加入。
+      var host = u.hostname.toLowerCase(), path = u.pathname.toLowerCase();
+      var ownerOk = ((host === "cdn.jsdelivr.net" || host === "fastly.jsdelivr.net") && path.indexOf("/gh/keeee1th/") === 0) ||
+        ((host === "raw.githubusercontent.com" || host === "gist.githubusercontent.com") && path.indexOf("/keeee1th/") === 0);
+      if (!ownerOk || u.protocol !== "https:" || u.port || u.username || u.password || u.hash || u.search || u.pathname.split("/").pop() !== filename) return null;
+    } catch (e) { return null; }
+    if (mine.url && mine.url !== want) return { kind: "address", id: mine.id, version: entry.version, url: want, text: "助手更新地址已变更，点此重新安装 " + entry.version };
+    return cmp > 0 ? { kind: "version", id: mine.id, version: entry.version, url: want, text: "助手有新版本 " + entry.version + "，点此更新" } : null;
+  }
+  function manifestNotify(n) {
+    try {
+      var key = "lastro_manifest_notice:" + n.id + ":" + n.kind + ":" + n.version + ":" + n.url;
+      var now = Date.now(), last = manifestNoticeMemory[key] || 0;
+      try { last = Math.max(last, Number(localStorage.getItem(key)) || 0); } catch (e0) {}
+      if (last && now - last < 86400000) return;
+      var old = document.getElementById("dsh-manifest-notice"); if (old) old.remove();
+      var box = document.createElement("div"), link = document.createElement("a"), close = document.createElement("button");
+      box.id = "dsh-manifest-notice";
+      box.style.cssText = "position:fixed;top:48px;left:50%;transform:translateX(-50%);max-width:90vw;z-index:2147483647;background:#fff;color:#123a63;border:1px solid #7897b9;border-radius:3px;padding:10px;font:13px/1.5 sans-serif;";
+      link.textContent = n.text; link.href = n.url; link.target = "_blank"; link.rel = "noopener noreferrer";
+      close.textContent = "关闭"; close.style.marginLeft = "10px"; close.addEventListener("click", function () { box.remove(); });
+      box.appendChild(link); box.appendChild(close); document.documentElement.appendChild(box);
+      try { isolateEl(box); } catch (e1) {}
+      manifestNoticeMemory[key] = now;
+      try { localStorage.setItem(key, String(now)); } catch (e2) {}
+    } catch (e) {}
+  }
+  function lastroManifestCheck() {
+    if (manifestBusy || typeof fetch !== "function" || typeof AbortController !== "function") return Promise.resolve(false);
+    manifestBusy = true;
+    var ac = new AbortController(), timer = null;
+    return new Promise(function (resolve) {
+      var done = false;
+      function finish(ok) { if (done) return; done = true; if (timer != null) clearTimeout(timer); manifestBusy = false; resolve(ok); }
+      timer = setTimeout(function () { ac.abort(); finish(false); }, 2500);
+      try {
+        fetch(LASTRO_MANIFEST_URL, { cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer", signal: ac.signal })
+          .then(function (r) { return r && r.ok ? r.text() : null; })
+          .then(function (text) {
+            if (done || !text || text.length > 65536) return finish(false);
+            var n = manifestDecision(JSON.parse(text), manifestSelf());
+            if (n) manifestNotify(n);
+            finish(true);
+          }).catch(function () { finish(false); });
+      } catch (e) { finish(false); }
+    });
+  }
+  function manifestStartupTick() {
+    if (manifestStarted || Date.now() < manifestStartAt) return;
+    manifestStarted = true;
+    try { lastroManifestCheck(); } catch (e) {}
+  }
 
   // ---------------- 状态 ----------------
   var state = {
@@ -4792,6 +4877,9 @@
     vline.style.cssText = "color:#9a9a9a;margin-top:1px;";
     vline.textContent = "仙境传说助手 v" + VER;
     body.appendChild(vline);
+    var updateBtn = document.createElement("button"); updateBtn.type = "button"; updateBtn.id = "dsh-manifest-check"; updateBtn.textContent = "检查更新";
+    updateBtn.addEventListener("click", function () { lastroManifestCheck(); });
+    roMenuRow(body, "助手更新（只检查，不自动安装）", updateBtn);
   }
 
   // 鼠标→触摸模拟层 + 视角控制（手机页 r=mn，V2.38.9）
@@ -8355,6 +8443,7 @@
   var masterTicks = [];
   var lastCaptureAt = 0;
   function masterTickReg(fn) { masterTicks.push(fn); }
+  masterTickReg(manifestStartupTick); // 启动后只运行一次，不重复拉取清单
   setInterval(function () { for (var i = 0; i < masterTicks.length; i++) { try { masterTicks[i](); } catch (e) {} } }, 1000);
   masterTickReg(function () { try { identityTick(); } catch (e) {} }); // V2.38.6：身份拍（复用 1s masterTick，不新增定时器）
   masterTickReg(function () { try { tickFollow(); } catch (e) {} });
