@@ -1,2 +1,8 @@
 ro-assist.user.js -text
 ro-assist-exp.user.js -text
+ro-infinite-dojo.user.js -text
+ro-itemhl.user.js -text
+ro-detect.user.js -text
+ro-dialog-dump.user.js -text
+tools/item-capture-core.js -text
+tools/ro-item-capture-receiver.cjs -text

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "kind": "lastro-script-manifest",
-  "updatedAt": "2026-10-10T10:03:43.580Z",
+  "updatedAt": "2026-10-10T14:04:44.260Z",
   "note": "固定寻址清单。feed 和 scripts 声明当前版本及地址；迁移地址须满足客户端与助手消费者的主机、路径白名单，新主机或文件名须先更新消费者。未发布条目不得作为下载源。",
   "feed": {
     "assist": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js",
@@ -12,14 +12,14 @@
       "id": "assist",
       "name": "RO 助手",
       "channel": "stable",
-      "version": "2.38.63",
+      "version": "2.38.64",
       "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js"
     },
     {
       "id": "assist-exp",
       "name": "RO 助手（实验版）",
       "channel": "exp",
-      "version": "2.38.63",
+      "version": "2.38.64",
       "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js"
     },
     {
@@ -27,37 +27,40 @@
       "name": "无限道场",
       "channel": "stable",
       "version": "1.0.8",
-      "url": "https://gist.githubusercontent.com/Keeee1th/7184276b1026d298e962eb3d49a1375f/raw/ro-infinite-dojo.user.js",
+      "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-infinite-dojo.user.js",
       "status": "published",
-      "sha256": "4c1b30bb90d391596ab60c349ee0dd808f4b6848b1878f3456a84df48898bfc6",
-      "note": "沿用原 secret gist 分发点；头部 updateURL/downloadURL 与此地址一致，源码仓库保持私有。"
+      "sha256": "38e10a2f974c220e1035a0c456efe3ec6724e7be17736f69287d44f600bc307a",
+      "note": "已公开发布；需玩家主动安装，不由助手自动下载。"
     },
     {
       "id": "itemhl",
       "name": "物品高亮",
       "channel": "stable",
       "version": "1.1",
-      "url": null,
-      "status": "not-published",
-      "note": "本清单尚未发布该脚本的最新版地址。"
+      "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-itemhl.user.js",
+      "status": "published",
+      "note": "已公开发布；需玩家主动安装，不由助手自动下载。",
+      "sha256": "b77e40fb8d0b84f0805b6182dcb571b1da8ff4edd55350f4b8fd2816d1e0bf41"
     },
     {
       "id": "detect",
       "name": "环境探测",
       "channel": "stable",
       "version": "1.0.9",
-      "url": null,
-      "status": "not-published",
-      "note": "本清单尚未发布该脚本的最新版地址。"
+      "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-detect.user.js",
+      "status": "published",
+      "note": "可选诊断插件：自动发送角色与诊断信息至用户本机，非远端；不要随意分享采集日志。",
+      "sha256": "f5174fd11919f7d5c1743d28bb674299762476aec14754eb9d5a5f8c1577d9a1"
     },
     {
       "id": "dialog-dump",
       "name": "对话转储",
       "channel": "stable",
       "version": "0.4.1",
-      "url": null,
-      "status": "not-published",
-      "note": "本清单尚未发布该脚本的最新版地址。"
+      "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-dialog-dump.user.js",
+      "status": "published",
+      "note": "可选对话诊断插件：可能记录运行时隐私，分享前自行检查。",
+      "sha256": "d44d6aad64977e85f06be23e4b2b33cd0b06684c2649a4dbbb88ea31c3c7ddc8"
     }
   ]
 }
