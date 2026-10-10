@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "kind": "lastro-script-manifest",
+  "updatedAt": "2026-10-10T08:58:01+08:00",
+  "note": "固定寻址清单（临时放在公开分发仓库）：以后换仓库、换 CDN、换文件名只改这里；旧安装可据此跟上。feed 是「当前该用哪个地址」，scripts 是逐脚本版本与地址。",
+  "feed": {
+    "assist": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js",
+    "assistExp": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js"
+  },
+  "scripts": [
+    {
+      "id": "assist",
+      "name": "RO 助手",
+      "channel": "stable",
+      "version": "2.38.62",
+      "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js"
+    },
+    {
+      "id": "assist-exp",
+      "name": "RO 助手（实验版）",
+      "channel": "exp",
+      "version": "2.38.62",
+      "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js"
+    },
+    {
+      "id": "dojo",
+      "name": "无限道场",
+      "channel": "stable",
+      "version": "1.0.7",
+      "url": null,
+      "status": "not-published",
+      "note": "源码在私有仓库 Lro-user-scripts，匿名不可取；发布到公开分发仓库后填入 url"
+    },
+    {
+      "id": "itemhl",
+      "name": "物品高亮",
+      "channel": "stable",
+      "version": "1.1",
+      "url": null,
+      "status": "not-published",
+      "note": "同上"
+    },
+    {
+      "id": "detect",
+      "name": "环境探测",
+      "channel": "stable",
+      "version": "1.0.9",
+      "url": null,
+      "status": "not-published",
+      "note": "同上"
+    },
+    {
+      "id": "dialog-dump",
+      "name": "对话转储",
+      "channel": "stable",
+      "version": "0.4.1",
+      "url": null,
+      "status": "not-published",
+      "note": "同上"
+    }
+  ]
+}
