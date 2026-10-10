@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "kind": "lastro-script-manifest",
-  "updatedAt": "2026-10-10T08:58:01+08:00",
-  "note": "固定寻址清单（临时放在公开分发仓库）：以后换仓库、换 CDN、换文件名只改这里；旧安装可据此跟上。feed 是「当前该用哪个地址」，scripts 是逐脚本版本与地址。",
+  "updatedAt": "2026-10-10T10:03:43.580Z",
+  "note": "固定寻址清单。feed 和 scripts 声明当前版本及地址；迁移地址须满足客户端与助手消费者的主机、路径白名单，新主机或文件名须先更新消费者。未发布条目不得作为下载源。",
   "feed": {
     "assist": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js",
     "assistExp": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js"
@@ -26,10 +26,11 @@
       "id": "dojo",
       "name": "无限道场",
       "channel": "stable",
-      "version": "1.0.7",
-      "url": null,
-      "status": "not-published",
-      "note": "源码在私有仓库 Lro-user-scripts，匿名不可取；发布到公开分发仓库后填入 url"
+      "version": "1.0.8",
+      "url": "https://gist.githubusercontent.com/Keeee1th/7184276b1026d298e962eb3d49a1375f/raw/ro-infinite-dojo.user.js",
+      "status": "published",
+      "sha256": "4c1b30bb90d391596ab60c349ee0dd808f4b6848b1878f3456a84df48898bfc6",
+      "note": "沿用原 secret gist 分发点；头部 updateURL/downloadURL 与此地址一致，源码仓库保持私有。"
     },
     {
       "id": "itemhl",
@@ -38,7 +39,7 @@
       "version": "1.1",
       "url": null,
       "status": "not-published",
-      "note": "同上"
+      "note": "本清单尚未发布该脚本的最新版地址。"
     },
     {
       "id": "detect",
@@ -47,7 +48,7 @@
       "version": "1.0.9",
       "url": null,
       "status": "not-published",
-      "note": "同上"
+      "note": "本清单尚未发布该脚本的最新版地址。"
     },
     {
       "id": "dialog-dump",
@@ -56,7 +57,7 @@
       "version": "0.4.1",
       "url": null,
       "status": "not-published",
-      "note": "同上"
+      "note": "本清单尚未发布该脚本的最新版地址。"
     }
   ]
 }
