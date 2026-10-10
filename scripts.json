@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "kind": "lastro-script-manifest",
-  "updatedAt": "2026-10-10T14:04:44.260Z",
+  "updatedAt": "2026-10-10T14:47:11.950Z",
   "note": "固定寻址清单。feed 和 scripts 声明当前版本及地址；迁移地址须满足客户端与助手消费者的主机、路径白名单，新主机或文件名须先更新消费者。未发布条目不得作为下载源。",
   "feed": {
     "assist": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js",
@@ -12,14 +12,14 @@
       "id": "assist",
       "name": "RO 助手",
       "channel": "stable",
-      "version": "2.38.64",
+      "version": "2.38.65",
       "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js"
     },
     {
       "id": "assist-exp",
       "name": "RO 助手（实验版）",
       "channel": "exp",
-      "version": "2.38.64",
+      "version": "2.38.65",
       "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js"
     },
     {

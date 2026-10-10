@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         仙境传说 · 原站插件模式（游戏助手）
 // @namespace    dsh.ro-plugin
-// @version      2.38.64
+// @version      2.38.65
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js
 // @description  在 post.lastro.cn / game.lastro.cn 原站以插件模式启动《仙境的传说》ROBrowser 客户端并连接原服务器；数据自动走本地镜像（127.0.0.1:8973）避免加载卡死，支持自动登录。PC 版直接打开 https://post.lastro.cn/ro/api.html 或备用线路 https://game.lastro.cn/ro/api.html?69.8；手机版打开 https://post.lastro.cn/?r=mn/index（登录页可选择平台与线路）。 新增私有本机客户端入口匹配（环回主机 127.0.0.1 / localhost，端口以页面自身 origin 为准、不写死）。
@@ -705,7 +705,7 @@
   }
   var LS_KEY = "dsh_ro_plugin_v1";
   var VERSION_RE = /\?([0-9.]+)/;
-  var VER = "2.38.64"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
+  var VER = "2.38.65"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
   try { window.__dshCombinedActive = true; } catch (e) {} // V2.30.0 防双浮层让位旗标：独立版词条色脚本见旗标即让位
   // ==================== 统一采集器注册表（dsh-collect v1 · 内部命名空间，不新增 window 全局）====================
   // 五方法：register 注册 / sample 采集 / query 查询 / refresh 刷新 / release 释放
@@ -2433,9 +2433,10 @@ function createRoItemCapture(env) {
     "#dsh-ro-panel .tppview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:6px;padding:2px 0;box-sizing:border-box;max-height:180px;overflow:auto}" +
     "#dsh-ro-panel .tppcard{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;padding:5px 4px;border:1px solid #c8d4e4;border-radius:6px;background:rgba(255,255,255,.92);cursor:pointer;font-family:inherit}" +
     "#dsh-ro-panel .tppcard:hover{background:#eef5ff;border-color:#1d4ed8}" +
-    "#dsh-ro-panel .tppcard-pic{width:100%;height:34px;display:flex;align-items:center;justify-content:center;overflow:hidden}" +
-    "#dsh-ro-panel .tppcard-pic img{max-width:100%;max-height:34px;image-rendering:pixelated}" +
-    "#dsh-ro-panel .tppcard-badge{font-size:13px;font-weight:700;color:#2a3a52;letter-spacing:1px;line-height:34px}" +
+    "#dsh-ro-panel .tppcard-pic{width:100%;height:18px;display:flex;align-items:center;justify-content:center;overflow:hidden}" +
+    "#dsh-ro-panel .tppcard-pic img{max-width:80%;max-height:18px;image-rendering:pixelated}" +
+    "#dsh-ro-panel .tppcard-pin{width:11px;height:11px;position:relative;display:inline-block;flex:0 0 auto;box-sizing:border-box;border:1px solid #6884ac;border-radius:50%}" +
+    "#dsh-ro-panel .tppcard-pin:after{content:'';position:absolute;left:3px;top:3px;width:3px;height:3px;border-radius:50%;background:#6884ac}" +
     "#dsh-ro-panel .tppcard-nm{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600;color:#16202c}" +
     "#dsh-ro-panel .tppcard-map{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:#5a6b7f}" +
     "#dsh-ro-panel .ac{position:absolute;top:calc(100% + 3px);left:0;right:0;z-index:99;background:#fff;border:1px solid #b8c6d4;border-radius:6px;max-height:180px;overflow:auto;box-shadow:0 3px 8px rgba(0,0,0,.18)}" +
@@ -18028,8 +18029,6 @@ function createRoItemCapture(env) {
       return "";
     } catch (e) { return ""; }
   }
-  // 文字徽标：中文取前 2 字、西文取前 2 个字符；空名退回 "?"。绝不返回空串（空串会让卡片空白）。
-  function tpPointBadge(name) { var s = String(name == null ? "" : name).trim(); return s ? s.slice(0, 2) : "?"; }
   function tpPointRender() {
     var box = $id("dsh-tpp-list"); if (!box) return;
     var list = tpPoints();
@@ -18044,7 +18043,7 @@ function createRoItemCapture(env) {
         var pg = list[gi];
         var thumb = tpPointThumb(pg.map);
         html += '<button type="button" class="ghost tppcard" data-tpp-go="' + gi + '" title="' + roEscTxt(pg.name + " · " + pg.map + " (" + pg.x + "," + pg.y + ")") + '">' +
-          '<span class="tppcard-pic">' + (thumb ? '<img src="' + roEscTxt(thumb) + '" alt="" loading="lazy">' : '<b class="tppcard-badge">' + roEscTxt(tpPointBadge(pg.name)) + '</b>') + '</span>' +
+          '<span class="tppcard-pic">' + (thumb ? '<img src="' + roEscTxt(thumb) + '" alt="" loading="lazy">' : '<span class="tppcard-pin" role="img" aria-label="地图位置"></span>') + '</span>' +
           '<span class="tppcard-nm">' + roEscTxt(pg.name) + '</span>' +
           '<span class="tppcard-map">' + roEscTxt(pg.map) + ' (' + pg.x + ',' + pg.y + ')</span></button>';
       }
