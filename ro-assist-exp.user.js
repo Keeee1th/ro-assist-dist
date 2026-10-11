@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         仙境传说 · 原站插件模式（游戏助手 · 实验版）
 // @namespace    dsh.ro-plugin
-// @version      2.38.71
+// @version      2.38.73
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
 // @description  在 post.lastro.cn / game.lastro.cn 原站以插件模式启动《仙境的传说》ROBrowser 客户端并连接原服务器；数据自动走本地镜像（127.0.0.1:8973）避免加载卡死，支持自动登录。PC 版直接打开 https://post.lastro.cn/ro/api.html 或备用线路 https://game.lastro.cn/ro/api.html?69.8；手机版打开 https://post.lastro.cn/?r=mn/index（登录页可选择平台与线路）。 新增私有本机客户端入口匹配（环回主机 127.0.0.1 / localhost，端口以页面自身 origin 为准、不写死）。
@@ -705,7 +705,7 @@
   }
   var LS_KEY = "dsh_ro_plugin_v1";
   var VERSION_RE = /\?([0-9.]+)/;
-  var VER = "2.38.71"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
+  var VER = "2.38.73"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
   try { window.__dshCombinedActive = true; } catch (e) {} // V2.30.0 防双浮层让位旗标：独立版词条色脚本见旗标即让位
   // ==================== 统一采集器注册表（dsh-collect v1 · 内部命名空间，不新增 window 全局）====================
   // 五方法：register 注册 / sample 采集 / query 查询 / refresh 刷新 / release 释放
@@ -9873,8 +9873,8 @@ function createRoItemCapture(env) {
     var n = Number(s && s.intSec);
     return (s && s.intSec != null && Number.isFinite(n) && n >= 0 ? Math.min(n, 86400) : Math.max(0, askNum("dsh-askint", 120))) * 1000;
   }
-  function askTargetId(skid) { // 天赐 / 加速术是对己方目标施法，不能发无目标 0
-    return skid === 34 || skid === 29 ? ((CLIENT.SS && CLIENT.SS.Entity && CLIENT.SS.Entity.GID) || (CLIENT.SS && CLIENT.SS.AID) || 0) : 0;
+  function askTargetId(skid) { // 天赐/加速术/狸猫冲刺/鲜虾是对角色施法；无自身 GID 时不可发无目标 0
+    return skid === 34 || skid === 29 || skid === 5035 || skid === 5041 ? ((CLIENT.SS && CLIENT.SS.Entity && CLIENT.SS.Entity.GID) || (CLIENT.SS && CLIENT.SS.AID) || 0) : 0;
   }
   // V2.38.2：#dsh-bufflog 原来是死元素（全脚本只有创建它的那一行、没有任何写入）→ 永远显示「辅助技能：未启用」。
   // 改为实时状态；内容不变不重写（防闪）。
@@ -9954,7 +9954,8 @@ function createRoItemCapture(env) {
             if (!intv || (s.lastAt && now - s.lastAt < intv)) { if (askDiagOn) console.log("[ASK-DIAG] [" + i + "] skid=" + s.skid + " NO-ST interval wait, elapsed=" + elapsed); continue; } // 纯间隔技能
             if (askDiagOn) console.log("[ASK-DIAG] [" + i + "] skid=" + s.skid + " NO-ST will cast, elapsed=" + elapsed);
           }
-          if (askDiagOn) console.log("[ASK-DIAG] CAST skid=" + s.skid + " lv=" + s.lv + " target=0");
+          if (askDiagOn) console.log("[ASK-DIAG] CAST skid=" + s.skid + " lv=" + s.lv + " target=" + askTargetId(s.skid));
+          if ((s.skid === 5035 || s.skid === 5041) && !askTargetId(s.skid)) { setStatus("自身角色 ID 未就绪：暂不施放 " + s.name, "warn"); continue; }
           var p = new (czp("USE_SKILL"))();
           p.SKID = s.skid;
           p.selectedLevel = s.lv;
@@ -9995,6 +9996,7 @@ function createRoItemCapture(env) {
         p.SKID = s.skid;
         p.selectedLevel = s.lv;
         p.targetID = askTargetId(s.skid);
+        if ((s.skid === 5035 || s.skid === 5041) && !p.targetID) throw Error("自身角色 ID 未就绪，拒绝无目标施法");
         dshCastMark(s.skid, s.lv, p.targetID, "combo");
         CLIENT.NM.sendPacket(p);
       } catch (e) {
@@ -10822,11 +10824,23 @@ function createRoItemCapture(env) {
     } catch (e) {}
     return false;
   }
+  function npColorMobileChatRow(p) {
+    // 只改手机聊天的颜色；文本不是服务器回执，不能更新内挂开关状态。
+    if (!IS_MN || !npChatContainer(p)) return;
+    var text = String(p && p.textContent || "").trim();
+    var match = /^(?:\[消息\]\s*)?(开启|关闭)自动战斗$/.exec(text);
+    if (!match || !p.style) return;
+    var color = match[1] === "开启" ? "#52e391" : "#ffbd72";
+    if (typeof p.style.setProperty === "function") p.style.setProperty("color", color, "important");
+    else p.style.color = color;
+  }
   function npObserveChatNode(node) {
     // 公屏/私聊/本机DOM均非权威，不更新战斗状态，也不兑现关闭确认。
     if (!node || node.nodeType !== 1) return;
-    var rows = node.tagName && String(node.tagName).toLowerCase() === "p" ? [node] : Array.prototype.slice.call(node.querySelectorAll ? node.querySelectorAll("p") : []);
-    for (var i = 0; i < rows.length; i++) { var p = rows[i]; if (npChatSeen && npChatSeen.has(p)) continue; if (npChatSeen) npChatSeen.add(p); }
+    var tag = node.tagName && String(node.tagName).toLowerCase();
+    var rows = tag === "p" || tag === "div" ? [node] : [];
+    if (node.querySelectorAll) rows = rows.concat(Array.prototype.slice.call(node.querySelectorAll("p, .content > div")));
+    for (var i = 0; i < rows.length; i++) { var p = rows[i]; if (npChatSeen && npChatSeen.has(p)) continue; if (npChatSeen) npChatSeen.add(p); npColorMobileChatRow(p); }
   }
   function npWatchBattleChat() {
     if (npChatObserver || typeof MutationObserver !== "function" || !document.body) return;
@@ -10835,7 +10849,9 @@ function createRoItemCapture(env) {
         var box = document.querySelector(CHAT_BATTLE_SELS[i]);
         if (!box) continue;
         var old = box.querySelectorAll("p");
-        for (var j = 0; j < old.length; j++) if (npChatSeen) npChatSeen.add(old[j]);
+        for (var j = 0; j < old.length; j++) npObserveChatNode(old[j]);
+        var oldDiv = box.querySelectorAll(".content > div");
+        for (var k = 0; k < oldDiv.length; k++) npObserveChatNode(oldDiv[k]);
       }
       npChatObserver = new MutationObserver(function (records) {
         for (var r = 0; r < records.length; r++) for (var n = 0; n < records[r].addedNodes.length; n++) npObserveChatNode(records[r].addedNodes[n]);
@@ -14611,6 +14627,12 @@ function createRoItemCapture(env) {
             }
             setStatus("锁定怪追击卡墙，内挂状态未确认，继续助手脱困…", "warn");
           }
+          if (isHybrid() && !zEngagedNow(now)) {
+            var hySeek = npEnsureHunt(); // 未开打则保持内挂寻怪；卡墙救援和服务器回执优先
+            var hyConfirmed = hySeek === "already" && npBattleState() === true;
+            setStatus(hyConfirmed ? "混合寻怪：内挂已确认，接近锁定怪…" : hySeek === "sent" || hySeek === "queued" ? "混合寻怪：已请求内挂接管，等待服务器回执…" : "混合寻怪：内挂状态未确认，未盲切…", hyConfirmed ? "st" : "warn");
+            return;
+          }
           if (isHybrid()) {
             // V2.33.0 混合寻怪：锁定怪还在接管距离外 → 交内挂长距离寻怪走路，助手不接管移动
             // V2.34.3 内挂死等兜底：内挂实际关闭、或判定内挂没在把角色带过去 → 助手自行接管 12s
@@ -14873,7 +14895,12 @@ function createRoItemCapture(env) {
       //   - 侦查没扫到怪 / 附近只有「超出」的锁定怪 → 持续发包让服务器自动寻怪（内挂移动靠近）
       if (npHuntMode() === "np" || isHybrid()) {
         if (typeof zFarPatrol !== "undefined" && zFarPatrol && zFarPatrol.active) zFarPatrolClear(true); // 切换寻怪方式后不保留自研路线
-        var npThD = isHybrid() ? takeoverDist() : calcAtkRange();
+        var npThD = isHybrid() ? Math.min(takeoverDist(), calcAtkRange()) : calcAtkRange();
+        if (isHybrid()) {
+          var hyIdle = npEnsureHunt(); // 只有确实进入攻击/交战才关闭内挂；无需等两次侦查和一秒延迟
+          setStatus(hyIdle === "unknown" || hyIdle === "failed" || hyIdle === "suppressed" ? "混合寻怪：内挂状态未确认，未盲切…" : "混合寻怪：未交战，内挂自动寻怪中…", hyIdle === "unknown" || hyIdle === "failed" || hyIdle === "suppressed" ? "warn" : "st");
+          return;
+        }
         if (btDiagOn) { try { var aR0 = calcAtkRange(); var _lk = Object.keys(lockList).slice(0,20).join(","); var _sm = scanMobs.slice(0,10).map(function (x) { return x.mid + "@" + x.dist; }).join(" "); btLog('zWalk-np', 'mode=' + (isHybrid() ? "hybrid" : "np") + ' scanMobs=' + scanMobs.length + ' hasAttackable=' + scanHasAttackableLockedMob(npThD) + ' hasOutOfRange=' + scanHasOutOfRangeLockedMob(npThD) + ' thD=' + npThD + ' scanSt=' + ($id('dsh-scanst') ? $id('dsh-scanst').textContent : '?') + ' lock=[' + _lk + '] mids=[' + _sm + ']'); } catch (e) {} }
         // V2.38.24 C 判定迟滞：无→有 立即停内挂（助手马上接管，不加延迟）；有→无 需连续 2 拍确认且距上次切换 ≥1s
         //   （拍 = 侦查扫描间隔）；目标死亡/丢失（zLock.done 或本拍刚解锁）造成的「无」不计入缓冲，立即恢复内挂。
@@ -15255,7 +15282,7 @@ function createRoItemCapture(env) {
       var pmRange = parseInt($id("dsh-z-pmrange").value, 10) || 2;
       var mgRange = parseInt($id("dsh-z-mgrange").value, 10) || 9;
       var atkRange = calcAtkRange(); // 技能顺序中最大射程+1 或 普攻物理距离
-      var npThD = isHybrid() ? takeoverDist() : atkRange; // V2.33.0 混合寻怪接管距离
+      var npThD = isHybrid() ? Math.min(takeoverDist(), atkRange) : atkRange; // 混合模式仅攻击距离内接手，远处保留内挂寻怪
       var anyLock = Object.keys(lockList).length > 0;
       // 非选中怪攻击选项：无视/瞬移/还击
       var onaMode = $id("dsh-z-ona") ? $id("dsh-z-ona").value : "还击";
@@ -16734,6 +16761,20 @@ function createRoItemCapture(env) {
     try { var paths=['UI/Components/Inventory/Inventory','UI/Components/BasicInventory/BasicInventory'];for(var i=0;i<paths.length;i++){var m=requireDB(paths[i]);if(m&&Array.isArray(m.list))return m.list;} } catch (e2) {}
     return null;
   }
+  function bagCleanProtectionChoices(){
+    var choices=[], seen={}, eq={}, eqMissing=0;
+    try { var comp=uiComp("Equipment"), root=comp&&(typeof gearEqRoot==="function"?gearEqRoot(comp):(typeof comp.getRoot==="function"?comp.getRoot():null));
+      if(root&&typeof root.querySelectorAll==="function") Array.prototype.forEach.call(root.querySelectorAll(".item[data-index]"),function(el){var idx=bagCleanInt(el.getAttribute("data-index"),1,65535);if(idx!==null)eq[idx]=true;});
+    }catch(e){}
+    function add(it,source){var id=bagCleanInt(it&&(it.ITID!=null?it.ITID:it.itemid),1,2147483647);if(id===null||seen[id])return false;seen[id]=true;choices.push({id:id,name:getItemName(id)||("物品 #"+id),source:source});return true;}
+    var inv=null;try{var c=bagInvComp();inv=c&&Array.isArray(c.list)?c.list:bagCleanInventory();}catch(e2){}
+    if(Array.isArray(inv))inv.forEach(function(it){add(it,"物品栏");});
+    Object.keys(eq).forEach(function(idx){var it=null;try{it=typeof gearEqItemByIndex==="function"?gearEqItemByIndex(comp,Number(idx)):null;if(!it&&typeof bagPktByIndex==="function")it=bagPktByIndex(Number(idx));}catch(e3){}
+      if(!it||bagCleanInt(it.index,1,65535)!==Number(idx)){eqMissing++;return;}
+      add(it,"装备栏");
+    });
+    return {items:choices,missing:eqMissing};
+  }
   function bagCleanInt(v,min,max){var n=Number(v);return Number.isInteger(n)&&n>=min&&n<=max?n:null;}
   function bagCleanRuleKey(k){return /^[1-9]\d*(?::u)?$/.test(k)&&Number(k.split(':')[0])<=2147483647;}
   // 逐角色键：没有角色档（例如测试沙箱）时退回全局键，保持键名 dsh-bag-clean-v2 不变
@@ -16822,9 +16863,23 @@ function createRoItemCapture(env) {
     dojoGuard.ok = false; dojoGuard.itids = null; dojoGuard.n = 0; dojoGuard.who = ""; dojoGuard.map = ""; dojoGuard.src = "";
     dojoGuard.reason = String(reason || "尚未在进入道场前采集背包快照");
   }
+  var dojoBagGuardReport = { sig: "", at: 0 };
   function dojoGuardFail(why) {
     dojoGuardClear(why);
     try { bagCleanChat("物品保护：" + dojoGuard.reason, "guard:" + dojoGuard.reason); } catch (e0) {}
+    // 只送本机；不含物品 ID、装备、角色名、账号或完整包内容。按原因去重，避免重复点开始刷日志。
+    try {
+      var sig = dojoGuard.reason, now = Date.now();
+      if (sig !== dojoBagGuardReport.sig || now - dojoBagGuardReport.at >= 60000) {
+        dojoBagGuardReport.sig = sig; dojoBagGuardReport.at = now;
+        var c = typeof bagInvComp === "function" ? bagInvComp() : null;
+        DSHCollect.post("http://127.0.0.1:8899/api/probe-collect", { t: "dojo-bag-guard", at: now, ver: VER, reason: /没收到过非空背包整表/.test(sig) ? "no-complete-inventory" : "other-guard-rejection",
+          bag: { complete: !!(typeof bagPkt !== "undefined" && bagPkt.complete), op: typeof bagPkt !== "undefined" ? bagPkt.listOp : 0,
+            rows: typeof bagPkt !== "undefined" ? bagPkt.n : 0, session: typeof bagPkt !== "undefined" ? bagPkt.sess : 0,
+            why: typeof bagPkt !== "undefined" ? String(bagPkt.why || "") : "bagPkt unavailable" },
+          inventory: { readable: !!(c && Array.isArray(c.list)), rows: c && Array.isArray(c.list) ? c.list.length : null } });
+      }
+    } catch (eProbe) {}
     return { ok: false, reason: dojoGuard.reason };
   }
   // 独立无限挑战经门面 dojoGuard 调用的入场前背包校验。只读，不发包；旧内置道场已退役。
@@ -17035,6 +17090,9 @@ function createRoItemCapture(env) {
       +'<details><summary>按类别丢弃（中文类别 · 当前背包件数与示例）</summary><div data-categories style="font-size:12px"></div></details>'
       +'<details><summary>类别保护例外（永不丢）</summary>'
       +'<div class="row" style="gap:4px"><input data-proid type="number" min="1" placeholder="保护 ID" style="flex:0 0 96px"><button class="ghost" data-proadd>加入保护</button></div>'
+      +'<div class="row" style="gap:4px;flex-wrap:wrap"><input data-profind type="text" placeholder="按名字/ID 搜当前物品" style="flex:1 1 120px"><button class="ghost" data-propick>从物品栏/装备栏点选保护</button></div>'
+      +'<div data-prohits class="st" style="font-size:12px;max-height:180px;overflow:auto"></div>'
+      +'<div class="st" style="font-size:11px">只加入同 ID 永不丢保护；无法读取编号的装备不展示。本项不代替入场前背包整表验证。</div>'
       +'<div data-protected style="font-size:12px"></div></details>'
       +'<details><summary>清理详情 / 保护原因</summary><div data-detail style="font-size:12px;white-space:pre-line"></div></details>'
       +'<div class="row" style="flex-wrap:wrap;gap:5px"><button data-export>导出名单</button><button class="ghost" data-import>粘贴导入</button><button class="ghost" data-pickfile>选择文件</button><input data-file type="file" accept=".json,application/json" style="display:none"></div>'
@@ -17068,7 +17126,7 @@ function createRoItemCapture(env) {
       },function(){self.checked=false;bagCleanSay('已停止：未加入类别规则。');});
     };cats.appendChild(line);});
       var pids=bagClean.config.protectedIds.slice().sort(function(a,b){return a-b;});
-      if(!pids.length)prot.textContent='没有保护例外（永不丢）条目：可在上面输入 ID 加入';
+      if(!pids.length)prot.textContent='没有保护例外（永不丢）条目：可从物品栏/装备栏点选，或输入 ID 加入';
       pids.forEach(function(id){var line=document.createElement('label'),ch=document.createElement('input');line.style.display='block';ch.type='checkbox';ch.checked=true;line.append(ch,document.createTextNode((getItemName(id)||'物品')+' #'+id));ch.onchange=function(){if(this.checked)return;var i=bagClean.config.protectedIds.indexOf(id);if(i>=0)bagClean.config.protectedIds.splice(i,1);changed('保护例外已修改：自动已关闭，需重新预览确认。');};prot.appendChild(line);});
     }
     bagClean.render=render;
@@ -17076,6 +17134,7 @@ function createRoItemCapture(env) {
     box.querySelector('[data-search]').oninput=function(){search=this.value||'';render();};
     box.querySelector('[data-searchclear]').onclick=function(){search='';var s=box.querySelector('[data-search]');if(s)s.value='';render();};
     box.querySelector('[data-bagadd]').onclick=function(){var q=(box.querySelector('[data-bagfind]').value||'').trim(),inv=bagCleanInventory()||[],hits=[],eh=box.querySelector('[data-baghits]');inv.forEach(function(it){var id=bagCleanInt(it&&it.ITID,1,2147483647);if(id===null)return;var nm=getItemName(id)||'';if(!q||String(id)===q||nm.indexOf(q)>=0||String(it.index)===q){if(!hits.some(function(h){return h.id===id;}))hits.push({id:id,nm:nm||('物品 #'+id)});}});hits=hits.slice(0,40);eh.textContent='';if(!hits.length){eh.textContent='背包里没有匹配的物品';return;}eh.appendChild(document.createTextNode('点一下加入丢弃名单：'));hits.forEach(function(h){var b=document.createElement('button');b.className='ghost';b.style.cssText='font-size:12px;margin:1px 3px';b.textContent=h.nm+' #'+h.id;b.onclick=function(){var k=String(h.id);if(Object.prototype.hasOwnProperty.call(bagClean.config.discardRules,k)){bagCleanSay('已在丢弃名单：'+h.nm+' #'+h.id+'（只本地提示：不重复添加、不移除、不改保留数量）');bagCleanChat('已在丢弃名单：'+h.nm+' #'+h.id+'（只本地提示：未做任何改动）');return;}bagClean.config.discardRules[k]=0;changed('已加入丢弃名单：'+h.nm+' #'+h.id);};eh.appendChild(b);});};
+    box.querySelector('[data-propick]').onclick=function(){var result=bagCleanProtectionChoices(),q=(box.querySelector('[data-profind]').value||'').trim().toLowerCase(),hits=box.querySelector('[data-prohits]');hits.textContent='';var selected=result.items.filter(function(it){return !q||String(it.id).indexOf(q)>=0||it.name.toLowerCase().indexOf(q)>=0;});if(!selected.length){hits.textContent='没有可读取的匹配物品；请先确认角色和物品栏已加载。'+(result.missing?' 装备栏有 '+result.missing+' 件无法核对编号，已跳过。':'');return;}hits.appendChild(document.createTextNode('点选加入保护名单（不会执行丢弃）：'));selected.forEach(function(it){var b=document.createElement('button');b.className='ghost';b.style.cssText='font-size:12px;margin:2px';b.textContent='['+it.source+'] '+it.name+' #'+it.id;b.onclick=function(){if(bagClean.config.protectedIds.indexOf(it.id)>=0){bagCleanSay('已在保护名单：'+it.name+' #'+it.id);return;}if(bagClean.config.protectedIds.length>=2000){bagCleanSay('保护名单已满，未改动');return;}bagClean.config.protectedIds.push(it.id);changed('已加入永不丢保护：'+it.name+' #'+it.id);b.disabled=true;};hits.appendChild(b);});if(result.missing)hits.appendChild(document.createTextNode('；装备栏 '+result.missing+' 件无法核对编号，已跳过。'));};
     box.querySelector('[data-proadd]').onclick=function(){var id=bagCleanInt(box.querySelector('[data-proid]').value,1,2147483647);if(id===null)return bagCleanSay('请输入有效物品 ID');if(bagClean.config.protectedIds.indexOf(id)<0)bagClean.config.protectedIds.push(id);changed('已加入保护例外：'+(getItemName(id)||'物品')+' #'+id);};
     box.querySelector('[data-preview]').onclick=function(){var p=bagCleanPreview();if(!p)return;bagCleanConfirm('预览候选',p.lines,'确认本规则集可用于自动丢弃',function(){if(!profileTrusted(activeProfileKey())){bagClean.enabled=false;bagClean.config.armed=false;bagClean.config.enabled=false;bagClean.generation++;bagCleanSave();return bagCleanSay('当前角色未识别（缺少可信入场前记录）：本轮不允许开启自动丢弃，请等角色识别后重新预览确认。');}if(dojoGuardInDojo()&&!dojoGuard.ok){bagClean.enabled=false;bagClean.config.armed=false;bagClean.config.enabled=false;bagClean.generation++;bagCleanSave();return bagCleanSay('已在道场地图内，且没有可信背包保护：拒绝开启自动丢弃。'+dojoGuard.reason);}bagClean.config.armed=true;bagClean.enabled=true;bagClean.config.enabled=true;bagClean.generation++;bagCleanSave();bagCleanSay('预览已确认：自动丢弃已开启（改规则/切档/刷新自动关闭）');if(bagClean.render)bagClean.render();},function(){bagCleanSay('已停止预览确认，未授权。');});};
     box.querySelector('[data-enable]').onchange=function(){var self=this;
@@ -26160,6 +26219,7 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
       L.push("missing=" + ((eq.missing && eq.missing.length) ? eq.missing.join("、") : "无"));
       var bagOk = null; try { bagOk = bagList(); } catch (e2) { bagOk = null; }
       L.push("背包数据源=" + (bagRead.source || "未读取") + " · " + bagRead.count + " 件 · 箭矢 " + bagRead.arrows + " 种 · list=" + (bagOk ? "可读" : "读不到"));
+      try { if (typeof bagPktDiagText === "function") L.push(bagPktDiagText()); } catch (eBagPkt) {} // 独立展示入场门禁使用的包流证据；装备完整不等于背包完整
       var eqName = "";
       try { eqName = EQ ? String(EQ.name || "无名") : "不可用（uiComp(Equipment) 与 requireDB 都拿不到）"; } catch (e3) { eqName = "异常"; }
       L.push("Equipment 组件名=" + eqName);
