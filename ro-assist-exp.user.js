@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         仙境传说 · 原站插件模式（游戏助手 · 实验版）
 // @namespace    dsh.ro-plugin
-// @version      2.38.65
+// @version      2.38.71
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
 // @description  在 post.lastro.cn / game.lastro.cn 原站以插件模式启动《仙境的传说》ROBrowser 客户端并连接原服务器；数据自动走本地镜像（127.0.0.1:8973）避免加载卡死，支持自动登录。PC 版直接打开 https://post.lastro.cn/ro/api.html 或备用线路 https://game.lastro.cn/ro/api.html?69.8；手机版打开 https://post.lastro.cn/?r=mn/index（登录页可选择平台与线路）。 新增私有本机客户端入口匹配（环回主机 127.0.0.1 / localhost，端口以页面自身 origin 为准、不写死）。
@@ -705,7 +705,7 @@
   }
   var LS_KEY = "dsh_ro_plugin_v1";
   var VERSION_RE = /\?([0-9.]+)/;
-  var VER = "2.38.65"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
+  var VER = "2.38.71"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
   try { window.__dshCombinedActive = true; } catch (e) {} // V2.30.0 防双浮层让位旗标：独立版词条色脚本见旗标即让位
   // ==================== 统一采集器注册表（dsh-collect v1 · 内部命名空间，不新增 window 全局）====================
   // 五方法：register 注册 / sample 采集 / query 查询 / refresh 刷新 / release 释放
@@ -2426,6 +2426,14 @@ function createRoItemCapture(env) {
     "#dsh-ro-panel .skgrid .list-item{min-width:0;padding:5px 2px}" +
     "#dsh-ro-panel .skgrid .switch{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
     "#dsh-ro-panel #dsh-skillorderlist,#dsh-ro-panel #dsh-asklist{max-height:132px;overflow:auto}" +
+    "#dsh-ro-panel #dsh-asklist,#dsh-asklist{max-height:200px;overflow-x:hidden}" +
+    "#dsh-asklist .ask-row{display:flex;width:100%;box-sizing:border-box;min-width:0;align-items:flex-start;justify-content:flex-start;gap:6px}" +
+    "#dsh-asklist .ask-main{flex:1 1 auto;min-width:0}" +
+    "#dsh-asklist .ask-name{line-height:1.4;font-weight:600;white-space:normal;overflow-wrap:anywhere}" +
+    "#dsh-asklist .ask-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin-top:3px;min-width:0}" +
+    "#dsh-asklist .ask-meta .tag{box-sizing:border-box;max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.4}" +
+    "#dsh-asklist .ask-timer{display:inline-flex;align-items:center;gap:3px;margin-left:auto;white-space:nowrap;flex:none}" +
+    "#dsh-asklist .ask-timer input{width:58px;min-width:0;box-sizing:border-box}" +
     // V2.38.47（任务2）：快捷传送点「图标式 / 列表式」样式（默认列表式，见 tpPointRender）。
     //   网格原语与 .skgrid 同口径（自带 max-height + overflow:auto）：面板 400px + overflow:hidden，网格必须自己滚，绝不撑破面板。
     //   卡片沿用面板既有像素风（image-rendering:pixelated，与游戏贴图同款）；不套旧蓝渐变配色，浅底 + 描边。
@@ -2582,22 +2590,24 @@ function createRoItemCapture(env) {
       // V2.38.20：默认由「瞬移术→翅膀」改为「翅膀→瞬移术」（已保存档案里的 dsh-z-flymode 会覆盖这个默认值）
       '<div class="row"><span class="lb">瞬移方式</span><select id="dsh-z-flymode" style="flex:0 0 120px"><option selected>翅膀→瞬移术</option><option>苍蝇翅膀优先</option><option>瞬移术Lv1</option><option>瞬移术→翅膀</option></select>' +
       '<label class="switch"><input id="dsh-z-flyauto" type="checkbox" checked>无翅膀自动瞬移术</label></div>' +
-      // V2.38.25 G1/G2：无目标瞬移与卡死瞬移拆回两条独立机制——两个开关各自独立（默认都勾），
-      //   三个时间控件：卡死不动阈值 / 无目标→自动移动 / 无目标→自动瞬移（后者读取时强制夹成大于前者）。
+      '<div class="row"><span class="lb">保命预留翅膀</span><input id="dsh-z-wingreserve" type="number" value="5" min="0" max="9999" step="1" style="flex:0 0 54px"><span class="st">个（默认 5；寻怪/脱困不用预留量，真正救命仍可用）</span></div>' +
+      // 无目标移动的 X 秒总是按寻怪方式执行；「无目标自动瞬移」仅管 Y 秒换点，不关闭移动。
+      //   三个时间控件：卡死不动阈值 / 无目标→自动移动 / 无目标→自动瞬移（正数时才夹成大于移动秒数，0=关闭本支）。
       //   旧 dsh-z-idlefly 控件恢复；历史 KV 一律保留不删（只读迁移输入见 migrateZControls）。
-      '<div class="row"><label class="switch"><input id="dsh-z-flystuck" type="checkbox" checked>卡死自动瞬移</label>' +
-      '<label class="switch"><input id="dsh-z-idlefly" type="checkbox" checked>无目标自动寻怪/瞬移</label></div>' +
-      '<div class="row"><span class="lb" style="min-width:44px">不动</span><input id="dsh-z-stucksec" type="number" value="4" min="1" max="60" style="flex:0 0 40px"><span style="color:#5a6b7f">s·不动</span>' +
-      '<span class="lb" style="min-width:44px">无目标</span><input id="dsh-z-nomove" type="number" value="2" min="0" max="60" style="flex:0 0 40px"><span style="color:#5a6b7f">s→自动移动</span>' +
-      '<input id="dsh-z-idleflysec" type="number" value="10" min="3" max="600" style="flex:0 0 44px"><span style="color:#5a6b7f">s→自动瞬移</span></div>' +
-      '<div class="row"><span class="st" style="font-size:10px">自动瞬移秒数必须大于自动移动秒数</span></div>' +
-      // V2.38.25 I：脱困换点等待秒数可调（dsh-z-escflysec，默认 6）。原为写死 15s，发布前按用户要求把默认缩短为 6s（可填 1..300，越小越费翅膀）
-      '<div class="row"><span class="lb" style="min-width:44px">脱困等待</span><input id="dsh-z-escflysec" type="number" value="6" min="1" max="300" style="flex:0 0 44px"><span style="color:#5a6b7f">s·走不动→换点</span></div>' +
+      '<div class="row"><label class="switch"><input id="dsh-z-flystuck" type="checkbox" checked>未交战且卡住时瞬移</label>' +
+      '<label class="switch"><input id="dsh-z-idlefly" type="checkbox" checked>无目标自动瞬移</label></div>' +
+      '<div class="row" style="flex-wrap:nowrap;gap:6px"><span class="lb" style="white-space:nowrap">不动</span><span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap"><input id="dsh-z-stucksec" type="number" value="4" min="0" max="60" style="flex:0 0 40px">秒→脱困瞬移</span></div>' +
+      '<div class="row" style="flex-wrap:nowrap;gap:6px"><span class="lb" style="white-space:nowrap">无目标</span><span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap"><input id="dsh-z-nomove" type="number" value="2" min="0" max="60" style="flex:0 0 40px">秒→移动</span></div>' +
+      '<div class="row" style="flex-wrap:nowrap;gap:6px"><span class="lb" style="white-space:nowrap">无目标</span><span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap"><input id="dsh-z-idleflysec" type="number" value="10" min="0" max="600" style="flex:0 0 44px">秒→瞬移</span></div>' +
+      '<div class="row"><span class="st" style="font-size:10px">仅战斗地图：没有符合攻击设置的可追击怪且未交战时，从同一次失去目标开始计时。达到移动秒数→自动寻怪；继续到瞬移秒数→换点。瞬移秒数填 0 则仅关闭无目标换点（仍按移动秒数寻怪）；正数须大于移动秒数，填小自动调高。</span></div>' +
+      '<div class="row"><span class="st" style="font-size:10px">关闭「无目标自动瞬移」只关闭此类瞬移，不关闭自动移动；卡住换点另受「未交战且卡住时瞬移」控制。不动/脱困等待填 0 只关闭各自的换点；瞬移间隔是保护 CD，填 0 不代表关闭瞬移。两类瞬移还受防御总开关限制。手动走位不生效；内挂寻怪移动不等移动秒数。</span></div>' +
+      // 脱困换点等待秒数可调（dsh-z-escflysec，默认 6，填 0 关闭这类换点；正数越小越费翅膀）。
+      '<div class="row"><span class="lb" style="min-width:44px">脱困等待</span><input id="dsh-z-escflysec" type="number" value="6" min="0" max="300" style="flex:0 0 44px"><span style="color:#5a6b7f">s·走不动→换点</span></div>' +
       // V2.38.23 视线增强 A/B：A 视线严格（含两端点，默认不勾——怪的所站格本身不可射时会被判无视线，
       //   可能「明明能打却不出手」，故默认关闭、由玩家自担开启）；B 打不到就换点（默认勾——同怪侧移 3 次仍无视线时换点，费翅膀）
       '<div class="row"><label class="switch"><input id="dsh-z-losstrict" type="checkbox">视线严格（含两端点）</label>' +
       '<label class="switch"><input id="dsh-z-losfly" type="checkbox" checked>打不到就换点</label></div>' +
-      '<div class="row"><label class="switch"><input id="dsh-z-rein" type="checkbox">寻怪自动上马（缰绳 12622）</label><span style="color:#5a6b7f;font-size:11px">骑乘状态不在身自动用</span></div>' +
+      '<div class="row"><label class="switch"><input id="dsh-z-rein" type="checkbox">寻怪自动上马（缰绳 12622）</label><span style="color:#5a6b7f;font-size:11px">未骑乘且攻击射程内无可打活怪、未交战时用</span></div>' +
       '<div class="row"><label class="switch"><input id="dsh-z-mapbound" type="checkbox" checked>地图边界</label>' +
       '<span class="lb" style="min-width:34px">半径</span><input id="dsh-z-mapbound-r" type="number" value="25" min="5" style="flex:0 0 42px"><span style="color:#5a6b7f;font-size:11px">格（以启动点为圆心，走出就回头）</span></div>' +
       '<div class="row"><span class="lb" style="min-width:80px">地图边缘距离</span><input id="dsh-z-mapbound-edge" type="number" value="15" min="3" style="flex:0 0 42px"><span style="color:#5a6b7f;font-size:11px">格（距当前地图物理边界小于此值就回头，防走到别的图）</span></div>' +
@@ -2634,8 +2644,9 @@ function createRoItemCapture(env) {
       '<div class="row"><span class="lb">SP范围</span><input id="dsh-z-sitsplo" type="number" value="10" style="flex:0 0 38px"><span style="color:#5a6b7f">~</span><input id="dsh-z-sitsphi" type="number" value="70" style="flex:0 0 38px"><span style="color:#5a6b7f">%</span>' +
       // V2.38.45（用户定稿）：默认「无视」→「逃脱」——坐下被打就起身移动离开，不再原地硬坐。
       '<span class="lb" style="min-width:60px">坐下被锁定</span><select id="dsh-z-sitxw" style="flex:0 0 72px"><option>无视</option><option>还击</option><option>瞬移</option><option selected>逃脱</option></select></div>' +
-      '<div class="row"><label class="switch"><input id="dsh-z-sitback" type="checkbox" checked>回满后继续战斗</label>' +
+      '<div class="row"><label class="switch"><input id="dsh-z-sitback" type="checkbox" checked>达到设定上限后起身继续战斗</label>' +
       '<label class="switch"><input id="dsh-z-sitnofight" type="checkbox">战斗状态不坐下</label></div>' +
+      '<div class="row"><span class="st" style="font-size:10px">HP 或 SP 低于左侧数值时坐下；HP 和 SP 都达到各自右侧上限时起身，无需回满。上限填 100% 时，满血满蓝即可起身。</span></div>' +
       '<div class="row"><span class="lb">攻击间隔</span><input id="dsh-z-attint" type="number" value="0.25" min="0.05" step="0.01" style="flex:0 0 44px"><span style="color:#5a6b7f">s（最低0.05；默认0.25限制快技能）</span>' +
       '<span class="lb" style="min-width:26px">寻怪</span><input id="dsh-z-range" type="number" value="14" style="flex:0 0 40px"><span style="color:#5a6b7f">格</span></div>' +
       '<div class="row"><span class="lb">物理距离</span><input id="dsh-z-pmrange" type="number" value="2" min="1" style="flex:0 0 40px"><span style="color:#5a6b7f">格(普攻/近战)</span>' +
@@ -2677,10 +2688,11 @@ function createRoItemCapture(env) {
       '<div class="row"><span>最短ms</span><input id="dsh-skill-cdmin" type="number" min="0.001" step="any" value="150"></div>' +
       '<div class="row"><span>最长ms</span><input id="dsh-skill-cdmax" type="number" min="0.001" step="any" value="900"></div>' +
       '<div class="row"><span class="st">技能行手填CD（支持小数秒）优先，不被自动上限覆盖，硬底线80ms；提前补偿最多100ms，无回执默认实际150ms。攻击拍默认250ms可调50ms；不绕过施法/服务器CD门禁，不保证服务端允许更快。</span></div>' +
-      '<div class="row"><label class="switch"><input id="dsh-prereq" type="checkbox" checked>自动补充释放前置（状态/气弹）</label>' +
+      '<div class="row"><label class="switch"><input id="dsh-prereq" type="checkbox" checked title="只控制自动补状态/补球；手写球0/球1等释放条件始终生效">自动补充释放前置（状态/气弹）</label>' +
       '<span class="lb">补球来源</span>' +
       '<select id="dsh-spheresrc" style="flex:0 0 auto" title="自动补气弹时用哪个技能。261 蓄气=SP8/次、一次 1 颗、最多充到技能等级（省蓝）；401 狂蓄气=SP20/次、一次补满 5 颗、无冷却可无限放（最快）；技能条件里的 球源401/球源261/球源自动 优先于这里"><option value="auto" selected>自动（缺 1-2 颗用蓄气 / 缺 3 颗以上用狂蓄气）</option><option value="261">只用蓄气（省蓝）</option><option value="401">只用狂蓄气（最快）</option></select>' +
       '<span class="tag blue" id="dsh-prereqcnt" style="margin-left:auto">释放需求表: 94技能</span></div>' +
+      '<div class="row"><span class="st" style="font-size:10px">蓄气/狂蓄气条件留空自动按球0（没球才放），弹指留空自动按球1（有球才放）；已有手写条件不变。关闭自动补充只停自动补球/补状态，不影响技能本身的释放条件。</span></div>' +
       '<details id="dsh-skillpickbox" style="margin:6px 0"><summary>点选技能释放（展开/收缩）</summary>' +
       '<div class="box"><div class="b-hd">点选已学主动技能 → 自动生成技能顺序</div>' +
       '<div id="dsh-skillpick" class="skgrid"></div></div></details>' +
@@ -2690,7 +2702,7 @@ function createRoItemCapture(env) {
       '<button class="ghost" id="dsh-skillimp" style="flex:0 0 auto">导入已学技能</button></div></div>' +
       '<details style="margin:6px 0"><summary>手动编辑技能顺序/条件（高级用法）</summary>' +
       '<textarea id="dsh-skillorder" rows="3" placeholder="技能顺序：每行 技能ID:等级:条件:释放%:次数:锁定次数:冷却秒&#10;例：271  :5   :球5,爆气:80 :20 :3:2&#10;   技能ID :等级:条件    :概率:次数:锁定次数:冷却秒&#10;条件=释放前置，须全满足，可空；球源401=该技能补球只用狂蓄气 / 球源261=只用蓄气 / 球源自动=按缺口现算（缺1-2颗用蓄气、缺3颗以上用狂蓄气）；该词不是门槛&#10;例：267:1:球1,球源261:100；271:5:球5,球源401,爆气:80:20:3:2&#10;释放%=0-100（省略=100）&#10;次数=整轮最多放N次（0=不限，重开重置）；锁定次数=每只怪最多放N次（0=不限，换怪重置）&#10;冷却秒=该技能间隔兜底秒数（0/省略=自动跟随服务器2842真实后摇，无数据默认150ms）&#10;等级超已学自动降级、未学自动跳过；只填ID也能用"></textarea>' +
-      '<div class="log" style="margin-top:2px">写法说明：技能ID:等级:条件:释放%:次数:锁定次数:冷却秒。条件=释放前置（如阿修罗需球5,爆气，自动补状态）；释放%=0-100（省略=100）；次数=整轮上限（重开自动战斗即重置）；锁定次数=每只怪上限（换目标/解锁清零重计）；冷却秒=该技能释放间隔兜底（0/省略=自动跟随服务器2842真实后摇[动态]，无数据默认150ms）。技能按各自冷却独立释放，不再按攻击轮次重复出手。点选/拖拽生成的行只填前2段，无需手写。例：271:5:球5,爆气:80:20:3:2 = 阿修罗5级，需5球+爆气，80%概率，整轮最多20次，每只怪最多3次，间隔兜底2秒。 条件里还能写补球来源词 球源401（该技能补球只用狂蓄气）/ 球源261（只用蓄气）/ 球源自动（缺 1-2 颗用蓄气、缺 3 颗以上用狂蓄气），优先级高于上面的「补球来源」下拉；不写则跟随全局默认。例：267:1:球1,球源261:100 = 该技能需 1 颗球，且补球只用蓄气。</div>' +
+      '<div class="log" style="margin-top:2px">写法说明：技能ID:等级:条件:释放%:次数:锁定次数:冷却秒。条件=释放前置（如阿修罗需球5,爆气，自动补状态）；释放%=0-100（省略=100）；次数=整轮上限（重开自动战斗即重置）；锁定次数=每只怪上限（换目标/解锁清零重计）；冷却秒=该技能释放间隔兜底（0/省略=自动跟随服务器2842真实后摇[动态]，无数据默认150ms）。技能按各自冷却独立释放，不再按攻击轮次重复出手。点选/拖拽会自动带入释放前置；气弹消耗技能默认补齐球N，手写球数与补球来源保留。例：271:5:球5,爆气:80:20:3:2 = 阿修罗5级，需5球+爆气，80%概率，整轮最多20次，每只怪最多3次，间隔兜底2秒。 条件里还能写补球来源词 球源401（该技能补球只用狂蓄气）/ 球源261（只用蓄气）/ 球源自动（缺 1-2 颗用蓄气、缺 3 颗以上用狂蓄气），优先级高于上面的「补球来源」下拉；不写则跟随全局默认。例：267:1:球1,球源261:100 = 该技能需 1 颗球，且补球只用蓄气。</div>' +
       '</details>' +
       '<div class="sec">辅助技能（选技能自动加判定条件 · 按间隔施放）</div>' +
       '<div class="row"><span class="lb">技能</span><select id="dsh-askskill" style="flex:0 0 auto;max-width:130px"><option value="">选择技能…</option></select>' +
@@ -2705,7 +2717,7 @@ function createRoItemCapture(env) {
       '<div style="position:relative;flex:1 1 130px;min-width:100px"><input id="dsh-askstatus" placeholder="状态ID/英文（如 12 或 INC_AGI，联想辅助）" autocomplete="off" style="width:100%;box-sizing:border-box;padding:3px 6px;border:1px solid #b8c6d4;border-radius:4px;font-size:12px">' +
       '<div id="dsh-askstatus-ac" class="ac" style="display:none"></div></div>' +
       '<span style="color:#5a6b7f;font-size:11px;line-height:1.4">选中后=该状态不在身才补（消失补）· 数字ID或英文EFST直认</span></div>' +
-      '<div class="row"><span class="lb">间隔</span><input id="dsh-askint" type="number" value="120" style="flex:0 0 48px"><span class="st">秒</span>' +
+      '<div class="row"><span class="lb">新增技能默认间隔</span><input id="dsh-askint" type="number" value="120" min="0" max="86400" style="flex:0 0 62px"><span class="st">秒（每个技能可在下方单独修改；0=关闭纯定时，状态消失补仍有效）</span>' +
       '<span class="lb" style="min-width:52px">SP不低于</span><input id="dsh-asksp" type="number" value="30" style="flex:0 0 44px"><span class="st">%</span>' +
       '<label class="switch" style="margin-left:auto"><input id="dsh-asken" type="checkbox">启用自动释放</label></div>' +
       '<div class="box"><div class="b-hd">技能释放列表 <span class="tag green" id="dsh-askcount" style="float:right">0 项</span></div>' +
@@ -2749,10 +2761,10 @@ function createRoItemCapture(env) {
             '<button class="sub-tab" data-sub="ap-item">物品</button>' +
       '<button class="sub-tab" data-sub="ap-sync">同步器</button></div>' +
       '<div class="a-body">' +
-      // 子页1：战斗辅助（自动使用物品 + 自动装箭矢）+ 背包快照 + 自动跟随（默认）
+      // 子页1：战斗辅助（自动使用物品）+ 背包快照 + 自动跟随（默认）
       '<div class="sub-page active" data-subpage="ap-pot">' +
       '<div id="dsh-fw-aid">' +
-      '<div class="sec" style="display:flex;align-items:center;gap:6px"><span style="flex:1">战斗辅助 · 自动使用物品 / 自动装箭矢</span>' +
+      '<div class="sec" style="display:flex;align-items:center;gap:6px"><span style="flex:1">战斗辅助 · 自动使用物品</span>' +
       '<button class="ghost" id="dsh-fw-btn-aid" data-fw="aid" style="flex:0 0 auto;padding:0 8px;font-size:11px">浮窗</button></div>' +
       '<div class="sec">自动使用物品（点选背包 · 条件触发）</div>' +
       '<div class="row"><span class="lb">物品</span><select id="dsh-itempick" style="flex:0 0 auto;max-width:130px"><option value="">选择物品…</option></select>' +
@@ -2771,8 +2783,8 @@ function createRoItemCapture(env) {
       '<button class="ghost" id="dsh-itemdel" style="flex:0 0 auto">删除选中</button>' +
       '<label class="switch" style="margin-left:auto"><input id="dsh-itemen" type="checkbox">启用自动使用</label></div>' +
       '<div class="row"><span class="st" style="font-size:10px">「优先使用治愈术替代药品」已移至 助手模式→战斗设置</span></div></div>' +
-      '<div class="sec">箭矢管理（V2.38.40：自动续箭总开关与按怪换箭都在「换箭设置」浮窗）</div>' +
-      '<div class="row"><span class="st" style="font-size:10px">已移到 功能菜单 → 战斗功能 → 换箭设置：浮窗第一行是「箭矢管理：自动续箭」总开关，第二行是「按怪/按目标选箭」子选项；下面两行只是状态显示。</span></div>' +
+      '<div class="sec">换箭设置（已移至独立浮窗）</div>' +
+      '<div class="row"><span class="st" style="font-size:10px">打开方式：功能菜单 → 战斗功能 → 换箭设置。</span></div>' +
       '<div class="row"><span class="st" style="font-size:10px">V2.16.27：仅当手持弓/乐器/鞭子时生效（其它职业没有箭矢槽，避免白耗箭袋）</span></div>' +
       '<div class="row"><span class="st" id="dsh-arrowlog" style="font-size:10px">未启用</span></div>' +
       '<div class="row"><span class="st" id="dsh-arrowbaglog" style="font-size:10px">背包数据源：未读取</span></div>' +
@@ -3013,10 +3025,11 @@ function createRoItemCapture(env) {
 
       '<div class="row"><label class="switch"><input id="dsh-bgkeep" type="checkbox" checked>后台保活(音频+WebLock)</label><span class="tag blue">切后台保持吃药/打怪/拾取</span></div>' +
       '<div class="row"><label class="switch"><input id="dsh-alert" type="checkbox" checked>掉线提醒</label>' +
-      '<label class="switch"><input id="dsh-reconn" type="checkbox" checked>自动重连</label></div>' +
+      '<label class="switch"' + (IS_MN ? ' style="display:none"' : '') + '><input id="dsh-reconn" type="checkbox" checked>自动重连</label>' +
+      (IS_MN ? '<span class="st">手机端不自动刷新，保留当前游戏画面</span>' : '') + '</div>' +
       (IS_MN ? '<div class="box" style="background:rgba(255,235,215,.95);border:1px solid #e08a2a"><div class="b-hd" style="color:#b45309">手机版保活 · 重要设置（必做）</div>' +
         '<div class="row"><span class="st" style="font-size:11px;color:#7c2d12">① 系统设置 → 电池/应用管理 → 找到本浏览器（Kiwi 等）→ 电池优化 → 选 <b>「不限制 / 无限制」</b>（小米/华为等品牌在「应用启动管理」里允许后台活动）。<br>② 否则切后台会被系统杀进程/断网络 → 掉线。</span></div>' +
-        '<div class="row"><span class="st" style="font-size:11px;color:#7c2d12">③ 助手已加后台保活：切后台瞬间连发心跳 + 回前台自动补心跳，超 90 秒自动重登。切后台勿超 90 秒；长时间挂机请保持屏幕常亮或分屏。</span></div></div>' : '') +
+        '<div class="row"><span class="st" style="font-size:11px;color:#7c2d12">③ 助手已加后台保活：切后台瞬间连发心跳 + 回前台自动补心跳；不会因超时自动刷新或重登，以免打断正常运行。长时间挂机请保持屏幕常亮或分屏。</span></div></div>' : '') +
       '<div class="sec">快速侦查（附近怪物/物品）</div>' +
       '<details style="margin-top:2px"><summary>点开查看附近目标</summary>' +
       '<div class="st" id="dsh-recon" style="font-size:11px;max-height:110px;overflow:auto">未就绪</div></details>' +
@@ -7072,7 +7085,7 @@ function createRoItemCapture(env) {
     ["dsh-prereq", "c"], ["dsh-z-attmix", "c"],
     ["dsh-scanen", "c"], ["dsh-scanint", "v"],
     ["dsh-z-ona", "v"], ["dsh-z-grpn", "v"], ["dsh-z-qoaen", "c"], ["dsh-z-qoan", "v"], ["dsh-z-qoaskill", "v"], ["dsh-z-qoaskilllv", "v"],
-    ["dsh-z-flymode", "v"], ["dsh-z-flyauto", "c"], ["dsh-z-flystuck", "c"],
+    ["dsh-z-flymode", "v"], ["dsh-z-flyauto", "c"], ["dsh-z-wingreserve", "v"], ["dsh-z-flystuck", "c"],
     // V2.38.25 G1/G2：无目标/卡死拆回两条独立机制——两个开关（dsh-z-flystuck 见上一行 / dsh-z-idlefly 本行）
     //   与三个秒数（dsh-z-stucksec / dsh-z-nomove / dsh-z-idleflysec）全部进存档表（漏登记会「换角色后设置丢/被默认值覆盖」）；
     //   历史 KV 一律保留不删。
@@ -7714,8 +7727,7 @@ function createRoItemCapture(env) {
       // V2.38.34 审计 P2：置零必须排在复位之前——复位会把 npBattleKnown 置回未知，之后置零走到 npRequestBattle 只会拿到 unknown，一个包都不发（2.38.32 对外行为回归）
       try { if (npZeroWasOn) npZeroBattle("换角色"); } catch (e0) {} // 此刻读到的仍是旧角色的真状态：发出这一个包，随后由复位整份作废
       try { npResetBattleState(); } catch (e0) {} // 换角色：旧角色排队意图绝不能落到新角色
-      try { dojoStop("换角色"); } catch (e5) {} // V2.36.0：换角色立即停止内置道馆并释放租约
-      if (typeof selfSpirits !== "undefined") selfSpirits = { aid: 0, num: 0, map: "" };
+      if (typeof selfSpirits !== "undefined" && selfSpiritCount(ent) === null) selfSpirits = { aid: 0, num: 0, map: "" };
       try { captureAll(); } catch (e) {} // 旧档先落盘
       setActiveProfile(key);
       ensureProfile(key);
@@ -7896,7 +7908,7 @@ function createRoItemCapture(env) {
   // 心跳在后台完全失效；且 Android 省电策略可能直接断开 WebSocket。服务器 60~90s 无包判定掉线。
   // 对策（仅 IS_MN 启用）：
   //  ① hidden 瞬间同步连发多个 PING，把服务器端「最后活跃」推到切后台那一刻（撑满判定窗口）；
-  //  ② visible 回前台立即补 PING；后台超过判定窗口 → 带 ?auto=1 重载，自动重登（不依赖手动点启动）；
+  //  ② visible 回前台立即补 PING；后台时长不代表断线，手机不自动重载，避免无人值守时卡在离开页面确认；
   try {
     if (IS_MN) {
       var mnHiddenAt = 0;
@@ -7912,18 +7924,11 @@ function createRoItemCapture(env) {
             sendPing(); // 回前台立即补心跳
             var gap = mnHiddenAt ? (Date.now() - mnHiddenAt) : 0;
             tlog("mn-visible gap=" + gap + "ms");
-            // 后台超过服务器判定窗口（约 90s）→ 大概率已掉线。
-            // 带 ?auto=1 重载：buildConfig 检测到 auto= 才注入 autoLogin → 自动重登，
-            // 比 onDisconnect 的 10s 延迟 + 无参 reload（还需手动启动）更可靠。
-            if (gap > 90000 && $id("dsh-reconn") && $id("dsh-reconn").checked && saved.account) {
-              setStatus("注意：切后台超时，自动重连并重登…", "err");
-              tlog("mn-visible auto-reload gap=" + gap);
-              var autoU = switchServerUrl(pickCv());
-              autoU = autoU.replace(/([?&])(run|auto)=/g, "$1auto=");
-              if (!/\bauto=/.test(autoU)) autoU += (autoU.indexOf("?") >= 0 ? "&" : "?") + "auto=1";
-              location.replace(autoU);
-            } else if (gap > 90000) {
-              setStatus("注意：切后台超过 90 秒，可能已掉线（未开自动重连）", "err");
+            // 后台时长不是断线证据：玩家取消离开页弹窗后仍可正常继续。
+            // 手机只补心跳并保留原页面，绝不由计时器发起刷新或绕过离开保护。
+            if (gap > 90000) {
+              setStatus("切后台较久，已尝试补心跳，保持当前游戏页面", "warn");
+              tlog("mn-visible keep-page gap=" + gap);
             }
           }
         } catch (e) {}
@@ -9778,11 +9783,22 @@ function createRoItemCapture(env) {
     var html = roListRoBanner(); // F2：未识别 → 明确标注「暂不可用」
     for (var i = 0; i < askList.length; i++) {
       var s = askList[i];
-      html += '<div class="list-item drag-item' + (i === askPickIdx ? ' active' : '') + '" data-ask-i="' + i + '" data-drag-i="' + i + '" draggable="true" style="cursor:grab" title="拖动调整顺序"><span class="dh">⠿</span><span>' + (i + 1) + '. ' + (s.name || ("技能" + s.skid)) + ' Lv' + s.lv + '</span>' + (s.st ? '<span class="tag blue" style="margin-left:4px">' + (s.stInv ? "在身补" : "消失补") + (/^\d+$/.test(String(s.st)) ? "·状态" + s.st : "") + '</span>' : '<span class="tag gray" style="margin-left:4px;color:#8a97a6">按间隔放（未识别状态）</span>') + '</div>';
+      var sec = Number(s.intSec);
+      s.intSec = Math.min(86400, Math.max(0, s.intSec == null || !Number.isFinite(sec) || sec < 0 ? askNum("dsh-askint", 120) : sec)); // 旧档继承原间隔一次，之后各技能独立
+      html += '<div class="list-item drag-item ask-row' + (i === askPickIdx ? ' active' : '') + '" data-ask-i="' + i + '" data-drag-i="' + i + '" draggable="true" style="cursor:grab" title="拖动调整顺序"><span class="dh">⠿</span><div class="ask-main"><div class="ask-name">' + (i + 1) + '. ' + (s.name || ("技能" + s.skid)) + ' Lv' + s.lv + '</div><div class="ask-meta">' + (s.st ? '<span class="tag blue">' + (s.stInv ? "在身补" : "消失补") + (/^\d+$/.test(String(s.st)) ? "·状态" + s.st : "") + '</span>' : '<span class="tag gray">状态未识别 · 按间隔放</span>') + '<label class="ask-timer">定时 <input data-ask-interval="' + i + '" type="number" min="0" max="86400" step="0.1" value="' + s.intSec + '"> 秒</label></div></div></div>';
     }
     el.innerHTML = html;
     el.querySelectorAll("[data-ask-i]").forEach(function (row) {
       row.addEventListener("click", function () { askPickIdx = parseInt(this.getAttribute("data-ask-i"), 10); renderAskList(); });
+    });
+    el.querySelectorAll("[data-ask-interval]").forEach(function (input) {
+      input.addEventListener("click", function (e) { e.stopPropagation(); });
+      input.addEventListener("change", function (e) {
+        e.stopPropagation();
+        var idx = parseInt(this.getAttribute("data-ask-interval"), 10), n = Number(this.value);
+        if (!askList[idx] || this.value.trim() === "" || !Number.isFinite(n) || n < 0 || n > 86400) { setStatus("定时间隔请填 0~86400 秒", "warn"); renderAskList(); return; }
+        askList[idx].intSec = n; saveAskList();
+      });
     });
     enableDragSort(el, function (from, to) {
       var moved = askList.splice(from, 1)[0];
@@ -9819,7 +9835,7 @@ function createRoItemCapture(env) {
     var debuff = $id("dsh-askdebuff") ? $id("dsh-askdebuff").value.trim() : "";
     if (debuff) {
       var debId = statusIdOf(debuff);
-      askList.push({ skid: skid, lv: found ? found.lv : 5, name: sname, st: debId >= 0 ? debId : debuff, stInv: true });
+      askList.push({ skid: skid, lv: found ? found.lv : 5, name: sname, st: debId >= 0 ? debId : debuff, stInv: true, intSec: Math.max(0, askNum("dsh-askint", 120)) });
       saveAskList();
       setStatus("已加入 " + sname + "（Debuff「" + debuff + "」在身才放" + (debId >= 0 ? "·ID" + debId : "·ID未识别，请从状态速查确认") + "）", debId >= 0 ? "ok" : "warn");
       return;
@@ -9836,7 +9852,7 @@ function createRoItemCapture(env) {
     } else if (cond && sname) {
       stId = buffStId(sname); if (stId < 0) { for (var sk in SKILL_STATUS_SRC) { var arr = SKILL_STATUS_SRC[sk]; for (var ai = 0; ai < arr.length; ai++) { if (arr[ai] === skid) { var tryId = buffStId(sk); if (tryId >= 0) { stId = tryId; } break; } } if (stId >= 0) break; } }
     }
-    askList.push({ skid: skid, lv: found ? found.lv : 5, name: sname, st: stId >= 0 ? stId : "", stInv: false });
+    askList.push({ skid: skid, lv: found ? found.lv : 5, name: sname, st: stId >= 0 ? stId : "", stInv: false, intSec: Math.max(0, askNum("dsh-askint", 120)) });
     saveAskList();
     setStatus("已加入 " + sname + (stId >= 0 ? "（自身状态消失才补·ID" + stId + "）" : (cond === "party" ? "（队友判定待支持，暂按间隔）" : "（未识别状态，按间隔放）")), "ok");
   });
@@ -9853,9 +9869,16 @@ function createRoItemCapture(env) {
   // V2.38.2：数字输入统一取值——SP 下限允许 0（原来 parseInt(...) || 30 把「不低于 0」也改成 30），用 isFinite 判断
   function askNum(id, def) { var n = parseInt($id(id) ? $id(id).value : "", 10); return isFinite(n) ? n : def; }
   function askSpGuard() { return askNum("dsh-asksp", 30); }
+  function askIntervalMs(s) {
+    var n = Number(s && s.intSec);
+    return (s && s.intSec != null && Number.isFinite(n) && n >= 0 ? Math.min(n, 86400) : Math.max(0, askNum("dsh-askint", 120))) * 1000;
+  }
+  function askTargetId(skid) { // 天赐 / 加速术是对己方目标施法，不能发无目标 0
+    return skid === 34 || skid === 29 ? ((CLIENT.SS && CLIENT.SS.Entity && CLIENT.SS.Entity.GID) || (CLIENT.SS && CLIENT.SS.AID) || 0) : 0;
+  }
   // V2.38.2：#dsh-bufflog 原来是死元素（全脚本只有创建它的那一行、没有任何写入）→ 永远显示「辅助技能：未启用」。
   // 改为实时状态；内容不变不重写（防闪）。
-  var buffLogLast = "", askLastCast = null;
+  var buffLogLast = "", askLastCast = null, askNextCastAt = 0; // 辅助技能一拍只发一项，间隔 300ms 避免第二项被服务器公共后摇吞掉
   function renderBuffLog() {
     try {
       var el = $id("dsh-bufflog"); if (!el) return;
@@ -9887,13 +9910,14 @@ function createRoItemCapture(env) {
       var ent = CLIENT.SS.Entity;
       if (!ent || !ent.life) return;
       var now = Date.now();
-      var intv = (askNum("dsh-askint", 120) || 120) * 1000;
+      if (now < askNextCastAt) return;
+      // 每项使用自身定时秒数；上方默认只在新增/旧档继承时读取，不能再联动其它技能。
       var spMax = ent.life.sp_max != null ? ent.life.sp_max : ent.life.maxsp;
       var spPct = spMax > 0 ? (ent.life.sp != null ? ent.life.sp / spMax * 100 : 100) : 100;
       var spGuard = askSpGuard();
       if (spPct < spGuard) return;
       // 修「掉 buff 不及时补」：去掉全局 askLastCast 门禁，改每技能独立 lastAt。
-      // 状态判活技能 = 状态消失/在身即补（仅 5s 防抖防重复）；无状态技能 = 按全局间隔放。
+      // 状态判活技能 = 状态消失/在身即补（保留 5s/30s 防抖）；无状态技能/状态未识别 = 各自独立间隔。
       if (askDiagOn) console.log("[ASK-DIAG] tick start, askList.length=" + askList.length + " en=" + en + " spPct=" + spPct.toFixed(1) + " spGuard=" + spGuard);
       var castAny = false;
       for (var i = 0; i < askList.length; i++) {
@@ -9903,13 +9927,14 @@ function createRoItemCapture(env) {
             var learnedSt = dshLearnedStatus(s.skid);
             if (learnedSt >= 0) { s.st = learnedSt; s.stInv = false; saveAskList(); }
           }
+          var intv = askIntervalMs(s);
           if (s.st) {
             var stId = buffStId(s.st);
             if (stId < 0) {
-              // V2.15.30：状态名未识别不再静默跳过（否则该 buff 永不补，看起来只补第一个）——按全局间隔放兜底，并提示一次
+              // 状态名未识别不再静默跳过；按该技能独立定时间隔兜底（0=关闭），并提示一次
               if (!s.stWarned) { s.stWarned = true; setStatus("自动技能状态未识别：" + s.name + "（st=" + s.st + "），按间隔放兜底，建议填数字状态ID", "warn"); }
               var elInv = s.lastAt ? (now - s.lastAt) : -1;
-              if (s.lastAt && now - s.lastAt < intv) { if (askDiagOn) console.log("[ASK-DIAG] [" + i + "] skid=" + s.skid + " st=INVALID interval wait, elapsed=" + elInv); continue; }
+              if (!intv || (s.lastAt && now - s.lastAt < intv)) { if (askDiagOn) console.log("[ASK-DIAG] [" + i + "] skid=" + s.skid + " st=INVALID interval wait, elapsed=" + elInv); continue; }
               if (askDiagOn) console.log("[ASK-DIAG] [" + i + "] skid=" + s.skid + " st=INVALID will cast (interval fallback), elapsed=" + elInv);
             } else {
               var stOn = buffStateOn(stId);
@@ -9919,35 +9944,37 @@ function createRoItemCapture(env) {
               if (s.skid === 357 && (stId === 105 || stId === 3)) { stOn = stOn || buffStateOn(1); }
               var need = s.stInv ? stOn : !stOn; // 在身补 / 消失补
               if (!need) { s.missCnt = 0; if (askDiagOn) console.log("[ASK-DIAG] [" + i + "] skid=" + s.skid + " st=" + s.st + " stId=" + stId + " stOn=" + stOn + " need=false"); continue; }
-              // 防抖：刚放出去状态未上身不重复；连续 2 次补后仍未上身（hook 未收到/状态实际加不上）→ 退避到全局间隔，避免每 5s 狂补
+              // 防抖：刚放出去状态未上身不重复；连续 2 次补后仍未上身（hook 未收到/状态实际加不上）→ 固定 30s 退避，避免每 5s 狂补
               var waitMs = s.missCnt >= 2 ? 30000 : 5000; // V2.10.5 退避固定 30s（原 intv 120s 会卡死补状态）；上身通知会清零 missCnt
               if (s.lastAt && now - s.lastAt < waitMs) { if (askDiagOn) console.log("[ASK-DIAG] [" + i + "] skid=" + s.skid + " WAIT missCnt=" + (s.missCnt || 0) + " elapsed=" + (now - s.lastAt) + " waitMs=" + waitMs); continue; }
               if (askDiagOn) console.log("[ASK-DIAG] [" + i + "] skid=" + s.skid + " st=" + s.st + " stId=" + stId + " stOn=" + stOn + " need=true missCnt=" + (s.missCnt || 0));
             }
           } else {
             var elapsed = s.lastAt ? (now - s.lastAt) : -1;
-            if (s.lastAt && now - s.lastAt < intv) { if (askDiagOn) console.log("[ASK-DIAG] [" + i + "] skid=" + s.skid + " NO-ST interval wait, elapsed=" + elapsed); continue; } // 纯间隔技能
+            if (!intv || (s.lastAt && now - s.lastAt < intv)) { if (askDiagOn) console.log("[ASK-DIAG] [" + i + "] skid=" + s.skid + " NO-ST interval wait, elapsed=" + elapsed); continue; } // 纯间隔技能
             if (askDiagOn) console.log("[ASK-DIAG] [" + i + "] skid=" + s.skid + " NO-ST will cast, elapsed=" + elapsed);
           }
           if (askDiagOn) console.log("[ASK-DIAG] CAST skid=" + s.skid + " lv=" + s.lv + " target=0");
           var p = new (czp("USE_SKILL"))();
           p.SKID = s.skid;
           p.selectedLevel = s.lv;
-          p.targetID = 0; // 对自己/无目标
-          dshCastMark(s.skid, s.lv, 0, "ask");
+          p.targetID = askTargetId(s.skid);
+          dshCastMark(s.skid, s.lv, p.targetID, "ask");
           CLIENT.NM.sendPacket(p);
           s.lastAt = now;
+          askNextCastAt = now + 300; // 分开技能包；未发送的后续项不能被错记为已补
           if (s.st) s.missCnt = (s.missCnt || 0) + 1; // 补了但判活仍缺 → missCnt++（连续2次退避到全局间隔）
           askLastCast = { name: s.name || ("技能" + s.skid), time: new Date(now).toTimeString().slice(0, 8) };
           castAny = true;
           if (btDiagOn) btLog('ask-cast', 'skid=' + s.skid + ' st=' + s.st + ' stInv=' + !!s.stInv + ' missCnt=' + (s.missCnt || 0));
+          break; // 下一个辅助技能等下一拍施放，避免连包争夺同一次技能时机
         } catch (e) {
           try { tlog("ask-cast-error skid=" + (s && s.skid) + " " + (e.message || e)); dshDiag("ask-cast-error", { skid: s && s.skid, error: String(e.message || e) }); } catch (e2) {}
         }
       }
       if (castAny) {
         dshDiag("ask-cast", { list: askList.length });
-        setStatus("自动技能已补缺失状态", "ok");
+        setStatus("自动辅助技能已施放：" + (askLastCast ? askLastCast.name : ""), "ok");
       }
     } catch (e) {}
   }
@@ -9967,8 +9994,8 @@ function createRoItemCapture(env) {
         var p = new (czp("USE_SKILL"))();
         p.SKID = s.skid;
         p.selectedLevel = s.lv;
-        p.targetID = 0;
-        dshCastMark(s.skid, s.lv, 0, "combo");
+        p.targetID = askTargetId(s.skid);
+        dshCastMark(s.skid, s.lv, p.targetID, "combo");
         CLIENT.NM.sendPacket(p);
       } catch (e) {
         try { tlog("combo-cast-error skid=" + (s && s.skid) + " " + (e.message || e)); } catch (e2) {}
@@ -10109,8 +10136,8 @@ function createRoItemCapture(env) {
   function onDisconnect(msg) {
     if (reconnecting) return;
     var doAlert = $id("dsh-alert") && $id("dsh-alert").checked;
-    var doReload = $id("dsh-reconn") && $id("dsh-reconn").checked && saved.account;
-    setStatus("注意：已断开连接", "err");
+    var doReload = !IS_MN && $id("dsh-reconn") && $id("dsh-reconn").checked && saved.account;
+    setStatus(IS_MN ? "检测到连接提示异常，手机端保持当前页面，不自动刷新" : "注意：已断开连接", "err");
     if (doAlert) {
       var flashes = 0;
       titleFlashing = true;
@@ -11103,7 +11130,11 @@ function createRoItemCapture(env) {
     //   否则播种自己会把 7 天逻辑过期刷成永不过期；② 状态播报走面板专用行 #dsh-battlestate（见 npStateNote 的拼装点），
     //   绝不写 #dsh-np-log —— 那一行是指令结果区（「未发送」/「已发送…」/失败原文），不能被状态播报顶掉。
     var isRealSrc = /^(loadinfo-2805|reloadinfo-2806|chat-notice)/.test(String(source || ""));
-    if (isRealSrc) { try { npAtkRecSave(!!on); } catch (eS) {} }
+    if (isRealSrc) {
+      try { npAtkRecSave(!!on); } catch (eS) {}
+      // 玩家手动关闭内挂后，放弃寻怪循环缓存的「已在工作」状态；只信真实服务器来源，不用旧面板勾选值盲切。
+      if (!on && typeof zWalkState !== "undefined" && zWalkState) { zWalkState.npOn = false; zWalkState.npMiss = 0; }
+    }
     npStateNote = (on ? "开" : "关") + " · " + new Date().toTimeString().slice(0, 8) + " · " + npSourceLabel(source);
     try { npAckResolve(!!on); } catch (eA) {} // V2.38.47：回执到达即结束等待（事件驱动）
     if (!on) { try { npOffServerAck(); } catch (e3) {} } // 服务器报告已关 = 关闭结果确认（不必等 op142）
@@ -11409,7 +11440,8 @@ function createRoItemCapture(env) {
     try {
       var result = npRequestBattle(true, "npEnsureHunt", false, null, npIsThree() ? null : function () { return npSendUpdate(38, 0); });
       tlog("np-hunt-on result=" + result + " cv=" + DEFAULTS.ClientVer);
-    } catch (e) {}
+      return result; // 卡墙交回内挂时，只有已发/已开/排队才能让助手移动让位
+    } catch (e) { return "failed"; }
   }
   function npHuntStop(source, immediate) {
     try {
@@ -11459,6 +11491,7 @@ function createRoItemCapture(env) {
       if (order0.length) {
         var maxSkillRange = base;
         for (var oi = 0; oi < order0.length; oi++) {
+          if (learnedSkillLv(order0[oi].skid) <= 0) continue; // 未学技能不得抬高追怪射程；释放层同样会跳过它
           var sr = getSkillRange(order0[oi].skid, order0[oi].lv);
           if (sr + 1 > maxSkillRange) maxSkillRange = sr + 1;
         }
@@ -11552,20 +11585,34 @@ function createRoItemCapture(env) {
   //         （zAtkHpTrack 的 at 字段口径：从无 HP 记录也算「没掉过血」）
   //   动作：doFly() 换点。节流：距上次自动换点（zWalkState.lastIdleFly）≥ dsh-z-flyint 秒（默认 4）。
   //   救命瞬移（HP/SP/失血/无药被围/群殴/BOSS）完全不参与本节流，仍按既有 flyCool 走，绝不延迟保命。
+  // 寻怪/脱困换点只在未交战时使用；锁定名单/发过锁定包本身不等于交战。
+  function zEngagedNow(nowMs) {
+    try {
+      var gid = gidInt(zLock && zLock.gid), mob = gid && zEntOf(gid), me = CLIENT.SS && CLIENT.SS.Entity;
+      if (!mob || !me || !me.position || !mob.position || zLock.done) return false;
+      var mid = mob._job != null ? mob._job : (mob.job != null ? mob.job : mob.mobId);
+      if (zBossIgnoredGid(gid, mid) || zRangeDist(mob.position, me.position) > calcAtkRange()) return false;
+      if (zFightDamageAt.gid === gid && nowMs - zFightDamageAt.at < 6000) return true;
+      if (typeof zLosClear === "function" && !zLosClear(me.position[0], me.position[1], mob.position[0], mob.position[1])) return false; // 隔墙试打不算交战
+      var acts = me.ACTION || {};
+      for (var act in acts) if (/^(ATTACK|CAST|SPELL|SKILL)/.test(act) && me.action === acts[act]) return true;
+      return false;
+    } catch (e) { return false; }
+  }
   function zFlyIntSecNow() {
     var v = 1; // V2.38.45：与面板缺省/发布端表一致（4s→1s；审计 F3 残留）
     try { var el = $id("dsh-z-flyint"); if (el) { var n = parseInt(el.value, 10); if (!isNaN(n) && n > 0) v = n; } } catch (e0) {}
     return v;
   }
   // V2.38.25 I：脱困换点等待秒数（dsh-z-escflysec）——「走路走不动 → doFly() 换点」的节流窗口。
-  //   默认 6（原写死 15s，发布前按用户要求缩短为 6）；取不到控件 / 值非数字 / <=0 → 6；夹到 1..300；任何异常一律 6。
+  //   默认 6；填 0 关闭追怪/走路脱困换点，缺失或无效值用默认 6；正数夹到 1..300。
   //   生效处：追怪卡住 6s / 同一卡住事件转向 4 次 / 八个方向 12 格全不可走（含 return 之后的死代码）。
   function zEscFlySecNow() {
     var v = 6;
     try {
       var el = $id("dsh-z-escflysec");
-      if (el) { var n = parseInt(el.value, 10); if (!isNaN(n) && n > 0) v = n; }
-      if (v < 1) v = 1;
+      if (el) { var n = parseInt(el.value, 10); if (!isNaN(n) && n >= 0) v = n; }
+      if (v < 0) v = 0;
       if (v > 300) v = 300;
     } catch (e0) { return 6; }
     return v;
@@ -11585,10 +11632,11 @@ function createRoItemCapture(env) {
       if (nowMs < flyFailUntil) return ""; // 不在瞬移失败冷却
       if (!zStuckSince) return "";
       var stuckSec = 4;
-      try { var el = $id("dsh-z-stucksec"); if (el) { var sv = parseInt(el.value, 10); if (!isNaN(sv) && sv > 0) stuckSec = sv; } } catch (e1) {}
-      if (nowMs - zStuckSince < stuckSec * 1000) return "";
+      try { var el = $id("dsh-z-stucksec"); if (el) { var sv = parseInt(el.value, 10); if (!isNaN(sv) && sv >= 0) stuckSec = sv; } } catch (e1) {}
+      if (stuckSec === 0 || nowMs - zStuckSince < stuckSec * 1000 || !canTravelFly()) return "";
       var ht = (zLock && zLock.gid) ? zAtkHpTrack[zLock.gid] : null;
-      if (ht && (nowMs - ht.at) < 4000) return ""; // 锁定怪最近 4s 掉过血 → 站桩正常打怪，不判卡死
+      if (ht && (nowMs - ht.at) < 4000) return ""; // 最近 4s 有锁定 HP 记录（初次采样也算）→ 给短暂观察窗，不判卡死
+      if (zEngagedNow(nowMs)) return ""; // 连续交战的 BOSS 无 HP 回执时也不能被「站桩=卡死」换点
       if (nowMs - ((zWalkState && zWalkState.lastIdleFly) || 0) < zFlyIntSecNow() * 1000) return ""; // 节流：距上次自动换点 ≥ dsh-z-flyint
       return "卡死" + stuckSec + "s";
     } catch (e) { return ""; }
@@ -12000,25 +12048,32 @@ function createRoItemCapture(env) {
       if (!$id("dsh-z-sit") || !$id("dsh-z-sit").checked) return false;
       var entN = CLIENT.SS && CLIENT.SS.Entity;
       var lfN = entN && entN.life;
-      if (!lfN || !lfN.maxhp || !lfN.maxsp) return false;
-      var hpN = lfN.hp / lfN.maxhp * 100;
-      var spN = lfN.sp / lfN.maxsp * 100;
+      var hmN = lfN && (lfN.hp_max != null ? lfN.hp_max : lfN.maxhp), smN = lfN && (lfN.sp_max != null ? lfN.sp_max : lfN.maxsp);
+      if (!lfN || !(hmN > 0) || !(smN > 0) || !(lfN.hp > 0)) return false;
+      var hpN = lfN.hp / hmN * 100;
+      var spN = lfN.sp / smN * 100;
       var loN = parseInt($id("dsh-z-sithplo").value, 10) || 30;
       var sLoN = parseInt($id("dsh-z-sitsplo").value, 10) || 10;
       return hpN < loN || spN < sLoN;
     } catch (e) { return false; }
   }
+  // 坐下包已发出但动画还没确认：短时让位，不把发包当作坐下成功。
+  function sitPending() { return sitSince > 0 && !isSitting() && Date.now() - sitSince < 1500; }
   // V2.15.22：坐下状态维护——坐下期间被打/回满/30s 看门狗 → 自动站起（无需手动）
   function sitMaintain() {
     try {
       if (!$id("dsh-z-sit") || !$id("dsh-z-sit").checked) { zSitWhy = "开关关"; return; }
-      if (!isSitting()) { sitSince = 0; sitHpAt = -1; return; } // V2.16.9：没坐着（无论谁站起）清坐下标记，防手动站起残留
+      if (sitPending()) return;
+      if (!isSitting()) { sitSince = 0; sitHpAt = -1; if (actLock.act === "sit") actLock.act = null; return; } // 坐姿未确认/手动站起后释放锁
       var nowM = Date.now();
       var entM = CLIENT.SS && CLIENT.SS.Entity;
       var lifeM = entM && entM.life;
       if (!lifeM) return;
-      var hpM = lifeM.maxhp > 0 ? lifeM.hp / lifeM.maxhp * 100 : 100;
-      var spM = lifeM.maxsp > 0 ? lifeM.sp / lifeM.maxsp * 100 : 100;
+      var hmM = lifeM.hp_max != null ? lifeM.hp_max : lifeM.maxhp, smM = lifeM.sp_max != null ? lifeM.sp_max : lifeM.maxsp;
+      if (!(hmM > 0) || !(smM > 0)) return;
+      var hpM = lifeM.hp / hmM * 100;
+      var spM = lifeM.sp / smM * 100;
+      if (!sitSince && sitSendAt && nowM - sitSendAt < 10000) { sitSince = sitSendAt; sitHpAt = hpM; } // 坐下动画晚于确认窗，仍认作本次助手坐下
       var hiM = parseInt($id("dsh-z-sithphi").value, 10) || 80;
       var sHiM = parseInt($id("dsh-z-sitsphi").value, 10) || 70;
       var hitM = (nowM - zHpWatch.lastHitAt) < 3000;
@@ -12033,19 +12088,15 @@ function createRoItemCapture(env) {
         setStatus("坐下被打，自动站起应战…", "warn");
         return;
       }
-      // 回满 → 站起继续（V2.16.9：只对脚本自己坐下的生效，手动坐下不干预；受「回满后继续战斗」开关控制）
+      // 两项都达到玩家设定的起身上限 → 起身继续；只管理助手自己发起的坐下，手动坐下不干预。
       var sitBackM = !$id("dsh-z-sitback") || $id("dsh-z-sitback").checked;
-      if (sitSince && sitBackM && hpM > hiM && spM > sHiM && !winM) {
-        if (!sendSit(false)) return;   // V2.38.52（P0-3）：没发出去就不清状态，下一拍再试
-        sitSince = 0; sitHpAt = -1;
-        if (actLock.act === "sit") actLock.act = null;
+      if (sitSince && sitBackM && hpM >= hiM && spM >= sHiM && !winM) {
+        if (sendSit(false)) sitStandAt = nowM; // 坐姿真解除前保留 sitSince；服务端拒绝则节流后重试
         return;
       }
       // 看门狗：坐下 30s 血未回升（坐不住）→ 站起
       if (sitSince && (nowM - sitSince > 30000) && !winM && hpM <= (sitHpAt >= 0 ? sitHpAt + 2 : hpM)) {
-        if (!sendSit(false)) return;   // V2.38.52（P0-3）：同上，发包失败保留状态
-        sitSince = 0; sitHpAt = -1;
-        if (actLock.act === "sit") actLock.act = null;
+        if (sendSit(false)) sitStandAt = nowM; // 同样等客户端确认已站起才清状态，避免一次丢包后永久坐着
       }
     } catch (e) {}
   }
@@ -12055,7 +12106,7 @@ function createRoItemCapture(env) {
       // V2.16.8：内挂模式不再让位——助手自己发包坐下（sendSit 直接发包，不依赖内挂 .opensit 是否真正生效）；
       //   坐下期间 zWalk 有 isSitting 保护（检测到坐着直接 return 不寻怪），与内挂寻怪不冲突；数值已由 pushSitToBot 双向同步
       sitMaintain();
-      if (isSitting()) { zSitWhy = "已坐下"; return; }
+      if (isSitting() || sitPending()) { zSitWhy = isSitting() ? "已坐下" : "等待坐姿确认"; return; }
       if (!$id("dsh-z-sit") || !$id("dsh-z-sit").checked) { zSitWhy = "开关关"; return; }
       // V2.38.45（用户定稿·坐下优先）：删掉「锁定怪在射程内 → 不坐」这条 —— 它是弓手永远坐不下的元凶
       //   （射程 9~12 格，站在 8 格外的怪也算「射程内」）。坐下不再看附近有没有怪、也不看锁定怪在哪：
@@ -12066,11 +12117,12 @@ function createRoItemCapture(env) {
       var lifeD = entD && entD.life;
       if (!lifeD) return;
       var nowD = Date.now();
-      var hpD = lifeD.maxhp > 0 ? lifeD.hp / lifeD.maxhp * 100 : 100;
-      var spD = lifeD.maxsp > 0 ? lifeD.sp / lifeD.maxsp * 100 : 100;
+      var hmD = lifeD.hp_max != null ? lifeD.hp_max : lifeD.maxhp, smD = lifeD.sp_max != null ? lifeD.sp_max : lifeD.maxsp;
+      var hpD = hmD > 0 ? lifeD.hp / hmD * 100 : 100;
+      var spD = smD > 0 ? lifeD.sp / smD * 100 : 100;
       // V2.38.52（P1-10）：生命必须可确认且 >0 才允许坐下。原来 hp 读不到时 hpD=NaN，
       //   只让 HP 分支落空、SP 偏低照样触发坐下；死亡或 HP 不可信时都不该坐。
-      if (!(typeof lifeD.maxhp === "number" && isFinite(lifeD.maxhp) && lifeD.maxhp > 0 && typeof lifeD.hp === "number" && isFinite(lifeD.hp))) { zSitWhy = "生命不可确认"; return; }
+      if (!(typeof hmD === "number" && isFinite(hmD) && hmD > 0 && typeof smD === "number" && isFinite(smD) && smD > 0 && typeof lifeD.hp === "number" && isFinite(lifeD.hp))) { zSitWhy = "生命不可确认"; return; }
       if (!(lifeD.hp > 0)) { zSitWhy = "已死亡"; return; }
       // V2.38.52（P2-2）：兜底阈值必须与 UI 默认值和 needSitNow 一致（30/10）。
       //   原来这里是 40/30、needSitNow 是 30/10 —— 同一个血蓝快照会一边判「不需要坐下」一边发坐下包。
@@ -12157,8 +12209,9 @@ function createRoItemCapture(env) {
     try {
       var cMap = getCurrentMapInfo();
       var life = ent && ent.life;
-      var hpPct = life && life.maxhp > 0 ? life.hp / life.maxhp * 100 : 100;
-      var spPct = life && life.maxsp > 0 ? life.sp / life.maxsp * 100 : 100;
+      var hm = life && (life.hp_max != null ? life.hp_max : life.maxhp), sm = life && (life.sp_max != null ? life.sp_max : life.maxsp);
+      var hpPct = hm > 0 ? life.hp / hm * 100 : 100;
+      var spPct = sm > 0 ? life.sp / sm * 100 : 100;
       var bossDist = -1, mobCount = 0;
       for (var i = 0; i < (mobs || []).length; i++) {
         var mb = mobs[i];
@@ -12391,6 +12444,7 @@ function createRoItemCapture(env) {
   }
   // A3：BOSS 四模式判定（瞬移 / 优先攻击 / 等待残血补尾刀 / 保持距离逃离）——V2.38.20：「不处理」升级为「保持距离逃离」
   var zLastBossAct = "保持距离逃离", zLastBossHp = -1, zLastGrpCount = 0, zLastFlyReason = "", zLastFlyReasonAt = 0;
+  var zDefenseFlyAt = 0; // 保命裁决已请求瞬移时，本拍寻怪移动/换点一律让位
   // V2.38.15：首领设置绝对优先（名单门已撤，首领只按「BOSS 出现」这一项裁决）
   var zBossIgnoreAll = false;   // 本拍所有首领都进忽略集合（保持距离逃离 / 尾刀未到线 / 血量未知；尾刀到线时只放行那一只）
   var zBossAllowGid = 0;        // 忽略集合里唯一放行的首领 GID（尾刀到线；0 = 没有）
@@ -12737,7 +12791,7 @@ function createRoItemCapture(env) {
       var stalled = !!zBossKeep.stillSince && (now - zBossKeep.stillSince >= 3000);
       var stuck = stalled && (!tgtWalkable || snapBack);
       var flyOn = !($id("dsh-z-flykill") && !$id("dsh-z-flykill").checked);
-      var stuckFly = !!(stuck && flyOn && now - (zBossKeep.lastFlyAt || 0) >= 15000);
+      var stuckFly = !!(stuck && flyOn && now - (zBossKeep.lastFlyAt || 0) >= 15000 && canTravelFly());
       // V2.38.21：采样（开关判据只此一处；关闭时热路径只判一个缓存布尔，零额外开销）
       if (zKeepSmp.on) zKeepSmpRecord(now, d, band, autoT, stuck, stuckFly, hit, pressed, closed);
       if (stuckFly) {
@@ -12891,6 +12945,45 @@ function createRoItemCapture(env) {
     } catch (e) {}
   }
   try { masterTickReg(function () { try { zDiagTick(); } catch (e) {} }); } catch (e) {}
+  // 04-02 锁怪射程只读取证：仅在“档内有未学技能且它足以抬高射程”时上报一次到本机。
+  var zRangeProbeSig = "", zRangeProbeAt = 0;
+  function zRangeProfileProbe() {
+    try {
+      if (!zRunning || !clientReady() || String(selfName() || "").trim() !== "04-02") return;
+      var cid = selfCharId(), ent = CLIENT.SS && CLIENT.SS.Entity;
+      if (!(cid > 0) || !ent || !ent.position) return;
+      var el = $id("dsh-skillorder"), order = el ? parseSkillOrder(el.value || "") : [];
+      if (!order.length) return;
+      var pm = parseInt($id("dsh-z-pmrange") && $id("dsh-z-pmrange").value, 10) || 0;
+      var real = realAtkRange(), base = real > 0 ? real : (pm > 0 ? pm : 2);
+      if (pm > 2 && base > pm) base = pm;
+      var suspect = [];
+      for (var i = 0; i < order.length; i++) {
+        var o = order[i], have = learnedSkillLv(o.skid), sr = getSkillRange(o.skid, o.lv);
+        if (have <= 0 && sr + 1 > base) suspect.push({ id: o.skid, configuredLv: o.lv, learnedLv: have, configuredRange: sr + 1 });
+      }
+      if (!suspect.length) return;
+      var sig = String(cid) + ":" + JSON.stringify(suspect);
+      if (sig === zRangeProbeSig && Date.now() - zRangeProbeAt < 60000) return;
+      zRangeProbeSig = sig; zRangeProbeAt = Date.now();
+      var prof = profiles[activeCharKey] || {}, target = zLock && zLock.gid ? zEntOf(zLock.gid) : null;
+      DSHCollect.post("http://127.0.0.1:8899/api/probe-collect", {
+        t: "zrange-profile-0402", at: Date.now(), ver: VER,
+        who: "04-02", charId: cid, profile: {
+          keyMatches: profileKeyMatches(activeCharKey, cid), trusted: profileTrusted(activeCharKey),
+          name: String(prof.name || ""), charId: prof.charId || 0, migrated: !!prof._claimedFrom
+        },
+        attack: { physical: pm, serverRange: real, base: base, effective: calcAtkRange(), invalidSkills: suspect },
+        lock: { gid: zLock.gid || 0, selfPos: ent.position.slice(0, 2), targetPos: target && target.position ? target.position.slice(0, 2) : null,
+          distance: target && target.position ? zRangeDist(target.position, ent.position) : null,
+          los: (function () { try { return target && target.position ? zLosClear(Math.round(ent.position[0]), Math.round(ent.position[1]), Math.round(target.position[0]), Math.round(target.position[1])) : null; } catch (eL) { return null; } })() },
+        chase: { since: zWalkState && zWalkState.chaseSince || 0, dist: zWalkState && zWalkState.chaseDist || 0,
+          replan: !!(zWalkState && zWalkState.chaseReplan), lastMove: zWalkState && zWalkState.lastMove || 0 },
+        action: String(zMon && zMon.action || ""), reason: String(zAtkWhy || "")
+      });
+    } catch (e) {}
+  }
+  try { masterTickReg(function () { zRangeProfileProbe(); }); } catch (e) {}
   // 「复制诊断」按钮：把 __dshZDiag 的 JSON 写进只读 textarea（事件委托，面板重建/换页后仍有效）
   try {
     document.addEventListener("click", function (e) {
@@ -13013,9 +13106,10 @@ function createRoItemCapture(env) {
       var life = ent && ent.life;
       var hpDrop = 0;
       if (life) {
-        var hpPct = life.maxhp > 0 ? life.hp / life.maxhp * 100 : 100;
-        var spPct = life.maxsp > 0 ? life.sp / life.maxsp * 100 : 100;
-        hpDrop = hpDrop2sPct(life.maxhp, now);
+        var hpMax = life.hp_max != null ? life.hp_max : life.maxhp, spMax = life.sp_max != null ? life.sp_max : life.maxsp;
+        var hpPct = hpMax > 0 ? life.hp / hpMax * 100 : 100;
+        var spPct = spMax > 0 ? life.sp / spMax * 100 : 100;
+        hpDrop = hpDrop2sPct(hpMax, now);
         if (inFight && hpPct < (parseInt($id("dsh-z-hpfly").value, 10) || 20)) { needFly = true; reason = "HP" + Math.round(hpPct) + "%"; }
         if (inFight && spPct < (parseInt($id("dsh-z-spfly").value, 10) || 10)) { needFly = true; reason = "SP" + Math.round(spPct) + "%"; }
         // V2.34.2：失血速率紧急逃生——固定血线会被「一秒掉 25%」的爆发直接跨过去
@@ -13029,7 +13123,7 @@ function createRoItemCapture(env) {
       }
       // V2.38.25 G1：卡死支拆回独立机制（判定/节流/计时都在 zStuckFlyTick 里）——与无目标支互不依赖；
       //   本拍若真的换点，会刷新「上次自动换点」时间戳，zWalk 的无目标支在同一拍因此绝不再飞第二次。
-      try { zStuckFlyTick(now); } catch (eStk) {}
+      // 卡死判定在本拍保命瞬移裁决完成后执行，见本函数结尾。
       // ---- (3) 群殴（血线之上才判；数量口径见 zGrpCount：最近3秒命中过我的怪 ∪ 贴身≤2格的怪）----
       var grpN = parseInt($id("dsh-z-grpn") ? $id("dsh-z-grpn").value : 0, 10) || 0;
       if (grpN < 0) grpN = 0; // 0 = 群殴处理关闭
@@ -13039,14 +13133,16 @@ function createRoItemCapture(env) {
       // V2.34.0 A2/A3：血线之下任何模式都先飞（上方血量瀑布已判）；血线之上才轮到 BOSS 与群殴
       if (!needFly && bossFly) { needFly = true; reason = bossFlyReason || "BOSS"; flyFromBoss = true; }
       if (!needFly && grpFly) { needFly = true; reason = "群殴(" + grpCnt + "只)"; }
+      // 寻怪卡死支晚于保命判定：同一拍低血/BOSS/围殴优先，不让普通翅膀先打断救命瞬移。
       // V2.16.0：防御瞬移总开关（dsh-z-flykill，默认开）——关掉后群殴/BOSS/低血/SP/被围/卡死/坐下看门狗全部不再瞬移，坐下回血不受影响
       if ($id("dsh-z-flykill") && !$id("dsh-z-flykill").checked) { needFly = false; flyFromBoss = false; }
       // V2.15.22：SP 低瞬移让位——坐下条件满足且未被围、HP 未到危险线时，SP 瞬移让位给坐下回蓝
-      if (needFly && /^SP/.test(reason) && needSitNow() && mobs.length < 3 && life && life.maxhp > 0 && (life.hp / life.maxhp * 100) >= (parseInt($id("dsh-z-hpfly").value, 10) || 20)) {
+      if (needFly && /^SP/.test(reason) && needSitNow() && mobs.length < 3 && life && (life.hp_max != null ? life.hp_max : life.maxhp) > 0 && (life.hp / (life.hp_max != null ? life.hp_max : life.maxhp) * 100) >= (parseInt($id("dsh-z-hpfly").value, 10) || 20)) {
         needFly = false;
         reason = "";
         flyFromBoss = false;
       }
+      zDefenseFlyAt = needFly ? now : 0; // 即便保命瞬移受冷却阻挡，也不能由寻怪换点抢先发包
       // V1.9.4：瞬移冷却门（连续失败 3 次后 10s 停手 + 瞬移间隔）——不再整拍 return，只挡瞬移本身
       // V2.38.20：瞬移间隔保护改为可选（dsh-z-flyinten 勾选才启用，默认勾选 = 维持既有行为）；数值框保留。
       //   救命情形的强制解锁逻辑维持不变（下方原样）。
@@ -13054,8 +13150,8 @@ function createRoItemCapture(env) {
       var flyInt = flyIntOn ? ((parseInt($id("dsh-z-flyint").value, 10) || 30) * 1000) : 0;
       // V2.34.2 A1：救命瞬移不受「连败 10s 锁」与瞬移间隔限制——血线之下 / 2秒失血≥25% / 贴身≥3只且HP<60% 时强制解锁（只留 1s 防抖）
       var critEsc = false;
-      if (life && life.maxhp > 0 && mobs.length > 0) {
-        var hpNowPct = life.hp / life.maxhp * 100;
+      if (life && (life.hp_max != null ? life.hp_max : life.maxhp) > 0 && mobs.length > 0) {
+        var hpNowPct = life.hp / (life.hp_max != null ? life.hp_max : life.maxhp) * 100;
         if (hpNowPct < (parseInt($id("dsh-z-hpfly").value, 10) || 20)) critEsc = true;
         else if (hpDrop >= 25) critEsc = true;
         else if (hpNowPct < 60 && zQoaNearCount(mobs) >= 3) critEsc = true;
@@ -13085,13 +13181,14 @@ function createRoItemCapture(env) {
       if (!flyIssued) {
         zQoaTry(mobs, ent, now);
       }
+      if (!needFly) { try { zStuckFlyTick(now); } catch (eStk) {} }
       // V2.16.19：坐下周期已提前到本函数开头（不受瞬移冷却影响），此处不再重复调用
       // V1.9.4 面板防御状态行
       var dsEl = $id("dsh-defstate");
       if (dsEl) {
         if (needFly) dsEl.textContent = "防御状态：瞬移(" + reason + ")";
         else if (defSnap.sitting) dsEl.textContent = "防御状态：坐下回血";
-        else if (potNoPotion && life && life.maxhp > 0 && (life.hp / life.maxhp * 100) < potHpThr() && mobs.length > 0) dsEl.textContent = "防御状态：低血无药被围";
+        else if (potNoPotion && life && (life.hp_max != null ? life.hp_max : life.maxhp) > 0 && (life.hp / (life.hp_max != null ? life.hp_max : life.maxhp) * 100) < potHpThr() && mobs.length > 0) dsEl.textContent = "防御状态：低血无药被围";
         else dsEl.textContent = "防御状态：正常";
       }
     } catch (e) {}
@@ -13125,10 +13222,11 @@ function createRoItemCapture(env) {
       // V1.7.0 默认「瞬移术→翅膀」：瞬移术Lv1 成功判定（已学+SP足）失败才回退苍蝇翅膀
       if (mode === "瞬移术→翅膀") {
         if (castTeleport()) { zFlyLastVia = "spell"; return true; }
-        var wingfb = findFlyWing();
+        var wingfb = findFlyWing(null, flyWingReserveNow());
         if (wingfb && useItemByIndex(wingfb.index)) {
           zWalkState.dir = Math.floor(Math.random() * 8); zWalkState.dirAt = Date.now(); // 瞬移后随机换方向，避免走回原地
           zWalkState.lastPos = null; zWalkState.stuckCnt = 0; zWalkState.tried = 0;
+          zTravelWingPendingStock = flyWingReserveNow() > 0 ? zTravelWingSeenStock : null;
           zFlyLastVia = "wing";
           tlog("fly-item-" + wingfb.itid);
           return true;
@@ -13137,10 +13235,11 @@ function createRoItemCapture(env) {
       }
       // 优先苍蝇翅膀（模糊搜索：名字含翅膀 + 描述确认瞬移效果）→ 用背包物品；否则瞬移术
       if (mode === "苍蝇翅膀优先" || mode === "翅膀→瞬移术") {
-        var wing = findFlyWing();
+        var wing = findFlyWing(null, flyWingReserveNow());
         if (wing && useItemByIndex(wing.index)) {
           zWalkState.dir = Math.floor(Math.random() * 8); zWalkState.dirAt = Date.now(); // 瞬移后随机换方向，避免走回原地
           zWalkState.lastPos = null; zWalkState.stuckCnt = 0; zWalkState.tried = 0;
+          zTravelWingPendingStock = flyWingReserveNow() > 0 ? zTravelWingSeenStock : null;
           zFlyLastVia = "wing";
           tlog("fly-item-" + wing.itid);
           return true;
@@ -13159,12 +13258,19 @@ function createRoItemCapture(env) {
   // 蝴蝶 / 回城类按 ID 二次排除；未鉴定或名称为空一律跳过，绝不猜。显式 ID 覆盖：调用方点名的 ID 优先。
   var FLY_WING_OK_IDS = [601, 9601, 12323, 22104];
   var FLY_WING_DENY_IDS = [12212, 602, 9602, 12324, 12507, 12508, 12509, 12510, 14582, 14583, 14584, 14585, 13849, 13850, 13851, 13852, 13853, 13854, 13855, 13856, 16992, 16993];
-  function findFlyWing(overrideIds) {
+  var zTravelWingPendingStock = null, zTravelWingSeenStock = 0, zTravelWingOwner = ""; // 普通换点发包后等背包数量变化，防旧快照连发吃掉预留量
+  function flyWingReserveNow() {
+    try { var el = $id("dsh-z-wingreserve"), n = el ? Number(el.value) : 5; return Number.isFinite(n) && n >= 0 ? Math.min(9999, Math.floor(n)) : 5; } catch (e) { return 5; }
+  }
+  function findFlyWing(overrideIds, reserve) {
     try {
+      var owner = String((CLIENT.SS && (CLIENT.SS.AID || (CLIENT.SS.Entity && CLIENT.SS.Entity.GID))) || "");
+      if (owner !== zTravelWingOwner) { zTravelWingOwner = owner; zTravelWingPendingStock = null; }
       var inv = findInventory();
       if (!inv) return null;
       var DB = CLIENT.DB || requireDB("DB/DBManager");
       var override = (overrideIds && overrideIds.length) ? overrideIds : null; // 显式 ID 覆盖：调用方点名即优先
+      var keep = reserve > 0 ? reserve : 0, total = 0, picked = null, countUnknown = false;
       for (var i = 0; i < inv.length; i++) {
         var it = inv[i] || {};
         var itid = it.ITID != null ? it.ITID : (it.itemid != null ? it.itemid : null);
@@ -13179,12 +13285,28 @@ function createRoItemCapture(env) {
         if (nm.indexOf("箱子") >= 0) continue;                 // 排除「…个箱子」等容器
         if (nm.indexOf("巨大") >= 0) continue;                 // 排除「巨大的苍蝇翅膀」（组队随机传送）
         if (nm.indexOf("料理") >= 0 || nm.indexOf("素材") >= 0) continue; // 素材料理 / 素材类同名物品
-        if (FLY_WING_OK_IDS.indexOf(itid) >= 0) return { index: index, itid: itid, name: nm }; // 显式 ID 覆盖：确认可用的 4 种
-        if (nm.indexOf("苍蝇翅膀") < 0) continue;              // 判据：名称必须含「苍蝇翅膀」
-        return { index: index, itid: itid, name: nm };
+        if (FLY_WING_OK_IDS.indexOf(itid) < 0 && nm.indexOf("苍蝇翅膀") < 0) continue; // 显式 ID 或符合名称的翅膀
+        var qty = Number(it.count != null ? it.count : it.amount);
+        if (Number.isFinite(qty) && qty <= 0) continue; // 背包槽还在但该堆已耗尽
+        if (!keep) return { index: index, itid: itid, name: nm }; // 保命档不受预留限制
+        if (!Number.isFinite(qty) || qty < 0) { countUnknown = true; continue; }
+        total += qty;
+        if (!picked) picked = { index: index, itid: itid, name: nm };
       }
+      if (!countUnknown && total > keep && picked && total !== zTravelWingPendingStock) { zTravelWingSeenStock = total; return picked; }
       return null;
     } catch (e) { return null; }
+  }
+  // 非救命换点若已触及翅膀预留量且瞬移术不可用，改由现有寻怪/脱困行走路径处理。
+  function canTravelFly() {
+    try {
+      var modeEl = $id("dsh-z-flymode"), mode = modeEl ? modeEl.value : "翅膀→瞬移术";
+      if (mode !== "瞬移术Lv1" && findFlyWing(null, flyWingReserveNow())) return true;
+      if (mode === "苍蝇翅膀优先" || (mode === "翅膀→瞬移术" && $id("dsh-z-flyauto") && !$id("dsh-z-flyauto").checked)) return false;
+      if (mode !== "瞬移术Lv1" && mode !== "瞬移术→翅膀" && mode !== "翅膀→瞬移术") return false;
+      var ent = CLIENT.SS && CLIENT.SS.Entity;
+      return learnedSkillLv(26) > 0 && !(ent && ent.life && ent.life.sp != null && ent.life.sp < 10);
+    } catch (e) { return false; }
   }
   function useItemByIndex(index) {
     try {
@@ -13395,7 +13517,9 @@ function createRoItemCapture(env) {
   }
   // 只在尚无已知状态且助手近期未发包时做一次启动校准；之后旧 checked 不再有权威性。
   function npCalibrate() {
-    // 面板含快捷键/玩家点击乐观写回；不能用它校准服务器状态。
+    // 面板含快捷键/玩家点击乐观写回；仅使用服务器回执角色档或本会话历史播种，未知时绝不盲切。
+    if (npSeedAllowed()) npSeedStateOnce();
+    return npBattleState();
   }
   function startZhu() {
     if (zRunning) return;
@@ -13439,6 +13563,7 @@ function createRoItemCapture(env) {
     setStatus("助手模式已启动（扫描+攻击）· 动作自检 " + _czchk.brief, "ok");
   }
   function stopZhu() {
+    if (zFarPatrol.active) zFarPatrolClear(true); // 停止时撤销本轮远点巡图，不带到下次启动
     if (!deathReturnStopping) deathReturnCancel("手动停止战斗");
     zRunning = false;
     stopScan();
@@ -13652,17 +13777,18 @@ function createRoItemCapture(env) {
   //   触发（全满足）：开关开 · 有锁定怪 · 该怪在攻击距离内（zRangeDist <= atkR 同口径）· zLosClear 判无视线 ·
   //   zLosStepAside 已因 cnt>=3 返回 null（试满 3 次）· 非坐着/非等坐 · 非 escapePending · 非瞬移失败冷却 ·
   //   距上次自动换点 >= zFlyIntSecNow() 秒（与卡死支/无目标支共用 zWalkState.lastIdleFly → 同一拍最多换一次点）。
-  //   永久被墙时会按 dsh-z-flyint（默认 4 秒）节奏持续换点，费翅膀——不想费就把这个开关关掉。
+  //   永久被墙时会按 dsh-z-flyint（当前默认 1 秒）节奏持续换点，费翅膀——不想费就把这个开关关掉。
   //   绝不读 dsh-z-astar / cAstOn / dshAStarData；绝不参与救命判定（救命仍按既有 flyCool 走，绝不被本节流挡住）。
   function zLosFlyDecide(nowMs, ctxL) {
     try {
       if (!ctxL || !ctxL.stepFull) return false;                               // 侧移没试满 3 次 → 不换点
+      if (zEngagedNow(nowMs)) return false;                                     // 正在交战，不做视线脱困换点
       if (!($id("dsh-z-losfly") && $id("dsh-z-losfly").checked)) return false;  // 开关（默认勾）
       if (!ctxL.gid) return false;                                             // 必须有锁定怪
       if (!(ctxL.dist <= ctxL.atkR)) return false;                             // 必须在攻击距离内（同 zRangeDist 口径）
       if (ctxL.losClear) return false;                                         // 有视线 → 不换点
       if (isSitting() || needSitNow()) return false;                           // 坐着 / 等坐让位
-      if (escapePending()) return false;                                       // 瞬移挂起
+      if (escapePending() || !canTravelFly()) return false;                    // 瞬移挂起或只能保命不能主动换点
       if (nowMs < flyFailUntil) return false;                                  // 不在瞬移失败冷却
       if (nowMs - ((zWalkState && zWalkState.lastIdleFly) || 0) < zFlyIntSecNow() * 1000) return false; // 距上次自动换点 >= dsh-z-flyint
       return true;
@@ -13863,6 +13989,8 @@ function createRoItemCapture(env) {
       try { hit = !!checks[i][1](); } catch (eC) { hit = true; } // 判据自身异常 → 保守按「在战斗」处理
       if (hit) { zReinSkipWhy = "rein-skip-" + checks[i][0]; return false; }
     }
+    var near = reinNearAttackableState();
+    if (near !== false) { zReinSkipWhy = near ? "rein-skip-nearmob" : "rein-skip-nearunknown"; return false; }
     zReinSkipWhy = "";
     // V2.38.51：所有寻怪方式的单纯赶路都由①/⑤的共同证据落实，不能把执行者切换当成战斗。
     return true; // 用户口径：非战斗即允许（站着不动 / 无目标直走 / 混合或内挂单纯寻路 / 内挂状态未知）
@@ -13883,6 +14011,7 @@ function createRoItemCapture(env) {
       var inR = false, unknownR = false;
       EM.forEach(function (e) {
         if (!e || e.GID !== targetR) return;
+        if (e.isDeath || (e.ACTION && e.action != null && e.action === e.ACTION.DIE) || e.remove_tick) return;
         if (e.objecttype !== 5 || !e.position || !Number.isFinite(e.position[0]) || !Number.isFinite(e.position[1])) { unknownR = true; return; }
         var d = Math.max(Math.abs(e.position[0] - entR.position[0]), Math.abs(e.position[1] - entR.position[1]));
         if (d <= atkR) inR = true;
@@ -13891,6 +14020,29 @@ function createRoItemCapture(env) {
     } catch (e) { return null; }
   }
   function lockMobInAtkRange() { return lockMobAtkRangeState() === true; } // 保留原语义（日志措辞用）
+  // 三态：true=攻击射程内有合格活怪；false=已确认没有；null=实体/坐标/射程读不到（不冒险上马）。
+  function reinNearAttackableState() {
+    try {
+      var me = CLIENT.SS && CLIENT.SS.Entity, atk = calcAtkRange();
+      if (!me || !me.position || !Number.isFinite(me.position[0]) || !Number.isFinite(me.position[1]) || !Number.isFinite(atk) || !(atk > 0)) return null;
+      var em = requireDB("Renderer/EntityManager");
+      if (!em || typeof em.forEach !== "function") return null;
+      var list = typeof lockList !== "undefined" ? lockList : {}, keys = Object.keys(list || {});
+      var listed = keys.some(function (mid) { return !!list[mid]; });
+      var all = !$id("dsh-z-allmobs") || $id("dsh-z-allmobs").checked;
+      var near = false, unknown = false;
+      em.forEach(function (e) {
+        if (!e || e.objecttype !== 5 || e.isDeath || (e.ACTION && e.action != null && e.action === e.ACTION.DIE) || e.remove_tick) return;
+        var mid = e._job != null ? String(e._job) : (e.job != null ? String(e.job) : (e.mobId != null ? String(e.mobId) : null));
+        if (typeof zBossIgnoredGid === "function" && zBossIgnoredGid(e.GID, mid)) return;
+        var locked = zLock && zLock.gid && String(zLock.gid) === String(e.GID);
+        if (!locked && !(listed ? !!(mid && list[mid]) : all)) return;
+        if (!e.position || !Number.isFinite(e.position[0]) || !Number.isFinite(e.position[1])) { unknown = true; return; }
+        if (Math.max(Math.abs(e.position[0] - me.position[0]), Math.abs(e.position[1] - me.position[1])) <= atk) near = true;
+      });
+      return near ? true : (unknown ? null : false);
+    } catch (e) { return null; }
+  }
   function tickRein() {
     try {
       var sw = $id("dsh-z-rein");
@@ -13944,10 +14096,10 @@ function createRoItemCapture(env) {
       var lifeR = ent.life;
       // V2.38.52（P1-9）：必须是真正的数字。原来只做 Number()+isFinite，`true` 会被 Number 成 1 而放行。
       var hpR = (typeof lifeR.hp === "number") ? lifeR.hp : NaN;
-      var maxR = (typeof lifeR.maxhp === "number") ? lifeR.maxhp : NaN;
+      var maxR = (typeof lifeR.hp_max === "number") ? lifeR.hp_max : ((typeof lifeR.maxhp === "number") ? lifeR.maxhp : NaN);
       if (!(isFinite(hpR) && isFinite(maxR) && maxR > 0)) {
         reinFailStreak = 0;
-        if (now - reinWarnAt >= 30000) { reinWarnAt = now; tlog("rein-skip-hpunknown 血量不可确认（hp=" + lifeR.hp + " maxhp=" + lifeR.maxhp + "），不使用缰绳"); }
+        if (now - reinWarnAt >= 30000) { reinWarnAt = now; tlog("rein-skip-hpunknown 血量不可确认（hp=" + lifeR.hp + " hp_max=" + maxR + "），不使用缰绳"); }
         return;
       }
       if (hpR <= 0) {
@@ -13982,7 +14134,18 @@ function createRoItemCapture(env) {
   var zLastCastSkid = 0; // V2.15.24：最近一次释放的技能ID（配合 skillDelay 用真实后摇等待）
   var skillDelay = {};   // V2.15.24+：服务器下发真实延迟表（0x43d/0x43e POSTDELAY + 0xb1a USESKILL_ACK3 动态覆盖）SKID→延迟ms
   var skillNextAt = {};  // V2.15.28：每技能独立 CD 计时（skillNextAt[SKID]=下次可释放时间戳），到点才发，不再按攻击轮次全局窗口
-  var selfSpirits = { aid: 0, num: 0, map: "" }; // 0x1d0/0x1e1 自身气弹权威缓存；换图或身份变化即失效
+  var selfSpirits = { aid: 0, num: 0, map: "" }; // 0x1d0/0x1e1 自身气弹权威缓存；旧身份/旧地图不可用
+  var selfSpiritOwner = null;
+  // 武僧数量只认当前自身气弹包；Summon1~5 是咒术召唤球，不是气弹。
+  function selfSpiritCount(ent) {
+    try {
+      var c = selfSpirits, ss = CLIENT.SS, aid = gidInt((ss && ss.AID) || (ent && ent.GID) || 0);
+      var cid = typeof selfCharId === "function" ? gidInt(selfCharId()) : 0;
+      var epoch = typeof identityEpoch === "undefined" ? 0 : identityEpoch, map = normMapKey(getMapName());
+      if (!ent || !aid || !cid || !map || !c || c.known !== true || selfSpiritOwner !== ent || c.aid !== aid || c.cid !== cid || c.epoch !== epoch || c.map !== map || !Number.isInteger(c.num) || c.num < 0) return null;
+      return c.num;
+    } catch (e) { return null; }
+  }
   var __dshSphereLog = []; // V2.32.2 气弹自采集诊断环形缓冲（自动采集，无需手动开关）
   function dshSphereLog(msg) {
     try {
@@ -14029,6 +14192,7 @@ function createRoItemCapture(env) {
   //   脚本静默不补发就一直停。方案：锁定目标后追踪其 HP，怪还活着但 HP 超 2.5s 未下降 = 连击已断 →
   //   用点选补一次锁定（官方点击路径 onMouseDown+onFocus 重新锁定+触发连击），3s 最小间隔防刷包。
   var zAtkHpTrack = {};   // gid -> { hp, at } 追踪锁定目标 HP 下降情况
+  var zFightDamageAt = { gid: 0, at: 0 }; // 仅记录确有 HP 下降，初次读数/补发锁定包不算交战证据
   var zAtkRelockAt = 0;   // 上次点选补锁时间
   function zAtkTrackHp(gid, ent) {
     try {
@@ -14038,7 +14202,7 @@ function createRoItemCapture(env) {
       var now = Date.now();
       var t = zAtkHpTrack[gid];
       if (!t) { zAtkHpTrack[gid] = { hp: hp, at: now }; return; }
-      if (hp < t.hp) { t.hp = hp; t.at = now; } // HP 下降 = 连击在打
+      if (hp < t.hp) { t.hp = hp; t.at = now; zFightDamageAt = { gid: gidInt(gid), at: now }; } // HP 下降 = 连击在打
     } catch (e) {}
   }
   function zAtkNeedRelock(gid, ent) {
@@ -14140,18 +14304,73 @@ function createRoItemCapture(env) {
       return { x: out[pick * 2], y: out[pick * 2 + 1], n: n };
     } catch (e) { return null; }
   }
+  // 自研寻怪远点：一次提交本地图内可走目标，途中寻路交给游戏；两秒没有坐标变化才换另一目标。
+  var zFarPatrol = { active: false, key: "", tx: 0, ty: 0, from: null, last: null, at: 0, progressAt: 0, tries: 0, rejected: [] };
+  function zFarPatrolClear(cancelRoute) {
+    if (cancelRoute && zFarPatrol.active) { try { var e = CLIENT.SS && CLIENT.SS.Entity; if (e && typeof e.resetRoute === "function") e.resetRoute(); } catch (ex) {} }
+    zFarPatrol.active = false; zFarPatrol.from = null; zFarPatrol.last = null; zFarPatrol.progressAt = 0;
+    zFarPatrol.tries = 0; zFarPatrol.rejected = [];
+  }
+  function zFarPatrolTick(ent, px, py, dirs, now) {
+    var terrain = dshAStarData();
+    if (!terrain || terrain.w < 4 || terrain.h < 4) { setStatus("本地图地形未就绪，暂不自动选远点；卡死保护照常运行…", "warn"); return true; } // 不退回短步盲走
+    var scope = String(activeProfileKey()) + "|" + String(getMapName() || "");
+    if (zFarPatrol.key !== scope) { zFarPatrolClear(false); zFarPatrol.key = scope; }
+    if (zFarPatrol.active) {
+      var changed = zFarPatrol.last && (px !== zFarPatrol.last[0] || py !== zFarPatrol.last[1]);
+      if (changed) { zFarPatrol.progressAt = now; zFarPatrol.rejected = []; zFarPatrol.tries = 0; }
+      zFarPatrol.last = [px, py];
+      if (Math.max(Math.abs(px - zFarPatrol.tx), Math.abs(py - zFarPatrol.ty)) <= 2) { zFarPatrol.active = false; }
+      else if (now - zFarPatrol.progressAt < 2000) return true;
+      else {
+        zFarPatrol.rejected.push(zFarPatrol.tx + "," + zFarPatrol.ty);
+        zFarPatrol.active = false; zFarPatrol.tries++;
+        tlog("far-patrol no-motion 2s dest=" + zFarPatrol.tx + "," + zFarPatrol.ty + " retries=" + zFarPatrol.tries);
+      }
+    }
+    if (now - zFarPatrol.at < 350) return true;
+    var base = (zWalkState.dir + zFarPatrol.tries) % dirs.length;
+    for (var i = 0; i < dirs.length; i++) {
+      var dir = dirs[(base + i) % dirs.length];
+      var tx = Math.max(1, Math.min(terrain.w - 2, Math.round(px + dir[0] * 55)));
+      var ty = Math.max(1, Math.min(terrain.h - 2, Math.round(py + dir[1] * 55)));
+      if (Math.max(Math.abs(tx - px), Math.abs(ty - py)) < 16) continue;
+      var dest = dshSnapWalk(tx, ty);
+      if (!dest || zFarPatrol.rejected.indexOf(dest[0] + "," + dest[1]) >= 0) continue;
+      // 只检查远点本身可走；途中路线由游戏处理，不在助手中分解或要求本地 A* 先走通。
+      var packet = new (czp("REQUEST_MOVE"))(); packet.dest = [dest[0], dest[1]];
+      CLIENT.NM.sendPacket(packet); zMarkSelfMove();
+      zFarPatrol.active = true; zFarPatrol.tx = dest[0]; zFarPatrol.ty = dest[1];
+      zFarPatrol.from = [px, py]; zFarPatrol.last = [px, py]; zFarPatrol.at = now; zFarPatrol.progressAt = now;
+      zWalkState.dir = (base + i) % dirs.length;
+      tlog("far-patrol one-target dest=" + dest[0] + "," + dest[1]);
+      setStatus("无目标，向本地图远点寻怪…", "st");
+      return true;
+    }
+    zFarPatrol.at = now; zFarPatrol.tries++;
+    setStatus("远处目标暂不可达，等待下一次换点或卡死保护…", "warn");
+    return true; // 无远点也不退回短步反复撞墙；独立卡死瞬移仍照常计时
+  }
   function zWalk() {
     try {
       if (!clientReady()) return;
       // V2.38.40 手动走位档：zWalk 是助手全部寻怪移动的唯一入口（走向目标 / 追怪 / 巡图直走 / A* 绕障 / 无目标换点瞬移 /
       //   卡死自动瞬移 / 脱困换点 / 打不到就换点 / 换图反向走与回图传送 / 首领保持距离接管，都挂在这条链上）→ 本档一律原地不动。
       //   只保留坐下周期（回血/回蓝属保命·回复动作，不产生任何位移）。首领「出现即瞬移」仍在 checkDefense 里按 dsh-z-flykill 照常执行。
+      if (isManual() && typeof zFarPatrol !== "undefined" && zFarPatrol && zFarPatrol.active) zFarPatrolClear(true);
       if (isManual()) { doSitCycle(scanMobs || []); return; }
-      if (moveXY.busy) return; // 手动坐标走路中 → 自动寻怪走位让位
+      if (moveXY.busy) { if (typeof zFarPatrol !== "undefined" && zFarPatrol && zFarPatrol.active) zFarPatrolClear(true); return; } // 手动坐标走路接管时撤销自己的远点路线
       if (zEscape.until > Date.now()) return; // V2.15.23：逃脱中（移动避开怪）→ 不寻怪不打怪
       if (pendingPick) { try { zMon.action = "拾取物品中"; } catch (e) {} return; } // V2.15.16：有拾取任务在身 → 寻怪让位（防拾取移动包被寻怪覆盖）
+      if (zDefenseFlyAt && Date.now() - zDefenseFlyAt < 1500) { zFarPatrolClear(false); return; } // 防御瞬移优先；旧巡图落点作废，但不重置独立卡死计时
       var ent = CLIENT.SS.Entity;
       if (!ent || !ent.position) return;
+      if (zEngagedNow(Date.now())) {
+        if (typeof zFarPatrolClear === "function") zFarPatrolClear(true); // 已交战，停止自研巡图；防止旧远点路线继续拉走角色
+        zWalkState.noTargetSince = 0;
+        if (npHuntOn) npHuntStop("engaged", true);
+        return; // 交战中不跑寻怪、脱困或换图移动；低血/围殴防御由 checkDefense 独立裁决
+      }
       // V2.16.8 换图检测 + 反向走回（走路跨图）；反向走 8s 没回图 → 助手直发传送回启动图
       try {
         var curKeyB = getMapName();
@@ -14161,7 +14380,8 @@ function createRoItemCapture(env) {
         try { var zEnRW = CLIENT.SS && CLIENT.SS.Entity; if (zEnRW && zEnRW.walk) zRouteW = zEnRW.walk; } catch (eRW) {}
         var zRouteTotalW = zRouteW ? (+zRouteW.total || 0) : 0;
         var zRouteIdxW = zRouteW ? (+zRouteW.index || 0) : 0;
-        var zRouteExtW = !!(zRouteTotalW > 0 && zRouteIdxW < zRouteTotalW && (Date.now() - (zWalkState.lastSelfMoveAt || 0) > 1500));
+        var zOwnPending = !!(typeof zFarPatrol !== "undefined" && zFarPatrol && zFarPatrol.active && zFarPatrol.from && zFarPatrol.key === String(activeProfileKey()) + "|" + String(curKeyB || "") && zEnRW && zEnRW.position && zEnRW.position[0] === zFarPatrol.from[0] && zEnRW.position[1] === zFarPatrol.from[1] && Date.now() - zFarPatrol.at < 3000);
+        var zRouteExtW = !!(zRouteTotalW > 0 && zRouteIdxW < zRouteTotalW && (Date.now() - (zWalkState.lastSelfMoveAt || 0) > 1500) && !zOwnPending);
         zWalkState.routeExt = zRouteExtW; zWalkState.routeTotal = zRouteTotalW; zWalkState.routeIdx = zRouteIdxW;
         if (zWalkState.startMap && curKeyB && normMapKey(curKeyB) !== normMapKey(zWalkState.startMap)) {
           // V2.32.2 换图加固：换图瞬间地图名/坐标未稳会误触反向走；要求新图名连续稳定 1.2s 且坐标有效才认定
@@ -14227,7 +14447,7 @@ function createRoItemCapture(env) {
         var ACT = ent.ACTION || {};
         isSitting = ent.action === ACT.SIT || ent.action === 2;
       } catch (e) {}
-      if (isSitting) return;
+      if (isSitting || sitPending()) return;
       // np 模式（内挂机制寻怪）不设 2s 走路门槛：发包时机由状态机控制（可攻击→停、无怪/超出→发）
       // 否则每次巡怪都要等满 2s 才发内挂指令（用户反馈的「巡怪延迟」）
       var npMode = npHuntMode() === "np" || isHybrid();
@@ -14246,6 +14466,7 @@ function createRoItemCapture(env) {
       var lockNear = null, lockNearD = 1e9, lockNearHp = 1e18, lockNearTier = -1; // 锁定怪候选（优先）
       var hitNear = null, hitNearD = 1e9, hitNearHp = 1e18;    // 还击候选（兜底）
       var heldNear = null, heldNearD = 1e9, heldNearHp = 1e18; // V2.38.4 G2②：chaseHold 保持中的那只怪（优先，防两只怪之间来回换目标点）
+      var bossNear = null, bossNearD = 1e9; // 首领「优先攻击」也要优先追同一只，不能被旧 chaseHold 抢走
       var zReactiveGid = zLock.reactive ? gidInt(zLock.gid) : 0; // V2.34.4：还击锁定的攻击者必须被追击（与 zAttack 同锚点）
       var zBossChaseGid = zBossWantGid || 0; // V2.38.15：被首领设置指定为最高优先的那只（优先攻击 / 尾刀到线）越过锁定名单与「打全部怪」被追击
       var zWalkSeenMob = 0, zWalkBlockedMob = 0; // V2.38.4：视野内活怪数 / 被名单门挡掉的怪数（仅诊断，不参与筛选）
@@ -14267,6 +14488,7 @@ function createRoItemCapture(env) {
             if (!inLockN && !allowHitTarget) return;
             if (!ent.position || !e.position) return;
             var d = zRangeDist(e.position, ent.position); // V2.34.3：格子距离口径（与客户端一致）
+            if (zBossChaseGid && gidInt(e.GID) === gidInt(zBossChaseGid)) { bossNear = e; bossNearD = d; }
             // V2.36.3：索敌优先级——已攻击我的锁定怪（打死为止）> 身侧(相邻 d<=1) > 血少 > 距离
             var hpNow = (e.life && e.life.hp != null) ? e.life.hp : 1e18;
             // V2.38.4 G2②：保持中的那只怪只要还在合格候选池里（未死亡/未移出名单）就优先选中
@@ -14284,7 +14506,8 @@ function createRoItemCapture(env) {
         });
         // 锁定怪候选优先；确无锁定怪才用还击候选
         // V2.38.4 G2②：chaseHold 优先；但「还击锁定的攻击者」优先级最高（不得回退 V2.34.4 F2 的还击追击语义）
-        if (heldNear && (zReactiveGid === 0 || gidInt(heldNear.GID) === zReactiveGid)) { near = heldNear; nearD = heldNearD; nearHp = heldNearHp; }
+        if (bossNear) { near = bossNear; nearD = bossNearD; nearHp = bossNear.life && bossNear.life.hp != null ? bossNear.life.hp : 1e18; }
+        else if (heldNear && (zReactiveGid === 0 || gidInt(heldNear.GID) === zReactiveGid)) { near = heldNear; nearD = heldNearD; nearHp = heldNearHp; }
         else if (lockNear) { near = lockNear; nearD = lockNearD; nearHp = lockNearHp; }
         else if (hitNear) { near = hitNear; nearD = hitNearD; nearHp = hitNearHp; }
         // V2.38.4：名单门可见提示——视野内确实有怪、却因「锁定名单 / 打全部怪」被排除时不静默直走
@@ -14322,6 +14545,7 @@ function createRoItemCapture(env) {
         tlog("walk-route-end " + (zRouteNatural ? "客户端路线自然走完" : "客户端路线被中断/消失") + "（上一拍 " + zRouteTotalNow + " 格）");
         zWalkState.routeActive = false; zWalkState.routeTotal = 0; zWalkState.routeIdx = 0;
       }
+      if (zRouteExtNow && typeof zFarPatrol !== "undefined" && zFarPatrol && zFarPatrol.active) zFarPatrolClear(false); // 客户端路线接管：失去自有路线所有权，不取消玩家点击的路线
       if (zRouteExtNow && !near) {
         // ② 只扫不发：路线进行中绝不发直走 / 换点 / 贴近 / 反向走等任何位移（扫描与安全保护照常执行）
         zWalkState.routeActive = true;
@@ -14342,6 +14566,7 @@ function createRoItemCapture(env) {
         setStatus("寻路途中扫到目标，主动接战…", "ok");
       }
       if (near) {
+        if (typeof zFarPatrolClear === "function") zFarPatrolClear(true); // 见怪即结束长途巡图，再走现有精准接近流程
         zWalkState.lastWalkDest = null; // V2.38.24 E：有目标（换目标/开始追怪）→ 直走目标作废，下次无怪直走必须重发
         // V2.38.4 G2②：追怪目标保持——进入追怪记 chaseHold={gid,at} 并优先保持同一只；
         //   只有该怪死亡/消失/超时（8s 内既没靠近也没在打）才换目标，换目标必须记 tlog
@@ -14367,6 +14592,25 @@ function createRoItemCapture(env) {
         // 完全无锁定怪时才由下方 np 分支重新开内挂兜底
         if (npMode || isHybrid()) {
           var atkR0 = calcAtkRange();
+          // 助手近处追锁定怪卡墙：已重规划仍原地不动，短时把追怪距离交回服务器内挂。
+          // 仅当前锁定 GID、射程外、非交战且原地不动触发；未知开关状态不认为已接管。
+          if (zWalkState.chaseGid === gidInt(near.GID) && zWalkState.chaseReplan && zWalkState.chaseSince && now - zWalkState.chaseSince >= 4000 &&
+              zWalkState.chaseFrom && zRangeDist(ent.position, zWalkState.chaseFrom) < 2 && nearD > atkR0 && !zEngagedNow(now)) {
+            zWalkState.npRescueGid = gidInt(near.GID); zWalkState.npRescueUntil = now + 12000;
+          }
+          if (zWalkState.npRescueGid === gidInt(near.GID) && now < zWalkState.npRescueUntil && nearD > atkR0 && !zEngagedNow(now)) {
+            var rescueResult = npEnsureHunt();
+            if (rescueResult === "already" && npBattleState() === true) {
+              zWalkState.chaseSince = 0; zWalkState.chaseReplan = false;
+              setStatus("锁定怪追击卡墙，临时缩短助手接管距离，内挂已确认接管寻路…", "warn");
+              return;
+            }
+            if (rescueResult === "sent" || rescueResult === "queued") {
+              setStatus("锁定怪追击卡墙，已请求内挂接管，等待服务器回执…", "warn");
+              return;
+            }
+            setStatus("锁定怪追击卡墙，内挂状态未确认，继续助手脱困…", "warn");
+          }
           if (isHybrid()) {
             // V2.33.0 混合寻怪：锁定怪还在接管距离外 → 交内挂长距离寻怪走路，助手不接管移动
             // V2.34.3 内挂死等兜底：内挂实际关闭、或判定内挂没在把角色带过去 → 助手自行接管 12s
@@ -14443,7 +14687,7 @@ function createRoItemCapture(env) {
             setStatus("追怪受阻，先换接近点重规划…", "st");
           } else if (chaseStuckMs >= 6000) {
             var chaseFlyOn = $id("dsh-z-flystuck") && $id("dsh-z-flystuck").checked && !($id("dsh-z-flykill") && !$id("dsh-z-flykill").checked); // V2.38.24 G1：开关合并为一个
-            if (chaseFlyOn && now - zWalkState.lastIdleFly >= zEscFlySecNow() * 1000) {
+            if (chaseFlyOn && zEscFlySecNow() > 0 && canTravelFly() && !zEngagedNow(now) && now - zWalkState.lastIdleFly >= zEscFlySecNow() * 1000) {
               zWalkState.lastIdleFly = now;
               zWalkState.chaseSince = 0; zWalkState.chaseGid = null; zWalkState.chaseFrom = null; zWalkState.chaseReplan = false;
               var fok7 = doFly();
@@ -14570,8 +14814,8 @@ function createRoItemCapture(env) {
       //   关掉 dsh-scanen（启用侦查扫描）时 (a)(c) 恒假（保留旧语义：绝不改成读实体实时数据兜底）。
       var zFlyKillOnNow = !($id("dsh-z-flykill") && !$id("dsh-z-flykill").checked);
       var zSitYieldNow = needSitNow();
-      // 卡壳脱困（追怪卡住 / 转向 4 次无位移 / 四周不可走）沿用既有语义：两条机制任一开着就允许脱困换点
-      var zAutoFlyOn = !!(($id("dsh-z-flystuck") && $id("dsh-z-flystuck").checked) || ($id("dsh-z-idlefly") && $id("dsh-z-idlefly").checked)) && zFlyKillOnNow && !zSitYieldNow;
+      // 卡壳脱困（追怪卡住 / 转向 4 次无位移 / 四周不可走）仅受卡住开关控制，不能借无目标瞬移开关误放行
+      var zAutoFlyOn = !!($id("dsh-z-flystuck") && $id("dsh-z-flystuck").checked) && zFlyKillOnNow && !zSitYieldNow && !zEngagedNow(now) && zEscFlySecNow() > 0 && canTravelFly(); // 脱困只受卡住开关管，无目标开关只管 Y 秒瞬移
       var zIdleFlyOn = !!($id("dsh-z-idlefly") && $id("dsh-z-idlefly").checked) && zFlyKillOnNow && !zSitYieldNow;
       function zIdleMoveSecNow() {
         try {
@@ -14583,24 +14827,24 @@ function createRoItemCapture(env) {
           return v;
         } catch (e) { return 2; }
       }
-      function zIdleFlySecNow() { // 读取时强制夹成 max(Y, X+1)：玩家填错也照常执行，绝不因此罢工
+      function zIdleFlySecNow() { // Y=0 关闭；正数才夹成 max(Y, X+1)
         var x = zIdleMoveSecNow(), y = 10;
         try { var el = $id("dsh-z-idleflysec"); var v = el ? parseInt(el.value, 10) : 10; if (!isNaN(v)) y = v; } catch (e) {}
+        if (y === 0) return 0; // 玩家主动关闭无目标定时瞬移，绝不能按 X+1 补开
         if (y < 3) y = 3;
         if (y > 600) y = 600;
         if (y <= x) y = x + 1;
         return y;
       }
       function zIdleFlyDecide(nowMs) {
-        // 返回 "" = 本支不参与（开关关 / 非战斗地图 / 瞬移挂起 / 失败冷却）→ 一切照旧，不设门槛
-        //      "ok"   = 有有效目标 → 无目标计时清零、不设门槛
-        //      "wait" = 无有效目标且未满 dsh-z-nomove 秒 → 本拍不发自行寻怪的长距离移动
+        // 返回 "ok"   = 有有效目标 → 无目标计时清零、不设门槛
+        //      "wait" = 非战斗图、瞬移挂起，或未满 dsh-z-nomove 秒 → 本拍不发自行寻怪移动
         //      "move" = 无有效目标且已满 dsh-z-nomove 秒 → 允许走下方既有寻怪路径
         //      "fly"  = 无有效目标且已满 dsh-z-idleflysec 秒 → doFly() 换点
         try {
-          if (!zIdleFlyOn) { zWalkState.noTargetSince = 0; return ""; }
-          if (!defSnap.isCombatMap) return ""; // 统一要求：只认战斗地图
-          if (escapePending() || nowMs < flyFailUntil) return ""; // 瞬移挂起 / 不在瞬移失败冷却
+          if (!defSnap.isCombatMap) return "wait"; // 无怪移动/瞬移均不在非战斗地图启动
+          if (escapePending()) return "wait"; // 已有瞬移挂起时既不继续寻怪也不重复换点
+          if (zEngagedNow(nowMs)) { zWalkState.noTargetSince = 0; return "ok"; }
           var atkR = calcAtkRange();
           var ht = zLock.gid ? zAtkHpTrack[zLock.gid] : null;
           if ((ht && nowMs - ht.at < 4000) || scanHasAttackableLockedMob(atkR) || scanHasOutOfRangeLockedMob(atkR)) {
@@ -14609,8 +14853,8 @@ function createRoItemCapture(env) {
           }
           if (!zWalkState.noTargetSince) zWalkState.noTargetSince = nowMs;
           var idleFrom = zWalkState.noTargetSince;
-          if (nowMs - idleFrom >= zIdleFlySecNow() * 1000) {
-            if (nowMs - zWalkState.lastIdleFly < zFlyIntSecNow() * 1000) return "move"; // 换点被节流挡住 → 至少继续自行寻怪
+          if (zIdleFlyOn && zIdleFlySecNow() > 0 && nowMs >= flyFailUntil && nowMs - idleFrom >= zIdleFlySecNow() * 1000) {
+            if (!canTravelFly() || nowMs - zWalkState.lastIdleFly < zFlyIntSecNow() * 1000) return "move"; // 无可用的非救命瞬移资源/被节流 → 继续自行寻怪
             return "fly";
           }
           if (nowMs - idleFrom >= zIdleMoveSecNow() * 1000) return "move";
@@ -14628,6 +14872,7 @@ function createRoItemCapture(env) {
       //   - 侦查扫到「可攻击到的锁定怪」（dist ≤ atkRange，非超出）→ 停内挂，助手接管战斗
       //   - 侦查没扫到怪 / 附近只有「超出」的锁定怪 → 持续发包让服务器自动寻怪（内挂移动靠近）
       if (npHuntMode() === "np" || isHybrid()) {
+        if (typeof zFarPatrol !== "undefined" && zFarPatrol && zFarPatrol.active) zFarPatrolClear(true); // 切换寻怪方式后不保留自研路线
         var npThD = isHybrid() ? takeoverDist() : calcAtkRange();
         if (btDiagOn) { try { var aR0 = calcAtkRange(); var _lk = Object.keys(lockList).slice(0,20).join(","); var _sm = scanMobs.slice(0,10).map(function (x) { return x.mid + "@" + x.dist; }).join(" "); btLog('zWalk-np', 'mode=' + (isHybrid() ? "hybrid" : "np") + ' scanMobs=' + scanMobs.length + ' hasAttackable=' + scanHasAttackableLockedMob(npThD) + ' hasOutOfRange=' + scanHasOutOfRangeLockedMob(npThD) + ' thD=' + npThD + ' scanSt=' + ($id('dsh-scanst') ? $id('dsh-scanst').textContent : '?') + ' lock=[' + _lk + '] mids=[' + _sm + ']'); } catch (e) {} }
         // V2.38.24 C 判定迟滞：无→有 立即停内挂（助手马上接管，不加延迟）；有→无 需连续 2 拍确认且距上次切换 ≥1s
@@ -14636,8 +14881,12 @@ function createRoItemCapture(env) {
           zWalkState.npMiss = (zWalkState.npMiss || 0) + 1;
           if (!zWalkState.npOn || zLock.done || zLock.kill || (zWalkState.npMiss >= 2 && now - (zWalkState.npAt || 0) >= 1000)) {
             zWalkState.npOn = false; zWalkState.npMiss = 0; zLock.kill = false; zWalkState.npAt = now;
-            npEnsureHunt();
-            if (scanHasOutOfRangeLockedMob(npThD)) {
+            var npStartResult = npEnsureHunt();
+            if (npStartResult === "unknown" || npStartResult === "failed" || npStartResult === "suppressed") {
+              setStatus("侦查未扫到可攻击锁定怪，但内挂状态未确认，未盲切自动战斗…", "warn");
+            } else if (npStartResult === "sent" || npStartResult === "queued") {
+              setStatus("已尝试开启内挂寻怪，等待游戏确认，尚不能当作正在移动…", "warn");
+            } else if (scanHasOutOfRangeLockedMob(npThD)) {
               setStatus(isHybrid() ? "锁定怪超出接管距离，内挂移动靠近中…" : "锁定怪超出攻击范围，内挂移动靠近中…", "st");
             } else {
               setStatus("侦查未扫到可攻击锁定怪，内挂自动寻怪中…", "st");
@@ -14657,7 +14906,8 @@ function createRoItemCapture(env) {
         }
         return;
       }
-      // 无目标支「自行寻怪」门槛（开关 B）：连续无有效目标未满 dsh-z-nomove 秒 → 本拍不发自行寻怪的长距离移动，
+      if (zIdleR === "ok") { setStatus("已有锁定目标，等实体定位；不启动无目标移动…", "st"); return; }
+      // 无目标支「自行寻怪」门槛（不受开关 B 是否勾选影响）：连续无有效目标未满 dsh-z-nomove 秒 → 本拍不发自行寻怪的长距离移动，
       //   先等有效目标出现（填 0 = 立刻开始移动）。上方内挂寻怪分支有自己的门控与迟滞，不受此门槛约束。
       if (zIdleR === "wait") {
         setStatus("无有效目标，等 " + zIdleMoveSecNow() + "s 后自动寻怪…", "st");
@@ -14683,6 +14933,7 @@ function createRoItemCapture(env) {
       }
       var WALK_RANGE = 12; // 每次向目标方向走 12 格
       var px0 = Math.round(ent.position[0]), py0 = Math.round(ent.position[1]);
+      if (typeof zFarPatrolTick === "function" && zFarPatrolTick(ent, px0, py0, dirs, now)) return; // 可读取本地图时单次提交远点；既有卡死瞬移独立计时
       // ===== V2.16.12 停用：区域寻怪半径（软边界）+ 地图物理边缘（硬边界）=====
       // 用户要求暂时移除「区域寻怪半径」，地图边缘机制意义小一并停用；代码保留供后续恢复（zWalkState.center 保留）。
       // 注意：两段共享 bndOn 变量，必须一起停用（A* 段的 bndOn2 同步停用）。
@@ -14997,7 +15248,7 @@ function createRoItemCapture(env) {
       sitMaintain(); // V2.15.22：坐下期间被打自动站起逃生（战斗循环每 tick，不依赖侦查扫描）
       // V2.32.2 坐下优先：sitMaintain 未站起（没被打/没回满/没过看门狗）→ 保持坐下，本拍不锁怪不攻击不追怪
       // V2.34.0 A6：坐着时仍允许防御判定（血量/群殴/受击），攻击可跳过；走路由 zWalk 自行跳过
-      if (isSitting()) { zAtkWhy = "已坐下"; zHoldTick("坐下回血中", false); return; }
+      if (isSitting() || sitPending()) { zAtkWhy = isSitting() ? "已坐下" : "等待坐姿确认"; zHoldTick(zAtkWhy, false); return; }
       var EM = requireDB("Renderer/EntityManager");
       var range = parseInt($id("dsh-z-range").value, 10) || 12; // 寻怪范围（触发目标考虑）
       // 攻击距离：物理/魔法按技能射程自动选择（普攻=物理距离；技能=技能射程与对应距离取大）
@@ -15385,11 +15636,24 @@ function createRoItemCapture(env) {
   }
   // 技能行统一序列化（对象 → textarea 行）：统一 6 段 skid:lv:cond:prob:uses:lock，行尾两空格+技能名做注释
   // prob：0-100（0=从不释放）；uses：本轮上限；lock：每次锁定上限；空段 cond 保留，与 parse 双向兼容
+  function skillEffectiveCond(skid, cond) {
+    cond = String(cond || "").trim();
+    // 蓄气/狂蓄气单独加入技能顺序且未设置条件时默认「球0」；玩家显式写的条件完全保留。
+    if ((skid === 261 || skid === 401) && !cond) return "球0";
+    if (typeof SKILL_REQ === "undefined" || !SKILL_REQ) return cond;
+    var req = skillReq(skid), parts = [];
+    if (req) { if (req[2] > 0) parts.push("球" + req[2]); if (req[3]) parts.push(statusNameToCond(req[3])); }
+    var defaults = parts.join(",");
+    if (!cond) return defaults;
+    if (/(?:^|[,，])\s*!?球\d+\s*(?:$|[,，])/.test(cond)) return cond;
+    var sphere = defaults.match(/(?:^|[,，])(球\d+)(?:$|[,，])/);
+    return sphere ? cond + "," + sphere[1] : cond;
+  }
   function skillLine(o) {
     var nm = getSkillNameById(o.skid);
     var v = parseInt(o.prob, 10);
     var prob = isNaN(v) ? 100 : Math.max(0, Math.min(100, v));
-    var cond = String(o.cond || "").trim();
+    var cond = skillEffectiveCond(o.skid, o.cond);
     var u = parseInt(o.uses, 10); if (isNaN(u) || u < 0) u = 0;
     var lk = parseInt(o.lock, 10); if (isNaN(lk) || lk < 0) lk = 0;
     var cd = Number(o.cd); if (!isFinite(cd) || cd < 0) cd = 0; // V2.15.28：第7段 冷却秒数（0=服务器2842动态后摇/默认150ms）
@@ -15428,7 +15692,7 @@ function createRoItemCapture(env) {
       if (prob > 100) prob = 100;
       if (uses < 0) uses = 0;
       if (lock < 0) lock = 0;
-      out.push({ skid: skid, lv: lv, cond: cond, prob: prob, uses: uses, lock: lock, cd: cd });
+      out.push({ skid: skid, lv: lv, cond: skillEffectiveCond(skid, cond), prob: prob, uses: uses, lock: lock, cd: cd });
     }
     return out;
   }
@@ -15443,13 +15707,12 @@ function createRoItemCapture(env) {
     return Math.min(wantLv || 5, have);
   }
   // 角色自身状态读取（客户端 Entity 字段，服务器 STATUS_CHANGE 实时写入）
-  // 气球=Summon1~5 非0个数；爆气=explosion 字段；另有 berserk(狂暴)/soullink(灵魂)/riding/falcon 等
+  // 气弹=当前自身 SPIRITS 包数量；未知=null。Summon1~5 不属于武僧气弹。
   function entStatus() {
     var ent = CLIENT.SS && CLIENT.SS.Entity;
     if (!ent) return null;
     var aid = gidInt((CLIENT.SS && CLIENT.SS.AID) || ent.GID || 0), map = normMapKey(getMapName());
-    var spheres = (selfSpirits.aid === aid && selfSpirits.map === map) ? selfSpirits.num : 0;
-    if (selfSpirits.aid !== aid || selfSpirits.map !== map) for (var i = 1; i <= 5; i++) if (ent["Summon" + i]) spheres++;
+    var spheres = selfSpiritCount(ent);
     // V2.32.2 自采集诊断：节流快照气弹候选字段（确定本客户端正确气弹来源用）
     if (!entStatus.__snapAt || Date.now() - entStatus.__snapAt > 2000) {
       entStatus.__snapAt = Date.now();
@@ -15461,7 +15724,8 @@ function createRoItemCapture(env) {
     }
     return {
       ent: ent,
-      spheres: spheres,            // 气球/气弹数 0~5
+      spheres: spheres,            // 服务器确认的气弹数；null=未知（不等于零）
+      spheresKnown: spheres !== null,
       explosion: ((ent.getOpt3 && ent.getOpt3(86)) || buffStateOn(86) || ent.explosion) ? 1 : 0, // EFST86：实体位优先，服务器状态缓存补充
       berserk: (ent.getOpt3 && ent.getOpt3(107)) ? 1 : (ent.berserk ? 1 : 0),       // V2.15.30 狂暴：读 virtue 位
       soullink: (ent.getOpt3 && ent.getOpt3(149)) ? 1 : (ent.soullink ? 1 : 0),     // V2.15.30 灵魂：读 virtue 位
@@ -15475,7 +15739,7 @@ function createRoItemCapture(env) {
     };
   }
   // 状态前置判断：cond 形如 "球5,爆气,hp>40,sp>30"（逗号分隔，全部满足才 true）
-  // 语法：球N=气球≥N；爆气=爆气中；狂暴；灵魂；hp>P/hp<P；sp>P/sp<P；!xxx=无某状态
+  // 语法：球0=当前无球，球N(N>0)=气球≥N；爆气=爆气中；狂暴；灵魂；hp>P/hp<P；sp>P/sp<P；!xxx=无某状态
   //   V2.38.4 新增 球源401/球源261/球源自动=该技能补球用哪个技能（只影响自动补球，不是门槛、不参与本函数判定）
   function checkSkillCond(cond) {
     if (!cond) return { ok: true, miss: "" };
@@ -15491,7 +15755,8 @@ function createRoItemCapture(env) {
       if (/^球源/.test(cc)) continue;
       var hit = false;
       var ms = cc.match(/^球(\d+)$/);
-      if (ms) hit = st.spheres >= parseInt(ms[1], 10);
+      if (ms && st.spheres == null) return { ok: false, miss: "气弹数量未知" };
+      if (ms) { var wantBall = parseInt(ms[1], 10); hit = wantBall === 0 ? st.spheres === 0 : st.spheres >= wantBall; }
       else {
         var mh = cc.match(/^hp([><=])(\d+)$/);
         if (mh) {
@@ -15835,6 +16100,7 @@ function createRoItemCapture(env) {
   //   V2.38.4 收口：来源选择里不再有「刚被复查判无效拉黑」这一态（拉黑机制整体撤掉）。
   function pickSphereSkill(need, st) {
     try {
+      if (!st || st.spheres == null) return 0;
       var pref = (need && need.sphereSrc) ? need.sphereSrc : sphereSrcGlobal();
       var gap = ((need && need.spheres) || 0) - st.spheres;
       if (pref === "auto") pref = gap >= 3 ? "401" : "261";
@@ -15854,6 +16120,25 @@ function createRoItemCapture(env) {
       return 0;
     } catch (e) { return 0; }
   }
+  var zSphereProbe = { aid: 0, cid: 0, map: "", epoch: -1, sent: false };
+  function sphereProbeOnce(ent) {
+    try {
+      var aid = gidInt(CLIENT.SS && CLIENT.SS.AID), cid = gidInt(selfCharId()), map = normMapKey(getMapName());
+      var epoch = typeof identityEpoch === "undefined" ? 0 : identityEpoch;
+      if (!ent || !aid || !cid || !map || gidInt(ent.GID) !== aid) return false;
+      if (zSphereProbe.aid !== aid || zSphereProbe.cid !== cid || zSphereProbe.map !== map || zSphereProbe.epoch !== epoch)
+        zSphereProbe = { aid: aid, cid: cid, map: map, epoch: epoch, sent: false };
+      if (zSphereProbe.sent) return false;
+      var lv = learnedSkillLv(261); if (!(lv > 0)) return false;
+      var p = new (czp("USE_SKILL"))(); p.SKID = 261; p.selectedLevel = lv; p.targetID = ent.GID;
+      CLIENT.NM.sendPacket(p);
+      zSphereProbe.sent = true; zPrepAt = Date.now();
+      skillNextAt[261] = Date.now() + skillCdMs({ skid: 261, cd: 0 });
+      tlog("cast-prep sphere 261 一次性气弹读数同步，等自身 464 包");
+      setStatus("气弹数未知：已蓄气一次，等待服务器气弹包确认", "st");
+      return true;
+    } catch (e) { return false; }
+  }
   function castStatusPrep(condStr, order) {
     try {
       var ent = CLIENT.SS && CLIENT.SS.Entity;
@@ -15867,6 +16152,10 @@ function createRoItemCapture(env) {
       // 1) 气弹不足 → 补气弹（V2.38.4：来源 401 狂蓄气 / 261 蓄气；条件里的 球源XXX 优先于全局默认）
       //    硬约束：需要球数 <= 当前球数 → 一颗都不补（由下面这个 if 的条件保证，不满足就完全不碰补球分支）；
       //            当前球数 >= 5 → 绝不补（需要 >5 颗的技能本客户端无解，直接 return false）。
+      if (need.spheres > 0 && st.spheres == null) {
+        if (sphereProbeOnce(ent)) return true;
+        setStatus("气弹数量未知：等当前自身气弹包；未学蓄气时请手动触发同步", "st"); return false;
+      }
       if (need.spheres > 0 && st.spheres < need.spheres) {
         // V2.38.4 收口（A2）：只认「数据异常」——连续补球球数始终无变化（沿用 zPrepSpam 计数口径，阈值不变）
         //   → 状态栏提示 + tlog 一条，然后停止补球。不判断技能可用性、不换技能、绝不拉黑。
@@ -16013,11 +16302,12 @@ function createRoItemCapture(env) {
         if (req[3]) parts2.push(req[3]);
         autoCond = parts2.join(",");
       }
-      var condStr = o.cond || autoCond;
+      var condStr = o.cond || ((o.skid === 261 || o.skid === 401) ? "球0" : autoCond); // 旧档案里留空的两种蓄气也只在无球时释放
       // 前置并行评估：不满足只记录（合流阶段补），后面的技能照常评估——输出不断
-      if (prereqEn && condStr) {
+      if (condStr) { // 手写/自动条件始终生效；开关只控制自动补状态和补球
         var ck = checkSkillCond(condStr);
         if (!ck.ok) {
+          if (ck.miss === "气弹数量未知" && o.skid === 261 && sphereProbeOnce(ent)) return true; // 球0 未知不假装为0，先用一次蓄气同步读数
           if (!blocked) blocked = { o: o, condStr: condStr };
           continue;
         }
@@ -16036,7 +16326,7 @@ function createRoItemCapture(env) {
         continue;
       }
       var bits = skillTypeBits(o.skid);
-      var isSelf = bits != null ? ((bits & 4) === 4) : false; // SELF=4；无类型信息按非自身处理
+      var isSelf = o.skid === 261 || o.skid === 401 || (bits != null && (bits & 4) === 4); // 补球技能必须对自身施放
       if (isSelf) {
         try {
           var ps = new (czp("USE_SKILL"))();
@@ -16085,7 +16375,7 @@ function createRoItemCapture(env) {
     }
     // 合流：无射程内可放技能 → 超射程的走近再放 > 补第一个被挡技能的前置 > 等（外层普攻穿插）
     if (walkSk) return "walk";
-    if (blocked) {
+    if (blocked && prereqEn) {
       if (castStatusPrep(blocked.condStr, order)) { zLastCastAt = Date.now(); zLastCastSkid = 0; return true; } // V2.15.28：补状态技能已在内部记 skillNextAt 独立 CD（zLastCast* 仅兼容旧引用）
     }
     // 有候选技能仍在独立冷却 → 明确返回 wait-cd，让外层按300ms余量决定等技能还是补普攻。
@@ -16537,7 +16827,7 @@ function createRoItemCapture(env) {
     try { bagCleanChat("物品保护：" + dojoGuard.reason, "guard:" + dojoGuard.reason); } catch (e0) {}
     return { ok: false, reason: dojoGuard.reason };
   }
-  // 唯一判定函数：助手内置道场（dojoStart）与独立脚本（门面 dojoGuard → 本函数）共用这一处。只读，不发包。
+  // 独立无限挑战经门面 dojoGuard 调用的入场前背包校验。只读，不发包；旧内置道场已退役。
   function dojoGuardCapture(force, restoreCurrent) {
     var who = dojoGuardWho();
     if (dojoGuard.ok && !force) {
@@ -16575,7 +16865,10 @@ function createRoItemCapture(env) {
         }
       }
     } catch (e2) { return dojoGuardFail("客户端背包交叉读取异常：" + String(e2 && e2.message || e2) + "；拒绝建立保护"); }
-    if (cmp) return dojoGuardFail(cmp + "（证据矛盾）：拒绝当作入场前状态");
+    if (cmp) {
+      identityLogLine("dojo-guard-mismatch " + cmp + " pktRows=" + n + " uiRows=" + (cl ? cl.length : 0) + " pktAgeMs=" + (pkt.at ? Date.now() - pkt.at : "unknown"));
+      return dojoGuardFail(cmp + "（证据矛盾）：拒绝当作入场前状态。请在安全地点打开背包等待服务器重发完整物品表，再点开始；若仍提示此错，保持停止，不要关闭保护或自动丢弃");
+    }
     var kinds = 0; for (var k in itids) if (Object.prototype.hasOwnProperty.call(itids, k)) kinds++;
     dojoGuard.ok = true; dojoGuard.itids = itids; dojoGuard.n = kinds; dojoGuard.who = who; dojoGuard.map = dojoGuardMap(); dojoGuard.src = "bagPkt.整表";
     dojoGuard.reason = ""; dojoGuard.restored = restoreCurrent === true;
@@ -19080,10 +19373,14 @@ function createRoItemCapture(env) {
   function onSelfSpirits(bytes, frameOff, lenTblOk) {
     try {
       if (!bytes || bytes.byteLength < 8) return;
-      var dv = new DataView(bytes), aid = dv.getUint32(2, true), num = Math.max(0, Math.min(5, dv.getUint16(6, true)));
+      var dv = ArrayBuffer.isView(bytes) ? new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength) : new DataView(bytes), aid = dv.getUint32(2, true), num = dv.getInt16(6, true);
+      if (num < 0 || num > 5) return;
       // V2.32.2 气弹缓存 aid 统一取整对齐（此前包 AID 为整数、实体 GID 为浮点，恒不等 → 缓存永判失效 → 气弹恒0）
       var ent = CLIENT.SS && CLIENT.SS.Entity, selfAid = gidInt((CLIENT.SS && CLIENT.SS.AID) || (ent && ent.GID) || 0);
-      if (selfAid && aid === selfAid) selfSpirits = { aid: aid, num: num, map: normMapKey(getMapName()) };
+      if (selfAid && aid === selfAid) {
+        selfSpirits = { aid: aid, num: num, map: normMapKey(getMapName()), known: true, cid: typeof selfCharId === "function" ? gidInt(selfCharId()) : 0, epoch: typeof identityEpoch === "undefined" ? 0 : identityEpoch, at: Date.now() };
+        selfSpiritOwner = ent || null;
+      }
       // V2.32.2 自采集诊断；V2.38.4 补记帧偏移与长度表可用性（定位「气弹包读不到 / 读到了但 AID 不匹配」）
       dshSphereLog("pkt aid=" + aid + " num=" + num + " selfAid=" + selfAid + " match=" + (aid === selfAid)
         + " off=" + (typeof frameOff === "number" ? frameOff : 0) + " lenTbl=" + (lenTblOk === true ? "on" : "off")
@@ -20858,6 +21155,7 @@ function createRoItemCapture(env) {
         hookStatusIcons(); // V1.7.5 方案A：buff 状态判活 hook（登录后可重试，幂等）
         try { npHookServerBattle(); } catch (eNSB) {} // V2.38.34：内挂状态被动采集旁听（幂等；客户端重新注册 PacketStructure 后能重新接管）
         try { npHookBattleAck(); } catch (eAH2) {} // V2.38.47 r2（审计 P1-2）：op142 回执通道同样每秒重挂——注入时客户端常未就绪，旧代码只有「关闭置零」才会重试
+        try { if (npHuntMode() === "np" || isHybrid()) npCalibrate(); } catch (eCal) {} // 角色就绪即按可信记录对齐，不等锁定怪出现；未知仍零 toggle
         try { partyHook(); } catch (e) {} // V2.23.0 队伍血条 hook（幂等，重复调用无副作用）
         try { fwRestore(); } catch (e) {} // V2.23.0 上次开着的浮窗自动恢复
         // V2.5.0：后台标签隐藏时跳过纯 UI 渲染（每秒全量重绘的 statbar/监控/状态表/提示/怪表），后台挂机只保功能逻辑，降 CPU/GC
@@ -20892,7 +21190,7 @@ function createRoItemCapture(env) {
           var curMap = CLIENT.MR && CLIENT.MR.currentMap ? String(CLIENT.MR.currentMap).split(".")[0] : "";
           if (curMap && curMap !== _lastMapKey) {
             _lastMapKey = curMap; zReinMapAt = Date.now(); // V2.38.4+：换图瞬间时间戳（自动上马判据⑦「换图/瞬移短窗口」用）
-            selfSpirits = { aid: 0, num: 0, map: "" };
+            if (selfSpiritCount(CLIENT.SS && CLIENT.SS.Entity) === null) selfSpirits = { aid: 0, num: 0, map: "" };
             dshDiag("map-change", { map: curMap, zRunning: zRunning, npHuntOn: npHuntOn });
             tlog("map-changed " + curMap);
             // 换图自动停止战斗（用户需求）：不读旧面板猜状态，只看服务器推来的采集状态
@@ -21063,7 +21361,7 @@ function createRoItemCapture(env) {
         var retry = document.createElement('div');
         retry.style.cssText = 'margin-top:6px;color:#6cb7ff;text-decoration:underline;cursor:pointer';
         retry.textContent = '点击重试(清缓存刷新)';
-        retry.onclick = function () { try { sessionStorage.removeItem(HEAL_KEY); } catch (e) {} runHeal(); };
+        retry.onclick = function () { try { sessionStorage.removeItem(HEAL_KEY); } catch (e) {} runHeal(true); };
         d.appendChild(retry);
         var close = document.createElement("div");
         close.textContent = "×";
@@ -21109,7 +21407,8 @@ function createRoItemCapture(env) {
       } catch (e) {}
       return Promise.all(p);
     }
-    function runHeal() {
+    function runHeal(userInitiated) {
+      if (IS_MN && !userInitiated) { show("检测到加载异常，已保留当前页面；需要时可手动点击重试", true); return; }
       if (healCancelled) return; // V2.15.13 用户已关闭 → 不再清缓存刷新
       var done = false;
       try { done = sessionStorage.getItem(HEAL_KEY) === '1'; } catch (e) {}
@@ -21556,11 +21855,13 @@ function createRoItemCapture(env) {
 
   // ---------------- V2.7.0 脚本执行器（导入 JSON 模板 · 白名单 8 类动作） ----------------
   var SCRIPTS_KEY = "dsh_scripts";
-  var SCR_ACTIONS = ["teleport", "walk", "battleOn", "battleOff", "useItem", "stopMove", "check", "talk", "loop", "ifWeight", "store", "dojoStart", "dojoWait", "dojoStop"];
-  function scrLoad() { try { var a = JSON.parse(localStorage.getItem(SCRIPTS_KEY) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function scrRetiredDojo(it) { return !!(it && (it.type === "dojo" || it.templateId === "infinite-dojo" || (Array.isArray(it.steps) && it.steps.some(function (s) { return s && /^(dojoStart|dojoWait|dojoStop)$/.test(s.action); })))); }
+  var SCR_ACTIONS = ["teleport", "walk", "battleOn", "battleOff", "useItem", "stopMove", "check", "talk", "loop", "ifWeight", "store"];
+  function scrLoad() { try { var a = JSON.parse(localStorage.getItem(SCRIPTS_KEY) || "[]"); return Array.isArray(a) ? a.filter(function (it) { return !scrRetiredDojo(it); }) : []; } catch (e) { return []; } }
   function scrSave(a) { try { localStorage.setItem(SCRIPTS_KEY, JSON.stringify(a)); } catch (e) {} }
   function scrValidate(obj) {
     if (!obj || typeof obj !== "object") return { ok: false, err: "顶层须为对象 {templateId, version, steps[]}" };
+    if (scrRetiredDojo(obj)) return { ok: false, err: "旧无限道场已退役，请使用波利旁的独立无限挑战入口" };
     if (typeof obj.templateId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(obj.templateId)) return { ok: false, err: "templateId 只能是 1-64 位字母/数字/_/-" };
     if (!Array.isArray(obj.steps) || !obj.steps.length || obj.steps.length > 500) return { ok: false, err: "steps 须为 1-500 项数组" };
     for (var i = 0; i < obj.steps.length; i++) {
@@ -21672,21 +21973,10 @@ function createRoItemCapture(env) {
     var m = scrEditModal();
     $id("dsh-scr-modal-title").textContent = "设置 · " + (it.name || it.templateId || ("脚本" + (idx + 1)));
     var body = $id("dsh-scr-modal-body");
-    var isDojo = it.type === "dojo";
-    var dp = (isDojo && it.steps && it.steps[0] && it.steps[0].params) || it.params || {};
     var lp = it.loop || { mode: "count", n: 1 };
     function opt(v, cur) { return v === cur ? " selected" : ""; }
     function chk(v) { return v ? " checked" : ""; }
     var html = "";
-    if (isDojo) {
-      html += '<div class="row"><span class="lb" style="min-width:56px">难度</span><select id="dsh-scr-e-diff">'
-        + '<option value="basic"' + opt(dp.difficulty || "basic", "basic") + '>初级</option>'
-        + '<option value="middle"' + opt(dp.difficulty, "middle") + '>中级</option>'
-        + '<option value="advanced"' + opt(dp.difficulty, "advanced") + '>高级</option></select></div>'
-        + '<label class="switch"><input id="dsh-scr-e-stop100" type="checkbox"' + chk(dp.stop100 !== false) + '>100轮领奖前暂停</label>'
-        + '<label class="switch"><input id="dsh-scr-e-fly" type="checkbox"' + chk(dp.fly) + '>道场无怪时飞行</label>'
-        + '<label class="switch"><input id="dsh-scr-e-emergency" type="checkbox"' + chk(dp.emergency) + '>中高级 HP&lt;70% 紧急飞行</label>';
-    }
     var untilTxt = lp.until ? String(JSON.stringify(lp.until)).replace(/"/g, "&quot;") : "";
     html += '<div class="row"><span class="lb" style="min-width:56px">循环</span><select id="dsh-scr-e-loopmode">'
       + '<option value="count"' + opt(lp.mode || "count", "count") + '>按次数</option>'
@@ -21697,7 +21987,7 @@ function createRoItemCapture(env) {
       + '<div class="row" id="dsh-scr-e-row-until"' + (lp.mode === "until" ? "" : ' style="display:none"') + '><span class="lb" style="min-width:56px">条件</span><input id="dsh-scr-e-until" type="text" value="' + untilTxt + '" placeholder=\'如 {"item":501}\'></div>'
       + '<div class="row"><span class="lb" style="min-width:56px">优先级</span><input id="dsh-scr-e-priority" type="number" min="0" max="999" value="' + (it.priority != null ? it.priority : 0) + '"></div>'
       + '<div class="row"><span class="lb" style="min-width:56px">顺序</span><input id="dsh-scr-e-order" type="number" min="0" max="999999" value="' + (it.order != null ? it.order : 0) + '"></div>'
-      + '<div class="log" style="font-size:10px;margin-top:4px">难度/暂停/飞行/循环/优先级都会随「确认执行」保存；循环=次数/时长/条件三选一。</div>';
+      + '<div class="log" style="font-size:10px;margin-top:4px">循环/优先级都会随「确认执行」保存；循环=次数/时长/条件三选一。</div>';
     body.innerHTML = html;
     $id("dsh-scr-e-loopmode").onchange = function () {
       var v = this.value;
@@ -21706,11 +21996,6 @@ function createRoItemCapture(env) {
       $id("dsh-scr-e-row-until").style.display = v === "until" ? "" : "none";
     };
     $id("dsh-scr-modal-ok").onclick = function () {
-      if (isDojo) {
-        var ndp = { difficulty: $id("dsh-scr-e-diff").value, stop100: $id("dsh-scr-e-stop100").checked, fly: $id("dsh-scr-e-fly").checked, emergency: $id("dsh-scr-e-emergency").checked };
-        if (it.steps && it.steps[0] && it.steps[0].action === "dojoStart") it.steps[0].params = ndp;
-        it.params = ndp;
-      }
       var nlp = { mode: $id("dsh-scr-e-loopmode").value };
       if (nlp.mode === "count") nlp.n = Math.max(1, parseInt($id("dsh-scr-e-count").value, 10) || 1);
       else if (nlp.mode === "duration") nlp.minutes = Math.max(1, Math.min(1440, parseInt($id("dsh-scr-e-minutes").value, 10) || 1));
@@ -21985,9 +22270,6 @@ function createRoItemCapture(env) {
         case "check": scrLogLine("check: map=" + getMapName() + " pos=" + (scrGetPos() ? Math.floor(scrGetPos()[0]) + "," + Math.floor(scrGetPos()[1]) : "?")); break;
         case "talk": scrTalkNpc(p.npc); break;
         case "store": scrStore(p); break;
-        case "dojoStart": scrDojoStart(step); break;
-        case "dojoStop": scrDojoStop(); break;
-        case "dojoWait": break; // 由 scrTick 等待轮次/条件
         case "loop": case "ifWeight": break; // 由 scrTick 直接处理，不走这里
       }
     } catch (e) { scrLogLine("动作异常: " + e.message); }
@@ -22040,10 +22322,6 @@ function createRoItemCapture(env) {
         return;
       }
     }
-    if (step.action === "dojoWait") {
-      if (scrDojoWaitMet(step)) scrNextStep();
-      return;
-    }
     if (scrCheckArrive(step) && scrCheckWait(step) && scrCheckUntil(step)) { scrNextStep(); return; }
     var maxT = step.timeoutMs || 20000;
     if (Date.now() - step._started > maxT) {
@@ -22076,18 +22354,6 @@ function createRoItemCapture(env) {
     scrRun.stepIndex = 0; scrRun.stepStartedAt = 0;
     scrSetState("循环 " + scrRun.scriptLoops + (loopCfg.mode === "count" ? "/" + loopCfg.n : "") + "，重新开始", "ok");
     scrLogLine("第 " + scrRun.scriptLoops + " 轮完成 → 重新开始");
-  }
-  function scrDojoStart(step) { try { dojoStart((step && step.params) || null); } catch (e) { scrLogLine("dojoStart 异常: " + e.message); } }
-  function scrDojoStop() { try { dojoStop("脚本停止道馆"); } catch (e) { scrLogLine("dojoStop 异常: " + e.message); } }
-  function scrDojoWaitMet(step) {
-    var p = (step && step.params) || {};
-    try { if (!dojoRun || !dojoRun.on) return true; } catch (e) { return true; } // 已停/暂停 → 完成
-    if (p.round != null) {
-      try { if (dojoRun.round < parseInt(p.round, 10)) return false; } catch (e) { return false; } // 未达轮次
-      return true; // 已达目标轮次
-    }
-    if (step && step.until) return !!scrCheckUntil(step);
-    return false; // 无轮次无条件 → 一直等到道馆停止
   }
   function scrNextStep() {
     scrRun.stepIndex++;
@@ -22145,7 +22411,6 @@ function createRoItemCapture(env) {
     scrLogLine("已入队（第 " + scrQueue.length + " 个待运行 · 串行）");
     scrQueueStart();
   }
-  var DOJO_SCRIPT_TPL = { templateId: "infinite-dojo", version: 1, type: "dojo", priority: 0, order: 0, loop: { mode: "count", n: 1 }, params: { difficulty: "basic", stop100: true, fly: false, emergency: false }, steps: [ { action: "dojoStart", params: { difficulty: "basic", stop100: true, fly: false, emergency: false } }, { action: "dojoWait" }, { action: "dojoStop" } ] };
   function scrImportRaw(name, raw) {
     var msg = $id("dsh-scr-msg");
     if (!raw) { if (msg) msg.textContent = "请粘贴 JSON 模板"; return; }
@@ -22186,9 +22451,9 @@ function createRoItemCapture(env) {
     if (!dock) { dock = document.createElement("div"); dock.id = "dsh-scr-dock"; dock.style.display = "none"; document.documentElement.appendChild(dock); }
     h = document.createElement("div"); h.id = "dsh-fw-scr";
     h.innerHTML = '<div class="sec">脚本执行（导入 JSON 模板 · 串行按优先级）</div>'
-      + '<div class="row"><span class="lb" style="min-width:42px">脚本名</span><input id="dsh-scr-name" type="text" placeholder="如：无限道场" style="flex:1 1 90px"></div>'
+      + '<div class="row"><span class="lb" style="min-width:42px">脚本名</span><input id="dsh-scr-name" type="text" placeholder="如：日常流程" style="flex:1 1 90px"></div>'
       + '<textarea id="dsh-scr-json" rows="4" placeholder=\'JSON 模板：{"templateId":"daily","version":1,"steps":[{"action":"walk","params":{"x":100,"y":80}}]}\'></textarea>'
-      + '<div class="row"><button id="dsh-scr-imp">导入上面的 JSON</button><button class="ghost" id="dsh-scr-file">从文件导入…</button><button class="green" id="dsh-scr-tpl-dojo">导入道馆脚本</button><span class="st" id="dsh-scr-msg" style="font-size:10px"></span></div>'
+      + '<div class="row"><button id="dsh-scr-imp">导入上面的 JSON</button><button class="ghost" id="dsh-scr-file">从文件导入…</button><span class="st" id="dsh-scr-msg" style="font-size:10px"></span></div>'
       + '<div class="row"><button class="ghost" id="dsh-scr-clear">清空输入</button><button class="ghost" id="dsh-scr-backup">备份全部脚本到文件</button></div>'
       + '<input id="dsh-scr-fileinput" type="file" accept=".json,application/json,text/plain" style="display:none">'
       + '<div class="box"><div class="b-hd">已导入脚本 <span class="tag green" id="dsh-scr-count" style="float:right">0</span></div>'
@@ -22196,7 +22461,7 @@ function createRoItemCapture(env) {
       + '<div class="row"><span class="lb" style="min-width:42px">运行</span><span class="st" id="dsh-scr-state" style="font-size:11px">未运行</span><button class="ghost" id="dsh-scr-stop" style="flex:0 0 auto;color:#b91c1c;border-color:#e5b3b3">停止</button></div>'
       + '<div class="row"><input id="dsh-scr-pptoken" type="password" placeholder="pushplus token（100轮暂停推送）" autocomplete="off" style="flex:1 1 90px"><button class="green" id="dsh-scr-ppsave" style="flex:0 0 auto">保存推送</button></div>'
       + '<label class="switch"><input id="dsh-scr-ppen" type="checkbox">启用推送</label>'
-      + '<div class="log" id="dsh-scr-log" style="font-size:10px;max-height:72px;overflow:auto">动作：teleport/walk/battleOn/battleOff/useItem/stopMove/check/talk/store/loop/ifWeight/dojoStart/dojoWait/dojoStop；顶层可配 type(dojo)/priority/order/loop(count|duration|until)；HP&lt;25% 自动停手。导入：粘贴 JSON 点「导入上面的 JSON」，或用「从文件导入…」选 .json（支持一次多条）；脚本只存在本机浏览器，换电脑前先点「备份全部脚本到文件」。</div>';
+      + '<div class="log" id="dsh-scr-log" style="font-size:10px;max-height:72px;overflow:auto">动作：teleport/walk/battleOn/battleOff/useItem/stopMove/check/talk/store/loop/ifWeight；顶层可配 priority/order/loop(count|duration|until)；HP&lt;25% 自动停手。导入：粘贴 JSON 点「导入上面的 JSON」，或用「从文件导入…」选 .json（支持一次多条）；脚本只存在本机浏览器，换电脑前先点「备份全部脚本到文件」。</div>';
     dock.appendChild(h);
     $id("dsh-scr-imp").onclick = function () { var v = $id("dsh-scr-json").value; scrImportRaw(($id("dsh-scr-name").value || "").trim(), v); if (v) $id("dsh-scr-json").value = ""; };
     $id("dsh-scr-file").onclick = function () { var f = $id("dsh-scr-fileinput"); if (f) f.click(); };
@@ -22210,7 +22475,6 @@ function createRoItemCapture(env) {
       this.value = "";
     };
     $id("dsh-scr-backup").onclick = function () { scrExportAll(); };
-    $id("dsh-scr-tpl-dojo").onclick = function () { scrImportRaw("无限道场", JSON.stringify(DOJO_SCRIPT_TPL)); };
     $id("dsh-scr-clear").onclick = function () { $id("dsh-scr-json").value = ""; $id("dsh-scr-name").value = ""; };
     $id("dsh-scr-stop").onclick = function () { scrQueue = []; scrRun.stop = true; scrRun.running = false; if (scrRun.timer) { clearInterval(scrRun.timer); scrRun.timer = null; } try { stopWalkXY(); } catch (e) {} scrSetState("已停止", "warn"); scrLogLine("手动停止"); };
     $id("dsh-scr-pptoken").value = notifyLoadToken(); $id("dsh-scr-ppen").checked = notifyPushEnabled();
@@ -22355,9 +22619,10 @@ function createRoItemCapture(env) {
   // V2.36.13：属性箭的元素顺序（元素码 = 下标）。arrowLoad 在 IIFE 初始化时就要用，必须声明在它前面。
   var ARROW_ELEM_ORDER=["火","水","风","地","毒","圣","暗","念","不死","无"];
   function arrowDefaults(){return {enabled:false,defaultItid:null,byMid:{},byElem:{}};}
-  function arrowLoad(){var d=arrowDefaults(),r=null,raw=null;try{raw=localStorage.getItem(ARROW_RULES_KEY);r=JSON.parse(raw||"null");}catch(e){}if(raw==null){try{var oldc=JSON.parse(localStorage.getItem(CHALLENGE_KEY)||"null");if(oldc&&typeof oldc==="object"){r={enabled:oldc.arrowOn===true,defaultItid:oldc.neutralItid,byMid:oldc.bossByMid};localStorage.setItem(ARROW_RULES_KEY,JSON.stringify(r));}}catch(e2){}}if(!r||typeof r!=="object")return d;d.enabled=r.enabled===true;d.byElem={};if(r.byElem&&typeof r.byElem==="object")Object.keys(r.byElem).forEach(function(k){var eit=arrowPos(r.byElem[k]);if(ARROW_ELEM_ORDER.indexOf(String(k))>=0&&eit)d.byElem[String(k)]=eit;});d.defaultItid=arrowPos(r.defaultItid)||arrowPos(r.neutralItid);var legacy=r.byMid&&typeof r.byMid==="object"?r.byMid:(r.bossByMid&&typeof r.bossByMid==="object"?r.bossByMid:null);if(legacy)Object.keys(legacy).forEach(function(k){var mid=arrowPos(k),v=legacy[k],itid=arrowPos(v&&v.itid!=null?v.itid:v);if(mid&&itid)d.byMid[mid]=itid;});return d;}
+  function arrowLoad(){var d=arrowDefaults(),r=null,raw=null;try{if(typeof saved!=="undefined"&&saved&&saved.arrowRules&&typeof saved.arrowRules==="object")r=saved.arrowRules;}catch(e){}if(!r){try{raw=localStorage.getItem(ARROW_RULES_KEY);r=JSON.parse(raw||"null");}catch(e){}}if(!r&&raw==null){try{var oldc=JSON.parse(localStorage.getItem(CHALLENGE_KEY)||"null");if(oldc&&typeof oldc==="object"){r={enabled:oldc.arrowOn===true,defaultItid:oldc.neutralItid,byMid:oldc.bossByMid};localStorage.setItem(ARROW_RULES_KEY,JSON.stringify(r));}}catch(e2){}}if(!r||typeof r!=="object")return d;d.enabled=r.enabled===true;d.byElem={};if(r.byElem&&typeof r.byElem==="object")Object.keys(r.byElem).forEach(function(k){var eit=arrowPos(r.byElem[k]);if(ARROW_ELEM_ORDER.indexOf(String(k))>=0&&eit)d.byElem[String(k)]=eit;});d.defaultItid=arrowPos(r.defaultItid)||arrowPos(r.neutralItid);var legacy=r.byMid&&typeof r.byMid==="object"?r.byMid:(r.bossByMid&&typeof r.bossByMid==="object"?r.bossByMid:null);if(legacy)Object.keys(legacy).forEach(function(k){var mid=arrowPos(k),v=legacy[k],itid=arrowPos(v&&v.itid!=null?v.itid:v);if(mid&&itid)d.byMid[mid]=itid;});return d;}
   var arrowRules=arrowLoad(),arrowTarget=null,arrowPending=null,arrowStatus="未启用",arrowBlocked=false,arrowReady=false;
-  function arrowSave(){try{localStorage.setItem(ARROW_RULES_KEY,JSON.stringify(arrowRules));}catch(e){}}
+  function arrowSave(){try{if(typeof saved==="undefined"||!saved||typeof saveSaved!=="function"||typeof activeProfileKey!=="function"||typeof loadProfiles!=="function")return false;var raw=JSON.stringify(arrowRules),key=activeProfileKey();if(!raw||!key)return false;saved.arrowRules=JSON.parse(raw);saveSaved(saved);var disk=loadProfiles(),p=disk&&disk[key],stored=p&&p.saved&&p.saved.arrowRules;if(JSON.stringify(stored)!==raw)return false;try{localStorage.setItem(ARROW_RULES_KEY,raw);}catch(e0){}return true;}catch(e){return false;}}
+   function arrowPersistSay(ok,s){arrowSay(ok?s:"保存失败：当前角色档案未确认写入；本次运行仍保留设置。");}
   // V2.38.37-arrow5 配置合并迁移（只做一次，绝不改变用户现有实际行为）：
   //   总开关 = 原「补箭/续箭」开关（#dsh-arrowen 的存档值 saved.ui["dsh-arrowen"]，缺省=开；兼容旧扁平键 saved.arrowEn）
   //            逻辑或 原「按怪换箭」开关（arrowRules.enabled）；两者原先都关 → 总开关为关。
@@ -22385,11 +22650,11 @@ function createRoItemCapture(env) {
   //   3 elemfallback 属性箭用不上时的属性补偿（未配置或背包里没有）：念→水/火/地/风；不死→火/圣
   //   4 default      通用（默认）箭 (defaultItid)
   //   5 plain        普通箭矢——魔法箭矢筒 2000030 产出的那支（只有前面配过东西才加，避免"什么都没配"被当成要换箭）
-  // 其它属性没有对应属性箭时直接落 4/5；全部都没有时由 arrowSelfTick 提示并保持当前箭。
+  // 已识别属性没有对应属性箭时才落 4/5；属性无法读取且无明确按怪规则时，保持当前箭不动作。
   function arrowCandidates(mid,cfg){cfg=cfg||arrowRules;var out=[],seen={},m=arrowPos(mid);
     function add(kind,itid){itid=arrowPos(itid);if(!itid||seen[itid])return;seen[itid]=1;out.push({kind:kind,itid:itid});}
     function addElem(kind,key,miss){var v=cfg.byElem?arrowPos(cfg.byElem[key]):null;if(!v||seen[v])return;seen[v]=1;out.push({kind:kind,itid:v,useElem:key,missElem:miss});}
-    var en=m?mobElemName(m):"",ev=en&&cfg.byElem?arrowPos(cfg.byElem[en]):null;if(ev)add("elem",ev); // 优先级 1：属性箭
+    var en=m?mobElemName(m):"",ev=en&&cfg.byElem?arrowPos(cfg.byElem[en]):null;if(m&&!en){var specific=cfg.byMid?cfg.byMid[m]:null;add("mob",specific&&specific.itid!=null?specific.itid:specific);return out;}if(ev)add("elem",ev); // 优先级 1：属性箭
     var v=m&&cfg.byMid?cfg.byMid[m]:null;add("mob",v&&v.itid!=null?v.itid:v); // 优先级 2：指定怪箭
     // 优先级 3：属性补偿链（顺序严格按用户口径）。判据是「属性箭用不上」——没配置或背包里没有都算，
     // 所以不再用 !ev 做门禁：补偿候选无条件排在属性箭之后，由候选链按顺序取第一个可用的。
@@ -22431,7 +22696,7 @@ function createRoItemCapture(env) {
   function arrowMobName(mid){try{var m=(getMobDb()||{})[arrowPos(mid)];return m?(m.kName||m.name||m.Name||("怪物 #"+mid)):("怪物 #"+mid);}catch(e){return "怪物 #"+mid;}}
   function arrowItemName(itid){try{return (getItemName(itid)||("ITID "+itid))+" #"+itid;}catch(e){return "ITID "+itid;}}
   function arrowFillMobs(s,q){if(!s)return;var old=s.value,db=getMobDb()||{},needle=String(q||"").trim().toLowerCase(),keys=[];Object.keys(db).forEach(function(k){if(!arrowPos(k))return;if(needle&&arrowMobName(k).toLowerCase().indexOf(needle)<0&&String(k).indexOf(needle)<0)return;keys.push(k);});keys.sort(function(a,b){return Number(a)-Number(b);});s.innerHTML='<option value="">选择怪物（可先搜索）</option>';keys.forEach(function(k){var m=db[k]||{},o=document.createElement("option");o.value=k;o.textContent=arrowMobName(k)+" #"+k+(Number(m.MvpDropsNum)>0?" [Boss]":"");s.appendChild(o);});if(old&&keys.indexOf(old)>=0)s.value=old;}
-  function arrowRenderCfg(){var box=$id("dsh-arrow-rules-list");if(!box)return;box.innerHTML="";var def=arrowPos(arrowRules.defaultItid),r0=document.createElement("div");r0.className="row";var s0=document.createElement("span");s0.style.cssText="flex:1 1 auto";s0.textContent="默认箭："+(def?arrowItemName(def)+"（打完后自动换回这支）":"未设置（不换箭，保持当前装备）");r0.appendChild(s0);box.appendChild(r0);var head=document.createElement("div");head.className="st";head.textContent="属性 → 箭（按当前攻击目标的属性自动换；留空=不强制；优先级 属性箭 > 指定怪箭 > 默认箭）";box.appendChild(head);ARROW_ELEM_ORDER.forEach(function(en){var row=document.createElement("div");row.className="row";var lb=document.createElement("span");lb.style.cssText="flex:0 0 auto;min-width:26px";lb.textContent=en;row.appendChild(lb);var sel=document.createElement("select");sel.style.cssText="flex:1 1 auto";arrowFillElemSelect(sel,arrowPos(arrowRules.byElem[en]));sel.addEventListener("change",function(){var v=arrowPos(this.value);if(v)arrowRules.byElem[en]=v;else delete arrowRules.byElem[en];arrowSave();arrowSay(v?("属性箭已保存："+en+" → "+arrowItemName(v)):("已清空"+en+"属性箭"));});var num=document.createElement("input");num.type="number";num.min="1";num.placeholder="手填ID";num.value=arrowPos(arrowRules.byElem[en])?String(arrowPos(arrowRules.byElem[en])):"";num.title="手填箭矢/物品 ID（填了就用它，可与下拉互相覆盖）";num.style.cssText="flex:0 0 68px;font-size:12px";num.addEventListener("change",function(){var v=arrowPos(this.value);if(v){arrowRules.byElem[en]=v;}else{delete arrowRules.byElem[en];}arrowSave();arrowRenderCfg();arrowSay(v?("属性箭已保存（手填）："+en+" → "+arrowItemName(v)):("已清空"+en+"属性箭"));});row.appendChild(num);row.appendChild(sel);if(arrowPos(arrowRules.byElem[en])){var clr=document.createElement("button");clr.className="ghost";clr.textContent="清";clr.style.cssText="flex:0 0 auto;padding:1px 6px;font-size:11px";clr.addEventListener("click",function(){delete arrowRules.byElem[en];arrowSave();arrowRenderCfg();arrowSay("已清空"+en+"属性箭");});row.appendChild(clr);}box.appendChild(row);});var ids=Object.keys(arrowRules.byMid).map(function(k){return arrowPos(k);}).filter(function(x){return !!x;});ids.sort(function(a,b){return a-b;});if(!ids.length){var e=document.createElement("span");e.className="st";e.textContent="未指定怪物：没配过的怪一律用属性箭/默认箭。";box.appendChild(e);return;}ids.forEach(function(mid){var row=document.createElement("div");row.className="row";var t=document.createElement("span");t.style.cssText="flex:1 1 auto";t.textContent=arrowMobName(mid)+" #"+mid+" → "+arrowItemName(arrowRules.byMid[mid])+(mobElemName(mid)?(" · "+mobElemName(mid)+"属性"):"");row.appendChild(t);var b=document.createElement("button");b.className="ghost";b.textContent="删除";b.style.cssText="flex:0 0 auto;padding:1px 8px;font-size:11px";b.addEventListener("click",function(){delete arrowRules.byMid[mid];arrowSave();arrowRenderCfg();arrowSay("已删除指定怪 #"+mid);});row.appendChild(b);box.appendChild(row);});}
+  function arrowRenderCfg(){var box=$id("dsh-arrow-rules-list");if(!box)return;box.innerHTML="";var def=arrowPos(arrowRules.defaultItid),r0=document.createElement("div");r0.className="row";var s0=document.createElement("span");s0.style.cssText="flex:1 1 auto";s0.textContent="默认箭："+(def?arrowItemName(def)+"（打完后自动换回这支）":"未设置（不换箭，保持当前装备）");r0.appendChild(s0);box.appendChild(r0);var head=document.createElement("div");head.className="st";head.textContent="属性 → 箭（按当前攻击目标的属性自动换；留空=不强制；优先级 属性箭 > 指定怪箭 > 默认箭）";box.appendChild(head);ARROW_ELEM_ORDER.forEach(function(en){var row=document.createElement("div");row.className="row";var lb=document.createElement("span");lb.style.cssText="flex:0 0 auto;min-width:26px";lb.textContent=en;row.appendChild(lb);var sel=document.createElement("select");sel.style.cssText="flex:1 1 auto";arrowFillElemSelect(sel,arrowPos(arrowRules.byElem[en]));sel.addEventListener("change",function(){var v=arrowPos(this.value);if(v)arrowRules.byElem[en]=v;else delete arrowRules.byElem[en];arrowPersistSay(arrowSave(),v?("属性箭已保存："+en+" → "+arrowItemName(v)):("已清空"+en+"属性箭"));});var num=document.createElement("input");num.type="number";num.min="1";num.placeholder="手填ID";num.value=arrowPos(arrowRules.byElem[en])?String(arrowPos(arrowRules.byElem[en])):"";num.title="手填箭矢/物品 ID（填了就用它，可与下拉互相覆盖）";num.style.cssText="flex:0 0 68px;font-size:12px";num.addEventListener("change",function(){var v=arrowPos(this.value);if(v){arrowRules.byElem[en]=v;}else{delete arrowRules.byElem[en];}var saveOk=arrowSave();arrowRenderCfg();arrowPersistSay(saveOk,v?("属性箭已保存（手填）："+en+" → "+arrowItemName(v)):("已清空"+en+"属性箭"));});row.appendChild(num);row.appendChild(sel);if(arrowPos(arrowRules.byElem[en])){var clr=document.createElement("button");clr.className="ghost";clr.textContent="清";clr.style.cssText="flex:0 0 auto;padding:1px 6px;font-size:11px";clr.addEventListener("click",function(){delete arrowRules.byElem[en];var saveOk=arrowSave();arrowRenderCfg();arrowPersistSay(saveOk,"已清空"+en+"属性箭");});row.appendChild(clr);}box.appendChild(row);});var ids=Object.keys(arrowRules.byMid).map(function(k){return arrowPos(k);}).filter(function(x){return !!x;});ids.sort(function(a,b){return a-b;});if(!ids.length){var e=document.createElement("span");e.className="st";e.textContent="未指定怪物：没配过的怪一律用属性箭/默认箭。";box.appendChild(e);return;}ids.forEach(function(mid){var row=document.createElement("div");row.className="row";var t=document.createElement("span");t.style.cssText="flex:1 1 auto";t.textContent=arrowMobName(mid)+" #"+mid+" → "+arrowItemName(arrowRules.byMid[mid])+(mobElemName(mid)?(" · "+mobElemName(mid)+"属性"):"");row.appendChild(t);var b=document.createElement("button");b.className="ghost";b.textContent="删除";b.style.cssText="flex:0 0 auto;padding:1px 8px;font-size:11px";b.addEventListener("click",function(){delete arrowRules.byMid[mid];var saveOk=arrowSave();arrowRenderCfg();arrowPersistSay(saveOk,"已删除指定怪 #"+mid);});row.appendChild(b);box.appendChild(row);});}
   function arrowCurrentMid(){try{var gid=gidInt(zLock&&zLock.gid);if(!gid){var me=CLIENT.SS&&CLIENT.SS.Entity;gid=gidInt(me&&me.targetGID);}if(!gid&&dps&&dps.cur&&Number(dps.cur.lastAt)&&Date.now()-Number(dps.cur.lastAt)<15000)gid=gidInt(dps.cur.gid);if(!gid)return 0;var list=apiEntities();for(var i=0;i<list.length;i++){if(list[i].gid===gid&&list[i].type===5&&list[i].mid)return list[i].mid;}}catch(e){}return 0;}
   var arrowSelfPending=null,arrowSelfSaid="",arrowQuiverAt=0;
   function arrowSelfSay(s){s=String(s);if(s===arrowSelfSaid)return;arrowSelfSaid=s;arrowSay(s);}
@@ -22451,9 +22716,9 @@ function createRoItemCapture(env) {
     if(!arrowManageOn()){arrowIdentityInvalidate("master-off");arrowSelfSay("箭矢管理总开关已关闭，按怪换箭不动作");return;}
     var bagSelfGate=readBagArrows();
     if(bagSelfGate&&bagSelfGate.known===false){arrowSelfSay("读不到背包箭矢，按怪换箭先不动作");return;}
-    if(arrowSupplyAdvance(now,ammoSelfGate,bagSelfGate,arrowSupplyKey()))return;
-    var mid0=arrowCurrentMid();
-    if(mid0&&arrowMobGone(mid0))mid0=0; // V2.36.13：目标怪已经不在场 = 打完了
+    var targetGid0=0;try{targetGid0=gidInt(typeof zLock!=="undefined"&&zLock&&zLock.gid);}catch(e0){}if(!targetGid0){try{var me0=typeof CLIENT!=="undefined"&&CLIENT.SS&&CLIENT.SS.Entity;targetGid0=gidInt(me0&&me0.targetGID);}catch(e1){}}if(!targetGid0){try{if(typeof dps!=="undefined"&&dps&&dps.cur&&Number(dps.cur.lastAt)&&Date.now()-Number(dps.cur.lastAt)<15000)targetGid0=gidInt(dps.cur.gid);}catch(e2){}}var mid0=arrowCurrentMid();if(!mid0&&targetGid0){arrowSelfPending=null;arrowSupply=null;arrowPending=null;arrowStableKey="";arrowSelfSay("读不到目标属性，保持当前箭，不切箭");return;}if(arrowSupplyAdvance(now,ammoSelfGate,bagSelfGate,arrowSupplyKey()))return;
+
+    if(mid0&&arrowMobGone(mid0)){mid0=0;targetGid0=0;} // V2.36.13：目标怪已经不在场 = 打完了
     // V2.36.13：打完后自动换回「默认箭」（默认箭在换箭设置里配；没配就什么都不做，保持当前装备）
     if(!mid0){
       arrowStickyBoss=null;
@@ -22478,9 +22743,9 @@ function createRoItemCapture(env) {
     }
     var eff=arrowEffectiveMid(mid0,0,now),mid=eff.mid||mid0;
     if(!arrowStableGate("s"+mid,now)){arrowSelfSay("目标刚换，等 1.5 秒确认："+arrowMobName(mid)+(eff.sticky?"[BOSS粘性]":""));return;}
-    var list=arrowCandidates(mid,arrowRules);
+    var en0=mobElemName(mid),specificCfg=arrowRules.byMid?arrowRules.byMid[mid]:null,specificItid=arrowPos(specificCfg&&specificCfg.itid!=null?specificCfg.itid:specificCfg),list=arrowCandidates(mid,arrowRules);if(!en0&&!specificItid){arrowSelfPending=null;arrowSelfSay("读不到目标属性，保持当前箭，不切箭");return;}
     if(!list.length){arrowSelfPending=null;arrowSelfSay("没有任何可用的箭矢/箭袋，保持当前箭："+arrowMobName(mid));return;}
-    var en0=mobElemName(mid),elemCfg=en0&&arrowRules.byElem?arrowPos(arrowRules.byElem[en0]):null;
+    var elemCfg=en0&&arrowRules.byElem?arrowPos(arrowRules.byElem[en0]):null;
     var tag=arrowMobName(mid)+(arrowBoss(mid)?"[BOSS]":"")+(eff.sticky?"[BOSS粘性]":""),ammo=ammoSelfGate,bag=readBagArrows(),i=0,j=0,row=null;
     for(i=0;i<list.length;i++){
       var same=!!(ammo&&Number(ammo.itid)===list[i].itid);
@@ -22506,15 +22771,15 @@ function createRoItemCapture(env) {
       + '<div class="box"><div class="b-hd">已配置</div><div id="dsh-arrow-rules-list" style="font-size:11px;max-height:104px;overflow:auto"></div></div>'
       + '<div id="dsh-arrow-rules-status" class="st"></div>'
       + '<div id="dsh-arrow-rules-bagdiag" class="st" style="font-size:11px">背包数据源：未读取</div>'
-      + '<div class="log">规则：优先级 属性箭（按目标属性）&gt; 指定怪箭 &gt; 默认箭；之后才是下面的说明。按你当前攻击的那只怪换箭（助手挂机、内挂、手动打的都算）→ 属性配过的先按属性换；这只怪单独配过就用指定怪箭；都没配就用默认箭；背包里没有要用的箭就用默认箭兜底；默认箭也没设 → 就不动（保持当前装备）；一场打完（没有攻击目标、或目标怪已消失）会自动换回默认箭，先等 1.5 秒确认。道场脚本报的怪优先。大 MVP（MvpDropsNum>0）30 秒内还在实体列表里就保持它的箭（boss 粘性）；目标刚换会先等 1.5 秒确认再换，随机刷新图不再乱换。</div>'
+      + '<div class="log">规则：优先级 属性箭（按目标属性）&gt; 指定怪箭 &gt; 默认箭；之后才是下面的说明。按你当前攻击的那只怪换箭（助手挂机、内挂、手动打的都算）→ 属性配过的先按属性换；这只怪单独配过就用指定怪箭；都没配就用默认箭；读不出目标属性时保持当前箭、不切换；背包里没有要用的箭就用默认箭兜底；默认箭也没设 → 就不动（保持当前装备）；一场打完（没有攻击目标、或目标怪已消失）会自动换回默认箭，先等 1.5 秒确认。道场脚本报的怪优先。大 MVP（MvpDropsNum>0）30 秒内还在实体列表里就保持它的箭（boss 粘性）；目标刚换会先等 1.5 秒确认再换，随机刷新图不再乱换。</div>'
       + '<div class="log">属性 → 箭：火/水/风/地/毒/圣/暗/念/不死/无 十行，留空=不强制；怪物属性取自内嵌的全量怪物表（2471 只）。真实换箭仍要求背包里有这支箭，否则按默认箭兜底。</div>'
       + '<div class="log">背包里一支箭都没有时会自动打开对应箭矢筒（风灵箭矢 → 风灵箭矢筒 / 魔法风灵箭矢筒）；连箭矢筒也没有就用魔法箭矢筒(2000030)补普通箭矢；两个都没有才提示并保持当前箭，绝不拿背包里任意一支箭凑数。</div>'
-      + '<div class="log">兜底顺序：属性箭 → 指定怪箭 → 念(水/火/地/风) 与 不死(火/圣) 属性补偿 → 通用箭 → 魔法箭矢筒普通箭矢。属性行可手填 ID；下拉框动态列出背包里的箭矢。</div>';
+      + '<div class="log">已读出属性时兜底顺序：属性箭 → 指定怪箭 → 念(水/火/地/风) 与 不死(火/圣) 属性补偿 → 通用箭 → 魔法箭矢筒普通箭矢。读不出目标属性时不兜底切换，保持当前箭。属性行可手填 ID；下拉框动态列出背包里的箭矢。</div>';
       + '<div class="log">V2.38.40：本窗口第一行是总开关「箭矢管理：自动续箭」（箭矢不足 50 支时自动补箭，没有箭袋则换普通箭矢）；第二行才是「按怪/按目标选箭」子选项，需总开关也开着。总开关关闭 → 全链路零动作；子选项关闭 → 不按怪切箭种，但补箭/兜底仍照常。旧版的开关在 战斗功能 → 箭矢管理，已移到这里。</div>';
     dock.appendChild(h);
     var en=$id("dsh-arrow-rules-enabled"),item=$id("dsh-arrow-rules-item"),mob=$id("dsh-arrow-rules-mob"),mobItem=$id("dsh-arrow-rules-mobitem"),find=$id("dsh-arrow-rules-find"),am=$id("dsh-arrowen");
-    en.checked=arrowRules.enabled;arrowFill(item);arrowFill(mobItem);arrowFillMobs(mob,"");arrowRenderCfg();
-    en.onchange=function(){arrowRules.enabled=en.checked;arrowSave();arrowSay(en.checked?"已启用":"已关闭");};
+    en.checked=arrowRules.enabled;arrowFill(item);var savedDefault=arrowPos(arrowRules.defaultItid);if(savedDefault){if(!item.querySelector('option[value="'+savedDefault+'"]')){var savedOpt=document.createElement("option");savedOpt.value=String(savedDefault);savedOpt.textContent=arrowItemName(savedDefault)+"（已保存）";item.appendChild(savedOpt);}item.value=String(savedDefault);}arrowFill(mobItem);arrowFillMobs(mob,"");arrowRenderCfg();
+    en.onchange=function(){arrowRules.enabled=en.checked;arrowPersistSay(arrowSave(),en.checked?"已启用":"已关闭");};
     if(am){
       // V2.38.38-arrow9：建窗时把存档值应用到控件，并立刻规范成唯一存档键（此后控件只是存档的一个视图，反复开关窗口都一致）。
       var amOn=arrowManageSaved();
@@ -22522,14 +22787,14 @@ function createRoItemCapture(env) {
       setArrowManage(amOn);
       am.onchange=function(){setArrowManage(am.checked===true);arrowSay(am.checked?"自动续箭已开启":"自动续箭已关闭（按怪换箭也不动作）");};
     }
-    $id("dsh-arrow-rules-default").onclick=function(){arrowRules.defaultItid=arrowPos(item.value);arrowSave();arrowRenderCfg();arrowSay(arrowRules.defaultItid?"默认箭已保存":"默认箭已清空（不换箭）");};
+    var saveDefaultArrow=function(){arrowRules.defaultItid=arrowPos(item.value);var ok=arrowSave();arrowRenderCfg();arrowPersistSay(ok,arrowRules.defaultItid?"默认箭已保存":"默认箭已清空（不换箭）");};item.addEventListener("change",saveDefaultArrow);$id("dsh-arrow-rules-default").onclick=saveDefaultArrow;
     if(find)find.oninput=function(){arrowFillMobs(mob,find.value);};
     $id("dsh-arrow-rules-cur").onclick=function(){var mid=arrowCurrentMid();if(!mid){arrowSay("取不到当前目标（先锁定或攻击一只怪）");return;}if(find)find.value="";arrowFillMobs(mob,"");if(!mob.querySelector('option[value="'+mid+'"]')){var o=document.createElement("option");o.value=String(mid);o.textContent=arrowMobName(mid)+" #"+mid;mob.appendChild(o);}mob.value=String(mid);arrowSay("已选中 "+arrowMobName(mid)+" #"+mid);};
-    $id("dsh-arrow-rules-mobsave").onclick=function(){var mid=arrowPos(mob.value),itid=arrowPos(mobItem.value);if(!mid||!itid){arrowSay("请选择怪物与箭矢");return;}arrowRules.byMid[mid]=itid;arrowSave();arrowRenderCfg();arrowSay("已保存 "+arrowMobName(mid)+" → "+arrowItemName(itid));};
+    var saveMobArrow=function(){var mid=arrowPos(mob.value),itid=arrowPos(mobItem.value);if(!mid||!itid){arrowSay("请选择怪物与箭矢");return;}arrowRules.byMid[mid]=itid;var ok=arrowSave();arrowRenderCfg();arrowPersistSay(ok,"已保存 "+arrowMobName(mid)+" → "+arrowItemName(itid));};mobItem.addEventListener("change",function(){if(arrowPos(mob.value)&&arrowPos(this.value))saveMobArrow();});$id("dsh-arrow-rules-mobsave").onclick=saveMobArrow;
     arrowSay(arrowStatus);return h;}
   // V2.38.38：开战判据与「补箭触发线」解耦。能开打 = 当前装备的箭矢可读（known===true）且 count>0（能射）；
   //   ARROW_LOW_AMMO(50) 只是「要不要启动补给」的触发线，不再决定能不能开打；总开关只决定动不动手换箭/开袋/用道具。
-  function arrowTargetTick(now){var arrowFightOk=function(a){return !!(a&&a.known===true&&Number(a.count)>0);};var arrowFightSay=function(a,s){arrowReady=arrowFightOk(a);arrowBlocked=!arrowReady;if(s)arrowSay(s);return !arrowReady;};arrowReady=false;arrowBlocked=!!arrowTarget;if(!arrowTarget||!arrowRules.enabled){arrowBlocked=!!arrowTarget&&arrowRules.enabled;return arrowBlocked;}var ammo=readEquippedAmmo();if(!ammo||ammo.known!==true){arrowSay("读不到装备栏当前箭矢，先不动作");return true;}if(typeof apiGuard==="function"&&apiGuard(arrowTarget.owner,"arrow")){arrowSay("阻塞：箭矢租约失效");return true;}if(!arrowManageOn()){arrowSupply=null;arrowPending=null;return arrowFightSay(ammo,Number(ammo.count)>0?("箭矢管理总开关已关闭：当前箭矢 ×"+Number(ammo.count)+"，照常开战（不换箭、不开袋、不用道具）"):"箭矢管理总开关已关闭：当前箭矢 ×0 射不了，且不换箭不补给，先不开战");}var supplyKey="t"+arrowTarget.mid+"@"+arrowTarget.gid;var bagT=readBagArrows();if(bagT&&bagT.known===false){arrowSay("读不到背包箭矢，先不动作");return true;}if(arrowSupplyAdvance(now,ammo,bagT,supplyKey)){if(arrowSupply&&arrowSupply.phase==="hold"){arrowBlocked=false;arrowReady=true;return false;}return arrowFightSay(ammo,arrowFightOk(ammo)?("补给进行中：当前箭矢 ×"+Number(ammo.count)+" 仍可射，照常开战"):null);}var eff=arrowEffectiveMid(arrowTarget.mid,arrowTarget.gid,now),midUse=eff.mid||arrowTarget.mid;if(!arrowStableGate("t"+midUse+"@"+arrowTarget.gid,now)){arrowBlocked=true;return true;}var list=arrowCandidates(midUse,arrowRules),bag=readBagArrows(),pick=null,i=0,j=0;for(i=0;i<list.length;i++){if(ammo&&Number(ammo.itid)===list[i].itid&&Number(ammo.count)>0){pick=list[i];break;}for(j=0;j<bag.length;j++){if(Number(bag[j].itid)===list[i].itid){pick={kind:list[i].kind,itid:list[i].itid,index:bag[j].index};break;}}if(pick)break;}if(!list.length){arrowPending=null;arrowBlocked=false;arrowReady=true;arrowSay("未配置箭矢，保持当前箭");return false;}if(ammo&&pick&&Number(ammo.itid)===pick.itid&&Number(ammo.count)>=ARROW_LOW_AMMO){arrowPending=null;arrowBlocked=false;arrowReady=true;arrowSay("已装备"+arrowKindName(pick.kind)+" #"+pick.itid);return false;}
+  function arrowTargetTick(now){var arrowFightOk=function(a){return !!(a&&a.known===true&&Number(a.count)>0);};var arrowFightSay=function(a,s){arrowReady=arrowFightOk(a);arrowBlocked=!arrowReady;if(s)arrowSay(s);return !arrowReady;};arrowReady=false;arrowBlocked=!!arrowTarget;if(!arrowTarget||!arrowRules.enabled){arrowBlocked=!!arrowTarget&&arrowRules.enabled;return arrowBlocked;}var ammo=readEquippedAmmo();if(!ammo||ammo.known!==true){arrowSay("读不到装备栏当前箭矢，先不动作");return true;}if(typeof apiGuard==="function"&&apiGuard(arrowTarget.owner,"arrow")){arrowSay("阻塞：箭矢租约失效");return true;}if(!arrowManageOn()){arrowSupply=null;arrowPending=null;return arrowFightSay(ammo,Number(ammo.count)>0?("箭矢管理总开关已关闭：当前箭矢 ×"+Number(ammo.count)+"，照常开战（不换箭、不开袋、不用道具）"):"箭矢管理总开关已关闭：当前箭矢 ×0 射不了，且不换箭不补给，先不开战");}var supplyKey="t"+arrowTarget.mid+"@"+arrowTarget.gid;var specific=arrowRules.byMid?arrowRules.byMid[arrowTarget.mid]:null,specificItid=arrowPos(specific&&specific.itid!=null?specific.itid:specific);if(!mobElemName(arrowTarget.mid)&&!specificItid){arrowPending=null;arrowSupply=null;arrowStableKey="";return arrowFightSay(ammo,"读不到目标属性，保持当前箭，不切箭");}var bagT=readBagArrows();if(bagT&&bagT.known===false){arrowSay("读不到背包箭矢，先不动作");return true;}if(arrowSupplyAdvance(now,ammo,bagT,supplyKey)){if(arrowSupply&&arrowSupply.phase==="hold"){arrowBlocked=false;arrowReady=true;return false;}return arrowFightSay(ammo,arrowFightOk(ammo)?("补给进行中：当前箭矢 ×"+Number(ammo.count)+" 仍可射，照常开战"):null);}var eff=arrowEffectiveMid(arrowTarget.mid,arrowTarget.gid,now),midUse=eff.mid||arrowTarget.mid;if(!arrowStableGate("t"+midUse+"@"+arrowTarget.gid,now)){arrowBlocked=true;return true;}var list=arrowCandidates(midUse,arrowRules),bag=readBagArrows(),pick=null,i=0,j=0;for(i=0;i<list.length;i++){if(ammo&&Number(ammo.itid)===list[i].itid&&Number(ammo.count)>0){pick=list[i];break;}for(j=0;j<bag.length;j++){if(Number(bag[j].itid)===list[i].itid){pick={kind:list[i].kind,itid:list[i].itid,index:bag[j].index};break;}}if(pick)break;}if(!list.length){arrowPending=null;arrowBlocked=false;arrowReady=true;arrowSay("未配置箭矢，保持当前箭");return false;}if(ammo&&pick&&Number(ammo.itid)===pick.itid&&Number(ammo.count)>=ARROW_LOW_AMMO){arrowPending=null;arrowBlocked=false;arrowReady=true;arrowSay("已装备"+arrowKindName(pick.kind)+" #"+pick.itid);return false;}
 if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,ammo,bag,supplyKey);return arrowFightSay(ammo,arrowFightOk(ammo)?("同种箭低于 "+ARROW_LOW_AMMO+" 支（×"+Number(ammo.count)+"），已启动补给；当前箭仍可射，照常开战"):("同种箭 ×0，已启动补给（未确认成功）；补给期间不开战"));}if(!pick){arrowSupplyStart(list[0].itid,now,ammo,bag,supplyKey);return arrowFightSay(ammo,arrowFightOk(ammo)?("无可用同种箭（当前箭 ×"+Number(ammo.count)+" 仍可射），补给中（未确认成功）"):("当前箭 ×0 且无可用箭矢/箭袋，补给中（未确认成功）：补给不可达时不会静默空转"));}var p=arrowPending;if(p&&p.itid===pick.itid){if(now<p.confirmUntil)return true;if(!p.retryAt){p.retryAt=now+3000;arrowSay("确认超时，3秒后重试");return true;}if(now<p.retryAt)return true;}if(equipArrow(pick.index)){arrowPending={itid:pick.itid,confirmUntil:now+5000,retryAt:0};arrowSay("换箭中"+arrowKindName(pick.kind)+" #"+pick.itid);return true;}arrowSay("阻塞：装备失败");return true;}
   setInterval(function(){var t=Date.now();try{arrowTargetTick(t);}catch(e){}try{arrowSelfTick(t);}catch(e){}},250);
 
@@ -22872,7 +23137,7 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   }
   // ================= V2.38.13 结束 =================
 
-  // 本轮新增：独立脚本的入场前物品保护入口 —— 与内置道场调用的是同一个 dojoGuardCapture（只读，不发包）
+  // 独立无限挑战的入场前物品保护入口 —— 走唯一 dojoGuardCapture（只读，不发包）
   function apiDojoGuard(owner){
     try{
       if(!clientReady())return {ok:false,reason:"游戏未就绪，读不到背包快照"};
@@ -23130,97 +23395,7 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   }
   masterTickReg(function () { try { deathReturnTick(); } catch (e) { deathReturnCancel("状态读取失败"); } });
 
-  // ================= 无限道场（脚本系统承载 · dojoStart/dojoWait/dojoStop 动作走公共 API 与同一租约） =================
-  // V2.36.2：道馆移出主脚本菜单，改为「脚本执行」浮窗导入任务脚本运行；此处保留 dojoStart/dojoTick/dojoStop 等动作实现。
-  var DOJO_OWNER="builtin-dojo",DOJO_KEY="dsh-ro-infinite-dojo-v1";
-  var dojoCfg=dojoLoad(),dojoRun={on:false,generation:0,round:0,remaining:null,lastMenu:"",lastNotice:"",lastNoticeAt:0,timer:null,phase:"等待助手",npc:null,lastFly:0};
-  function dojoLoad(){var d={difficulty:"basic",stop100:true,fly:false,emergency:false,migrated:false},v;try{v=JSON.parse(localStorage.getItem(DOJO_KEY)||"null");if(v&&typeof v==="object")Object.assign(d,v);}catch(e){}if(!d.migrated){try{v=JSON.parse(localStorage.getItem(CHALLENGE_KEY)||"null");if(v&&typeof v==="object"){if(/^(basic|middle|advanced)$/.test(v.difficulty))d.difficulty=v.difficulty;d.stop100=v.stop100!==false;d.fly=v.flyOn===true;d.emergency=v.emergencyFly===true;}}catch(e2){}d.migrated=true;dojoSave(d);}return d;}
-  function dojoSave(v){try{localStorage.setItem(DOJO_KEY,JSON.stringify(v||dojoCfg));}catch(e){}}
-  function dojoApi(){
-    try{
-      var a=window.__DSH_RO_ASSIST_API__,c=a&&a.capabilities();
-      if(!a||a.protocol!==API_PROTOCOL||!c||c.protocol!==API_PROTOCOL||c.arrowRules!==true||c.battleTarget!==true)return null;
-      if(!Array.isArray(c.scopes)||!Array.isArray(c.modules)||c.modules.indexOf("dojo")<0)return null;
-      if(["dojo","battle","movement","dialog","arrow","fly"].some(function(k){return c.scopes.indexOf(k)<0;}))return null;
-      if(["snapshot","acquire","release","contactNpc","walkTo","chooseMenu","requestBattle","setBattleTarget","clearBattleTarget","setArrowTarget","clearArrowTarget","requestFly"].some(function(k){return typeof a[k]!=="function";}))return null;
-      return a;
-    }catch(e){return null;}
-  }
-  function dojoDist(a,b){try{if(!a||!b)return Infinity;return Math.max(Math.abs(Number(a[0])-Number(b[0])),Math.abs(Number(a[1])-Number(b[1])));}catch(e){return Infinity;}}
-  function dojoNorm(s){return String(s||"").replace(/\^[0-9a-f]{6}/gi,"").replace(/<[^>]*>/g," ").replace(/[０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-65248);}).replace(/達/g,"达").replace(/貓/g,"猫").replace(/\s+/g," ").trim();}
-  function dojoNotice(raw){if(!dojoRun.on)return;var s=dojoNorm(raw),now=Date.now(),m;if(!s||(s===dojoRun.lastNotice&&now-dojoRun.lastNoticeAt<2500))return;dojoRun.lastNotice=s;dojoRun.lastNoticeAt=now;m=s.match(/第\s*(\d+)\s*[轮层波]/);if(m)dojoRun.round=Math.max(dojoRun.round,Number(m[1]));m=s.match(/(?:还剩|剩余)\s*[:：]?\s*(\d+)/);if(m)dojoRun.remaining=Number(m[1]);m=s.match(/(?:完成|通过)\s*第?\s*(\d+)\s*[轮层波]|第\s*(\d+)\s*[轮层波]\s*(?:完成|结束|通过)/);if(m){dojoRun.round=Math.max(dojoRun.round,Number(m[1]||m[2]));if((dojoRun.cfg||dojoCfg).stop100&&dojoRun.round>=100){try{notifyPush("无限道场已达 100 轮，领奖前已暂停");}catch(e){}return dojoStop("第100轮领奖前暂停");}dojoRun.phase="本轮完成，等待领奖菜单";}dojoRender();}
-  function dojoChoose(a,s){var m=s.menu;if(!s.dialogOpen){dojoRun.lastMenu="";return false;}if(!m||!m.naid||!Array.isArray(m.items)||!m.items.length||!m.fingerprint)return false;if(m.fingerprint===dojoRun.lastMenu)return true;var re=dojoRun.phase.indexOf("领奖")>=0?/领取奖励|领奖/:({basic:/初级/,middle:/中级/,advanced:/高级/}[(dojoRun.cfg||dojoCfg).difficulty]),hits=[];m.items.forEach(function(x,i){if(re.test(dojoNorm(x)))hits.push(i);});if(!hits.length&&dojoRun.phase.indexOf("领奖")<0)m.items.forEach(function(x,i){if(/继续挑战|开始挑战|进入挑战/.test(dojoNorm(x)))hits.push(i);});if(hits.length!==1){dojoRun.phase="菜单不唯一，请手动选择";return true;}dojoRun.lastMenu=m.fingerprint;var r=a.chooseMenu(DOJO_OWNER,{naid:m.naid,index:hits[0],fingerprint:m.fingerprint});if(!r||!r.ok)dojoRun.phase="菜单提交失败";return true;}
-  function dojoNpcs(s){return (s.npcs||[]).filter(function(n){return /^(喵达人|猫达人|白猫|白猫达人)$/.test(dojoNorm(n.name).replace(/\s/g,""));});}
-  function dojoContact(a,s,now){
-    var list=dojoNpcs(s);
-    if(!dojoRun.npc)dojoRun.npc={gid:list.length===1?list[0].gid:0,firstAt:now,lastAt:0,walked:false};
-    if(now-dojoRun.npc.firstAt>=30000)return dojoStop("寻找 NPC 超过30秒，已停止");
-    if(list.length>1){dojoRun.phase="NPC 别名不唯一，请手动靠近";return;}
-    if(list.length===1){
-      var n=list[0];
-      if(dojoRun.npc.gid!==n.gid)dojoRun.npc={gid:n.gid,firstAt:now,lastAt:0,walked:false};
-      if(now-dojoRun.npc.lastAt>=1000){a.contactNpc(DOJO_OWNER,n.gid);dojoRun.npc.lastAt=now;}
-      var far=!s.player||!s.player.position?true:dojoDist(s.player.position,n.position)>2; // 8 秒后且距离>2 才走近
-      if(now-dojoRun.npc.firstAt>=8000&&!dojoRun.npc.walked&&n.position&&far){a.walkTo(DOJO_OWNER,{x:Math.round(n.position[0]),y:Math.round(n.position[1])});dojoRun.npc.walked=true;}
-      dojoRun.phase="接触道场 NPC";
-    }else if(now-dojoRun.npc.firstAt>=8000&&!dojoRun.npc.walked){a.walkTo(DOJO_OWNER,{x:99,y:107});dojoRun.npc.walked=true;dojoRun.phase="前往 NPC 候选坐标";}
-    else dojoRun.phase="寻找道场 NPC";
-  }
-  function dojoTick(g){
-    if(!dojoRun.on||g!==dojoRun.generation)return;
-    var a=dojoApi(),s=a&&a.snapshot(DOJO_OWNER),now=Date.now();
-    if(!a||!s||!s.ready)return dojoStop("助手 API 缺失或未就绪");
-    if(dojoChoose(a,s)||s.dialogOpen)return dojoRender();
-    var live=(s.mobs||[]).filter(function(m){return !m.dead&&m.mid&&m.gid;}),t=live.filter(function(m){return m.isBoss;})[0]||live[0]; // 道场必须清空每一波的全部怪物才触发下一关：BOSS 优先，其余活怪一律回落（修正 V2.38.13 FIX-6 的 BOSS-only 判定）；外部租约路径的 apiBattleTargetEntity 不变
-    if(t){
-      dojoRun.npc=null;
-      a.setBattleTarget(DOJO_OWNER,{mid:t.mid,gid:t.gid});
-      var ar=a.setArrowTarget(DOJO_OWNER,{mid:t.mid,gid:t.gid}),fresh=a.snapshot(DOJO_OWNER),match=fresh&&fresh.arrow&&fresh.arrow.target&&fresh.arrow.target.mid===t.mid&&fresh.arrow.target.gid===t.gid,allowed=(dojoRun.cfg||dojoCfg).difficulty==="basic"&&fresh&&fresh.arrow&&fresh.arrow.enabled===false||fresh&&fresh.arrow&&fresh.arrow.enabled===true&&fresh.arrow.ready===true&&fresh.arrow.blocked===false&&match;
-      if((dojoRun.cfg||dojoCfg).difficulty!=="basic"&&!arrowCandidates(t.mid,arrowRules).length)allowed=false;
-      dojoRun.phase=allowed?"战斗中":"等待换箭就绪"; // 内置中高级缺规则不放行；不改外部租约
-    if(!allowed&&fresh&&fresh.arrow&&fresh.arrow.status)dojoRun.phase="等待换箭就绪："+fresh.arrow.status; // V2.38.38：不放行时必须写出原因，不得只显示「等待换箭就绪」静默空转
-      a.requestBattle(DOJO_OWNER,!!allowed);
-      if((dojoRun.cfg||dojoCfg).emergency&&(dojoRun.cfg||dojoCfg).difficulty!=="basic"&&s.player&&s.player.maxHp>0&&s.player.hp/s.player.maxHp<.7&&now-dojoRun.lastFly>3000){dojoRun.lastFly=now;a.requestFly(DOJO_OWNER,{reason:"道场低血量"});}
-    }else{
-      a.clearBattleTarget(DOJO_OWNER);a.clearArrowTarget(DOJO_OWNER);
-      if((dojoRun.cfg||dojoCfg).fly&&s.inDojoMap&&dojoRun.remaining>0&&now-dojoRun.lastFly>3000){dojoRun.lastFly=now;a.requestFly(DOJO_OWNER,{reason:"道场无怪且仍有剩余"});}
-      dojoContact(a,s,now);
-    }
-    dojoRender();
-  }
-  function dojoStart(params){
-    var a=dojoApi();
-    if(!a||!a.ready())return dojoStop("缺少兼容的 RO助手 API，功能已禁用");
-    // 本轮新增：入场前必须建立可信完整的背包快照（与独立脚本共用 dojoGuardCapture 同一判定函数）。
-    //   拿不到证据 / 证据矛盾 → fail-closed：不申请控制权、不自动入场、不启动丢弃，只说明原因。
-    var guard=dojoGuardCapture();
-    if(!guard||!guard.ok)return dojoStop("入场前物品保护未建立："+((guard&&guard.reason)||"未知原因")+"（不自动入场、不启动丢弃）");
-    var r=a.acquire(DOJO_OWNER,["dojo","battle","movement","dialog","arrow","fly"]); // 与外部脚本同一租约，被占用即拒绝
-    if(!r||!r.ok)return dojoStop(r&&r.error||"助手正被其他流程占用");
-    dojoRun.on=true;dojoRun.generation++;dojoRun.round=0;dojoRun.remaining=null;dojoRun.lastMenu="";dojoRun.npc=null;dojoRun.lastFly=0;dojoRun.phase="启动中";
-    dojoRun.cfg = params ? Object.assign({}, dojoCfg, params) : dojoCfg; // 脚本动作参数覆盖（不落盘，仅本次运行）
-    if(dojoRun.cfg.difficulty!=="basic"&&!arrowRules.enabled){arrowRules.enabled=true;arrowSave();var en=$id("dsh-arrow-rules-enabled");if(en)en.checked=true;bagCleanChat("中高级道场已自动启用换箭；沿用已有箭矢规则，缺箭或缺规则时安全等待");}
-    dojoRun.timer=setInterval(function(){dojoTick(dojoRun.generation);},250);
-    dojoTick(dojoRun.generation);
-  }
-  function dojoStop(reason){
-    var a=dojoApi();
-    var dojoWasOn=dojoRun.on;dojoRun.on=false;dojoRun.generation++;
-    if(dojoRun.timer)clearInterval(dojoRun.timer); // 100 轮暂停/停止必须清掉定时器
-    dojoRun.timer=null;
-    if(a){try{a.clearBattleTarget(DOJO_OWNER);a.clearArrowTarget(DOJO_OWNER);a.release(DOJO_OWNER);}catch(e){}}
-    if(dojoWasOn){try{npZeroBattle("dojoStop");}catch(e){}} // 挂机结束：置零内挂自动战斗（状态未知一律走 unknown 零发包，绝不盲切）
-    dojoRun.npc=null;dojoRun.phase=reason||"已停止";dojoRender();
-  }
-  function dojoRender(){
-    try{
-      var st=$id("dsh-scr-state");
-      if(st&&dojoRun.on)st.textContent="道馆 " + dojoRun.phase + " · 轮次 " + (dojoRun.round||0) + (dojoRun.remaining==null?"":" · 剩余 "+dojoRun.remaining);
-    }catch(e){}
-  }
-  try{window.addEventListener("dsh-ro-assist-notice",function(e){try{dojoNotice(e.detail&&(e.detail.text||e.detail.message));}catch(err){}});}catch(e){}
-  try{window.addEventListener("pagehide",function(){try{if(dojoRun.on)dojoStop("页面离开");}catch(err){}});}catch(e){}
-
+  var DOJO_OWNER="builtin-dojo"; // 已退役的保留标识：兼容旧租约校验与临时战斗目标清理
 
 // MVP_TIMER_START: 公告栏剩余时间以接收时刻为基准，关闭窗口不停止计时。
   // V2.36.6：状态惰性初始化——mvpInit 在文件前段就被调用，此处（var 提升后）原先形同未初始化。
@@ -24918,7 +25093,7 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   }
   // 槽位容器探测（只读一次，诊断复用）：11 个 .<cls> 是否都在根子树里、每格里有几个 .item[data-index]
   function gearDomProbe(root) {
-    var p = { root: !!root, missing: [], err: [], itemN: 0, byMask: {}, qsa: false, idxSet: {}, idxDistinct: 0, dupIdx: [] };
+    var p = { root: !!root, missing: [], err: [], itemN: 0, byMask: {}, qsa: false, idxSet: {}, idxDistinct: 0, dupIdx: [], badIdx: [], multiIdx: [] };
     try {
       if (!root) return p;
       p.qsa = (typeof root.querySelectorAll === "function");
@@ -24939,10 +25114,13 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
           var cells = null;
           try { cells = box.querySelectorAll(".item[data-index]"); } catch (e3) { cells = null; }
           if (cells) {
+            var firstIdx = null;
             for (var ci = 0; ci < cells.length; ci++) {
               var cEl = cells[ci];
               var dv = gearDomIdxVal((cEl.getAttribute && cEl.getAttribute("data-index") != null) ? cEl.getAttribute("data-index") : (cEl.dataset ? cEl.dataset.index : null));
-              if (dv == null) continue;
+              if (dv == null) { p.badIdx.push(sl.cls); continue; }
+              if (firstIdx === null) firstIdx = dv;
+              else if (firstIdx !== dv && p.multiIdx.indexOf(sl.cls) < 0) p.multiIdx.push(sl.cls);
               if (p.idxSet[dv] === undefined) { p.idxSet[dv] = sl.m; p.idxDistinct++; }
               else if (p.idxSet[dv] !== sl.m && p.dupIdx.indexOf(dv) < 0) p.dupIdx.push(dv);
             }
@@ -24985,7 +25163,11 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
       if (probe.missing && probe.missing.length) return { ok: false, why: "槽位容器缺失：" + probe.missing.join("/") };
       for (var i = 0; i < GEAR_SLOTS.length; i++) { if (!(probe.byMask[GEAR_SLOTS[i].m] >= 0)) return { ok: false, why: "容器内 .item 数量不可数：" + GEAR_SLOTS[i].cls }; }
       var idxN = Number(stat && stat.idxN) || 0, okN = Number(stat && stat.okN) || 0;
-      if (probe.itemN !== idxN) return { ok: false, why: "DOM 装备格 " + probe.itemN + " 与可解析序号 " + idxN + " 不一致（有 .item 读不出 data-index）" };
+      if (probe.badIdx && probe.badIdx.length) return { ok: false, why: "有 .item 读不出 data-index：" + probe.badIdx.join("/") };
+      if (probe.multiIdx && probe.multiIdx.length) return { ok: false, why: "同一槽位出现不同装备序号：" + probe.multiIdx.join("/") };
+      var occupied = 0; for (var oi = 0; oi < GEAR_SLOTS.length; oi++) if (probe.byMask[GEAR_SLOTS[oi].m] > 0) occupied++;
+      if (idxN !== occupied || probe.itemN < idxN) return { ok: false, why: "DOM 有内容槽 " + occupied + " 个，但成功按槽读取 " + idxN + " 个序号（节点共 " + probe.itemN + " 个）" };
+      // 同槽多节点只有序号完全相同才允许：重复渲染不是缺失装备，也不能绕过异物/空槽检查。
       if (idxN !== okN) return { ok: false, why: "DOM 装备格 " + idxN + " 里有 " + (idxN - okN) + " 个没取到物品对象" };
       // V2.38.48 修（用户实机：穿时装/影子的角色永远不过这道门）：
       //   旧判据要求「组件 getAmount == 11 个常规槽里出现的格子数」——但该方法是「已穿件数」口径，把时装/影子槽也算进去
@@ -25942,7 +26124,7 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
       }
       out.dom = { how: domHow, sel: gearDomSelOf(root), attached: attached, missing: probe.missing.slice(), err: probe.err.slice(),
         itemN: probe.itemN, idxN: domIdxN, okN: domOkN, skipN: domSkipN, qsa: !!probe.qsa,
-        idxDistinct: Number(probe.idxDistinct) || 0, dupIdx: (probe.dupIdx || []).slice(), selfN: gearSelfN(EQ),
+        idxDistinct: Number(probe.idxDistinct) || 0, dupIdx: (probe.dupIdx || []).slice(), badIdx: (probe.badIdx || []).slice(), multiIdx: (probe.multiIdx || []).slice(), selfN: gearSelfN(EQ),
         dupSlots: (dupSlots || []).slice(),
         getItemByIndex: canIdx, getAmount: !!(EQ && typeof EQ.getAmount === "function"), getNumber: !!(EQ && typeof EQ.getNumber === "function"),
         complete: !!(dcu.ok && out.ok && out.complete), why: (dcu.ok && !out.ok) ? "DOM 结构完整，但一件装备都没读到（0 槽不是成功）" : (dcu.why || "") };
@@ -26051,33 +26233,58 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   function gearCardOpen(CC) {
     var needOpen = false;
     try { needOpen = !(CC.ui && CC.ui.parent && CC.ui.parent().length); } catch (e) { needOpen = true; }
+    if (!needOpen) return false;
     try { if (typeof CC.append === "function") CC.append(); return needOpen; } catch (e2) { return needOpen; }
   }
-  function gearCardTabMap(CC) {
-    var map = {}, oldTab = null, oldFilter = null;
-    try {
-      oldTab = CC.ui.find(".tabs button.sd[data-tab]").eq(0); oldFilter = CC.ui.find("input[type=\'radio\']:checked").eq(0);
-      for (var t = 1; t <= 7; t++) {
-        var all = CC.ui.find("#all,input#all,input[type=\'radio\'][value=\'all\'],input[type=\'radio\'][data-filter=\'all\']").eq(0); if (all.length && !all.prop("checked")) all.prop("checked", true).trigger("change").trigger("click");
-        var btn = CC.ui.find(".tabs button[data-tab=\'" + t + "\']"); if (!btn.length) continue; btn.trigger("click"); var pages = Number(CC.ui.find(".page .totalPages").text()) || 1; if (pages > 8) pages = 8;
-        for (var pg = 1; pg <= pages; pg++) { var items = CC.ui.find(".container .item[data-itid]"); for (var i = 0; i < items.length; i++) { var el = items.eq(i), cid = Number(el.attr("data-itid")); if (!cid || map[cid]) continue; var tb = t, lv = 1, ch = el.find("[data-tab]").eq(0); if (ch.length) { var a = Number(ch.attr("data-tab")), b = Number(ch.attr("data-level")); if (a) tb = a; if (b) lv = b; } map[cid] = { tab: tb, level: lv }; } if (pg < pages) CC.ui.find(".page .next").trigger("click"); }
-      }
-    } catch (e) { map.__error = String(e && e.message ? e.message : e); }
-    try { if (oldTab && oldTab.length) oldTab.trigger("click"); else { var tb0 = CC.ui.find(".tabs button[data-tab=\'0\']"); if (tb0.length) tb0.trigger("click"); } } catch (e2) {}
-    try { if (oldFilter && oldFilter.length) oldFilter.prop("checked", true).trigger("change").trigger("click"); } catch (e3) {} return map;
+  function gearCardTabMap(CC, wanted, cb, previous, stillCurrent) {
+    var map = {}, remaining = {}, left = 0, oldTab = null, oldFilter = null, tab = 0, pg = 1, pages = 1;
+    for (var wi = 0; wi < wanted.length; wi++) { var id = Number(wanted[wi].id); if (id > 0 && !remaining[id]) { remaining[id] = true; left++; } }
+    try { oldTab = previous && previous.oldTab || CC.ui.find(".tabs button.sd[data-tab]").eq(0); oldFilter = previous && previous.oldFilter || CC.ui.find("input[type='radio']:checked").eq(0); } catch (e) { map.__error = String(e); }
+    function finish() {
+      try { if (oldTab && oldTab.length) oldTab.trigger("click"); else { var tb0 = CC.ui.find(".tabs button[data-tab='0']"); if (tb0.length) tb0.trigger("click"); } } catch (e2) {}
+      try { if (oldFilter && oldFilter.length) oldFilter.prop("checked", true).trigger("change").trigger("click"); } catch (e3) {}
+      cb(map);
+    }
+    function step() {
+      try {
+        if (stillCurrent && !stillCurrent()) { cb(map); return; }
+        if (!left || tab >= 7) { finish(); return; }
+        if (pg > pages) {
+          tab++; pg = 1;
+          var all = CC.ui.find("#all,input#all,input[type='radio'][value='all'],input[type='radio'][data-filter='all']").eq(0);
+          if (all.length && !all.prop("checked")) all.prop("checked", true).trigger("change").trigger("click");
+          var btn = CC.ui.find(".tabs button[data-tab='" + tab + "']");
+          if (!btn.length) { pages = 0; setTimeout(step, 0); return; }
+          btn.trigger("click"); pages = Number(CC.ui.find(".page .totalPages").text()) || 1; if (pages > 8) pages = 8;
+        }
+        var items = CC.ui.find(".container .item[data-itid]");
+        for (var i = 0; i < items.length; i++) {
+          var el = items.eq(i), cid = Number(el.attr("data-itid")); if (!remaining[cid]) continue;
+          var tb = tab, lv = 1, ch = el.find("[data-tab]").eq(0);
+          if (ch.length) { var a = Number(ch.attr("data-tab")), b = Number(ch.attr("data-level")); if (a) tb = a; if (b) lv = b; }
+          map[cid] = { tab: tb, level: lv }; delete remaining[cid]; left--;
+        }
+        if (left && pg < pages) CC.ui.find(".page .next").trigger("click");
+        pg++; setTimeout(step, 0); // 每次最多扫一页，避免阻塞游戏主线程
+      } catch (e) { map.__error = String(e && e.message || e); finish(); }
+    }
+    pages = 0; setTimeout(step, 0);
   }
   function gearDeckSnapshot(cb) {
     var CC = gearCardComp();
     if (!CC || !CC.ui) { cb({ ok: false, why: "卡片典藏组件不可用", cards: [], wasOpen: false }); return; }
     var wasOpen = false;
     try { wasOpen = !!(CC.ui.parent && CC.ui.parent().length) && CC.ui.is(":visible"); } catch (e) {}
+    var originalTab = null, originalFilter = null;
+    if (wasOpen) try { originalTab = CC.ui.find(".tabs button.sd[data-tab]").eq(0); originalFilter = CC.ui.find("input[type='radio']:checked").eq(0); } catch (e0) {}
     var opened = gearCardOpen(CC);
     setTimeout(function () {
-      var out = { ok: true, wasOpen: wasOpen, opened: opened, cards: [] };
+      var out = { ok: true, wasOpen: wasOpen, opened: opened, cards: [], oldTab: originalTab, oldFilter: originalFilter };
       try {
         var t0 = CC.ui.find(".tabs button[data-tab='0']");
         if (t0.length) t0.trigger("click");
-        try { if (typeof CC.setCards === "function") CC.setCards(); } catch (e1) {}
+        // 点选卡组页签已经触发渲染。只有页面还没有卡片容器时才尝试昂贵的全量重绘。
+        if (!CC.ui.find(".container").length) try { if (typeof CC.setCards === "function") CC.setCards(); } catch (e1) {}
         // V2.38.52（P0-2）：区分「卡册真的没有卡」与「DOM 没渲染 / 容器取错」。
         //   原来 out.ok 初始为 true 且只捕获异常 ⇒ 容器缺失或格子读不到 id 时仍算成功，
         //   空数组被当成「当前配置」保存，会直接覆盖玩家的卡册预设。
@@ -26110,21 +26317,29 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
       //   身份世代变了就整份作废，宁可让用户重读一次。
       var ep1 = 0; try { ep1 = Number(identityEpoch) || 0; } catch (eEp2) {}
       if (ep0 !== ep1) { gearCapBusy = false; try { gearLog("读取期间角色/会话已切换，本次卡册结果作废（请重读）"); } catch (e0) {} return; }
-      gearCapBusy = false;
-      var deck = [];
       var CC = gearCardComp();
-      try {
-        if (snap.ok && snap.cards.length) {
-          var map = gearCardTabMap(CC);
-          for (var i = 0; i < snap.cards.length; i++) {
-            var c = snap.cards[i], r = map && map[c.id];
-            if (!r || !r.tab || !r.level) { snap.ok = false; snap.why = "卡片 " + c.id + " 的页签/等级读取失败"; deck = []; break; }
-            deck.push({ id: c.id, name: c.name, tab: r.tab, level: r.level });
+      function finish(map) {
+        var ep2 = 0; try { ep2 = Number(identityEpoch) || 0; } catch (eEp3) {}
+        if (mySeq !== gearCapSeq || ep0 !== ep2) { if (mySeq === gearCapSeq) gearCapBusy = false; return; }
+        var deck = [];
+        try {
+          if (snap.ok && snap.cards.length) {
+            for (var i = 0; i < snap.cards.length; i++) {
+              var c = snap.cards[i], r = map && map[c.id];
+              if (!r || !r.tab || !r.level) { snap.ok = false; snap.why = "卡片 " + c.id + " 的页签/等级读取失败"; deck = []; break; }
+              deck.push({ id: c.id, name: c.name, tab: r.tab, level: r.level });
+            }
           }
-        }
-      } catch (e) {}
-      if (CC && !snap.wasOpen) { try { CC.remove(); } catch (e2) {} }
-      cb({ eq: eqOut, eqN: eq.n, eqOk: !!eq.ok, eqWhy: eq.why || "", deck: snap.ok ? deck : null, deckOk: !!snap.ok, why: snap.why || "" });
+        } catch (e) { snap.ok = false; snap.why = String(e && e.message || e); }
+        if (CC && snap.opened) { try { CC.remove(); } catch (e2) {} }
+        gearCapBusy = false;
+        cb({ eq: eqOut, eqN: eq.n, eqOk: !!eq.ok, eqWhy: eq.why || "", deck: snap.ok ? deck : null, deckOk: !!snap.ok, why: snap.why || "" });
+      }
+      if (snap.ok && snap.cards.length) { try { gearCardTabMap(CC, snap.cards, finish, snap, function () { return mySeq === gearCapSeq && ep0 === identityEpoch; }); } catch (e) { snap.ok = false; snap.why = String(e && e.message || e); finish(null); } }
+      else {
+        if (snap.wasOpen) { try { if (snap.oldTab && snap.oldTab.length) snap.oldTab.trigger("click"); if (snap.oldFilter && snap.oldFilter.length) snap.oldFilter.prop("checked", true).trigger("change").trigger("click"); } catch (eR) {} }
+        finish(null);
+      }
     });
   }
   // V2.38.36 防重入状态：读到结果只接受最新一次（连点两次时旧一轮回调作废，绝不覆盖新结果）
@@ -26894,8 +27109,8 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
     ["finishHpRatio", "dsh-z-bosshp", "num", 30, 0, 100, 1, 100], // V2.38.32：min 0（运行时 line=0 即基本不补尾刀）
     ["nonTargetAction", "dsh-z-ona", "sel", "还击", 0, 0, 1, 1],
     ["roamAfterNoTargetMs", "dsh-z-nomove", "num", 2, 0, 60, 1000, 1], // V2.38.32：0..60s（对齐 zIdleMoveSecNow 的 0..60 钳制）
-    ["stallMs", "dsh-z-stucksec", "num", 4, 1, 600, 1000, 1],
-    ["idleFlyMs", "dsh-z-idleflysec", "num", 10, 3, 600, 1000, 1], // V2.38.32：3..600s（对齐 zIdleFlySecNow）
+    ["stallMs", "dsh-z-stucksec", "num", 4, 0, 600, 1000, 1],
+    ["idleFlyMs", "dsh-z-idleflysec", "num", 10, 0, 600, 1000, 1], // 0=关闭，正数 3..600s（对齐 zIdleFlySecNow）
     ["escapeIntervalMs", "dsh-z-flyint", "num", 1, 0, 60, 1000, 1], // V2.38.46：缺省兜底 1s，与面板 HTML 的 value="1" 及解析处 num(...,1,...) 对齐（此前是没人引用的死值 4，属内部不一致）；0..60s（0 由运行时按 4s 特例处理，发布前已换算；上限 60s 取的是无头端闸门上限，运行时读取点本身无上限 —— 已知残差 R2）
     ["escapeIntervalEnabled", "dsh-z-flyinten", "chk", true, 0, 0, 1, 1]
   ];
@@ -26992,15 +27207,15 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
       finishHpRatio: num("finishHpRatio", "dsh-z-bosshp", 30, 0, 100, 1, 100), // ≥100 与运行时等价（永远是「血量 ≤ 阈值」）；无头端 0..1 校验必过
       nonTargetAction: sel("nonTargetAction", "dsh-z-ona", "还击", ["还击", "瞬移"]), // V2.38.32（审计 R5）：运行时只认这两个值，未知串按默认归一
       roamAfterNoTargetMs: num("roamAfterNoTargetMs", "dsh-z-nomove", 2, 0, 60, 1000, 1), // 0=无目标即刻换点（无头端消费端另有 500ms 下限，0 会被它回落成自己的默认）
-      stallMs: num("stallMs", "dsh-z-stucksec", 4, 1, 600, 1000, 1),
-      idleFlyMs: num("idleFlyMs", "dsh-z-idleflysec", 10, 3, 600, 1000, 1),
+      stallMs: num("stallMs", "dsh-z-stucksec", 4, 0, 600, 1000, 1),
+      idleFlyMs: num("idleFlyMs", "dsh-z-idleflysec", 10, 0, 600, 1000, 1),
       escapeIntervalMs: num("escapeIntervalMs", "dsh-z-flyint", 1, 0, 60, 1000, 1),
       escapeIntervalEnabled: chk("dsh-z-flyinten", true)
     };
     // V2.38.32（审计一般③）：发布前两处联动，与运行时读值逐字一致 ——
-    //   ① IDLE 换点秒数必须 > 无目标秒数（zIdleFlySecNow：y = max(y, x+1)）；
+    //   ① IDLE 换点秒数 0=关闭；正数才必须 > 无目标秒数（zIdleFlySecNow：y = max(y, x+1)）；
     //   ② 瞬移间隔 0 由运行时按 4 秒执行（flyint：n>0 才用，否则默认 4 秒）。
-    if (typeof values.idleFlyMs === "number" && typeof values.roamAfterNoTargetMs === "number" && values.idleFlyMs <= values.roamAfterNoTargetMs) values.idleFlyMs = values.roamAfterNoTargetMs + 1000;
+    if (typeof values.idleFlyMs === "number" && values.idleFlyMs > 0 && typeof values.roamAfterNoTargetMs === "number" && values.idleFlyMs <= values.roamAfterNoTargetMs) values.idleFlyMs = values.roamAfterNoTargetMs + 1000;
     if (values.escapeIntervalMs === 0) values.escapeIntervalMs = 4000;
     for (var vk in values) { if (Object.prototype.hasOwnProperty.call(values, vk) && values[vk] === undefined) delete values[vk]; }
     return {

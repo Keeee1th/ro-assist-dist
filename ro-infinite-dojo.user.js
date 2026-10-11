@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         仙境传说 · 脚本入口（独立版）
 // @namespace    dsh.ro-plugin
-// @version      1.0.8
+// @version      1.0.10
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-infinite-dojo.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-infinite-dojo.user.js
-// @description  脚本入口（无限道场）：在 post.lastro.cn / game.lastro.cn 的页面上自动完成无限道场：到报名点、按对话流程报名、进道场战斗、按轮次领奖、结束后自动再来一轮；需要先启用 RO 助手。
+// @description  脚本入口（无限挑战本地测试版）：到报名点报名，服务器确认本轮出怪后才代打；无怪不猜结算，付费选项需手动确认；需要先启用 RO 助手。
 // @author       DSH
 // @match        http://post.lastro.cn/*
 // @match        https://post.lastro.cn/*
@@ -107,7 +107,7 @@
 
   /* ==================== 常量 ==================== */
 
-  var VERSION        = "1.0.8";
+  var VERSION        = "1.0.10";
   var API_PROTOCOL   = 1;
   var OWNER          = "ro-infinite-dojo";      // 控制权属主，全程一致
   var SCOPES         = ["dojo", "battle", "movement", "dialog", "fly"];
@@ -141,7 +141,7 @@
     entryMap: "prontera",
     entryX: 148,
     entryY: 147,
-    npcName: "荣誉管理员",
+    npcName: "荣耀管理员",
     dojoNpcAliases: ["喵达人", "猫达人", "白猫", "白猫达人"],
     challengeKeywords: ["无限挑战"],
     challengeIndex: 2,
@@ -195,6 +195,7 @@
         if (typeof v === "string" && v) c[k] = v;
       }
     }
+    if (c.npcName === "荣誉管理员") c.npcName = DEFAULTS.npcName; // 旧档错字仅对已知默认值迁移
     if (!/^(basic|middle|advanced)$/.test(String(c.difficulty))) c.difficulty = DEFAULTS.difficulty;
     return c;
   }
@@ -206,7 +207,8 @@
     stage: "idle",                       // idle / entry / battle / settle / stopped
     phase: "未开始", step: "",
     statusLine: "",
-    cycle: 0, round: 0, remaining: null, dist: null,
+    cycle: 0, round: 0, remaining: null, dist: null, challengeMap: "",
+    roundActive: false, combatOn: false, rewardChosen: false, lastCompletedRound: 0,
     entry: null, npc: null, dojoNpc: null,
     lastMenuFp: "", lastNextFp: "",
     lastNotice: "", lastNoticeAt: 0,
@@ -665,6 +667,9 @@
     run.stage = "entry";
     run.round = 0;
     run.remaining = null;
+    run.challengeMap = "";
+    run.rewardChosen = false; run.lastCompletedRound = 0;
+    run.roundActive = false; run.combatOn = false;
     run.dist = null;
     run.lastMenuFp = "";
     run.lastNextFp = "";
@@ -697,7 +702,7 @@
 
     // 已报名 → 等地图变化进道场
     if (e.signedUp) {
-      if (!sameMap(s.map, cfg.entryMap)) return beginBattle(s, now);
+      if (s.map && !sameMap(s.map, cfg.entryMap)) return beginBattle(s, now);
       if (now - (e.gotoAt || now) > 15000) {
         e.gotoRetries++;
         if (e.gotoRetries > 3) return doStop("报名后一直没有进入道场（goto-timeout），请手动进一次道场", "goto-timeout");
@@ -903,13 +908,14 @@
     }
   }
 
-  // V2.38.13 FIX-5：进入/回到战斗阶段统一在这里重新打开自动拾取（结算与结算超时兜底都收起过，只开卡片6/装备4/防具5）
+  // 入图与结算后先等本轮出怪；拾取可能驱动走位，只有服务器确认出怪才允许打开。
   function enterBattleStage() {
     run.stage = "battle";
     run.noMobSince = 0;
-    call(api(), "requestPickup", [OWNER, { on: true, types: [4, 5, 6] }]);
   }
   function beginBattle(s, now) {
+    run.challengeMap = String((s && s.map) || ""); // 报名后实际进入的地图为准，不猜地图名关键词
+    run.roundActive = false; run.combatOn = false; // 入图不等于出怪；只有服务器本轮开始提示才允许打
     enterBattleStage();
     run.noMobWarned = false;
     run.lastMenuFp = "";
@@ -918,8 +924,8 @@
     run.npc = null;
     run.noNextSince = 0;
     run.entry && (run.entry.boxMissAt = 0);
-    setPhase("道场内战斗", "地图 " + (s && s.map ? s.map : "?"));
-    logLine("已进入道场（地图 " + ((s && s.map) || "?") + "），开始战斗");
+    setPhase("已进入无限挑战", "等待本轮出怪公告");
+    logLine("已进入无限挑战（地图 " + ((s && s.map) || "?") + "），等待出怪公告后再战斗");
   }
 
   /* ==================== 战斗循环 ==================== */
@@ -928,6 +934,17 @@
     var m = (s.dialogOpen && s.menu && Array.isArray(s.menu.items) && s.menu.items.length) ? s.menu : null;
     if (m) return dojoMenuTick(a, s, m, now);
     if (s.dialogOpen) return pressNext(a, s, now, "副本内对话");
+    if (run.rewardChosen) {
+      if (s.map && !sameMap(s.map, run.challengeMap)) return doStop("已领取阶段奖励并离开挑战地图，请手动确认后再入场", "reward-exit");
+      setPhase("已提交阶段领奖", "等待服务器确认离开副本");
+      return;
+    }
+    if (!run.challengeMap || !sameMap(s.map, run.challengeMap)) { setPhase("已离开报名后的挑战地图", "不启动战斗，等待地图核对"); return; }
+    if (!run.roundActive) {
+      if (dojoNpcList(s).length) return dojoNpcTick(a, s, now);
+      setPhase("等待本轮出怪提示", "不寻怪、不发战斗动作");
+      return;
+    }
 
     var live = (s.mobs || []).filter(function (x) { return x && !x.dead && x.mid && x.gid; });
     var t = live.filter(function (x) { return x.isBoss; })[0] || live[0];
@@ -945,6 +962,7 @@
         logLine("请求开战失败（battle-request-failed）：" + rwhy, "warn");
         return doStop("请求开战失败（battle-request-failed：" + rwhy + "）", "battle-request-failed");
       }
+      run.combatOn = true;
       setPhase("战斗中", "目标 " + (t.isBoss ? "首领" : "普通") + " #" + t.mid);
       if (cfg.emergency && cfg.difficulty !== "basic" && s.player && s.player.maxHp > 0 && s.player.hp / s.player.maxHp < 0.7 && now - run.lastFly > 3000) {
         run.lastFly = now;
@@ -954,7 +972,8 @@
       return;
     }
 
-    // 无怪
+    // 暂无怪：立即收起普通战斗；保护状态不归本脚本终止。
+    if (run.combatOn) { call(a, "assistCombat", [OWNER, false]); run.combatOn = false; }
     call(a, "clearBattleTarget", [OWNER]);
     if (!run.noMobSince) {
       run.noMobSince = now;
@@ -965,13 +984,9 @@
       call(a, "requestFly", [OWNER, { reason: "道场无怪且仍有剩余" }]);
       logLine("无怪且仍有剩余，已请求飞行");
     }
-    // V1.0.8：结算兜底 —— 结算过去只由「公告解析 → onRoundDone」这一条单点链驱动：
-    //   公告事件没来、或公告措辞与那两条正则不匹配时，脚本会一轮一轮一直打下去、永不停手。
-    //   道场里长时间没有活怪，说明这一轮实际上已经结束（服务器多半在等结算菜单）→ 按轮次结束处理。
-    if (run.noMobSince && (now - run.noMobSince) > 90000) {
-      return beginSettle(now, "长时间无怪（公告兜底）");
-    }
-    dojoNpcTick(a, s, now);
+    // 无怪不代表轮次结束：不凭等待时长领奖或开下一轮。
+    if (run.remaining === 0) dojoNpcTick(a, s, now);
+    else setPhase("等待本轮剩余怪物或结束公告", "不推断结算");
   }
 
   function dojoNpcTick(a, s, now) {
@@ -1086,6 +1101,8 @@
 
   function beginSettle(now, why) {
     if (run.stage !== "battle") return; // V2.38.13 FIX-9：删掉恒假的第二项（语义=只允许从战斗阶段进入结算）
+    run.roundActive = false;
+    if (run.combatOn) { call(api(), "assistCombat", [OWNER, false]); run.combatOn = false; }
     call(api(), "requestPickup", [OWNER, { on: false }]); // V1.0.2：结算阶段收起自动拾取
     run.stage = "settle";
     run.settleUntil = now + cfg.settleWaitMs;
@@ -1100,9 +1117,18 @@
     var hc = pickIndex(items, cfg.continueKeywords);
     var hl = pickIndex(items, levelWords(cfg.difficulty));
     var idx = -1, why = "";
-    if (hs.length === 1) { idx = hs[0]; why = "领奖"; }
+    var due = run.cycleEnd || (run.round > 0 && cfg.settleEvery > 0 && run.round % cfg.settleEvery === 0);
+    if (!due) {
+      if (run.round < 1) return doStop("轮次尚未确认，不自动领奖或付费继续", "round-unconfirmed");
+      if (hc.length !== 1) return doStop("本轮未到结算点，继续挑战菜单不唯一或缺失", "invalid-menu");
+      if (!/免费|无需(?:费用|付费)|不(?:消耗|扣费)/.test(items[hc[0]]) || /付费|花费|消耗|金币|zeny|zen|钻石|点券|积分|C点/i.test(items[hc[0]])) return doStop("继续挑战未明确免费，请手动确认", "payment-required");
+      idx = hc[0]; why = "免费继续挑战";
+    } else if (hs.length === 1) { idx = hs[0]; why = "领奖"; }
     else if (hs.length > 1) return doStop("结算菜单「领奖」命中多项，请手动选择（invalid-menu）：" + items.join(" / "), "invalid-menu");
-    else if (hc.length === 1) { idx = hc[0]; why = "继续挑战"; }
+    else if (hc.length === 1) {
+      if (!/免费|无需(?:费用|付费)|不(?:消耗|扣费)/.test(items[hc[0]]) || /付费|花费|消耗|金币|zeny|zen|钻石|点券|积分|C点/i.test(items[hc[0]])) return doStop("继续挑战未明确免费，请手动确认", "payment-required");
+      idx = hc[0]; why = "免费继续挑战";
+    }
     else if (hc.length > 1) return doStop("结算菜单「继续挑战」命中多项，请手动选择（invalid-menu）：" + items.join(" / "), "invalid-menu");
     else if (hl.length === 1) { idx = hl[0]; why = "难度"; }
     else return doStop("结算菜单里没有可用的领奖或继续项，请手动选择（invalid-menu）：" + items.join(" / "), "invalid-menu");
@@ -1115,6 +1141,7 @@
     run.lastNextFp = "";
     run.noNextSince = 0;
     run.settleSeen = true;
+    if (why === "领奖") run.rewardChosen = true;
     run.settleUntil = now + 8000;
     logLine("结算：已选「" + items[idx] + "」（" + why + "）");
   }
@@ -1133,22 +1160,29 @@
       setPhase(run.settleSeen ? "结算完成，等下一层" : "等待结算菜单", "");
       return;
     }
-    if (run.settleSeen) return finishSettle(now);
-    logLine("等不到结算菜单，先继续打", "warn");
-    enterBattleStage(); // V2.38.13 FIX-5：结算超时兜底回到战斗阶段必须重新打开自动拾取，否则整轮不再捡
-    setPhase("继续战斗", "");
+    if (run.settleSeen) return finishSettle(now, s);
+    logLine("等不到结算菜单，等待服务器确认下一轮，不擅自开战", "warn");
+    enterBattleStage(); // 超时只恢复观察，下一轮出怪公告之前不启动战斗或拾取
+    setPhase("等待本轮出怪公告", "结算菜单超时，未擅自开战");
   }
 
-  function finishSettle(now) {
+  function finishSettle(now, s) {
+    if (run.cycleEnd) {
+      s = s || call(api(), "snapshot", [OWNER]);
+      if (!s || !s.map || sameMap(s.map, run.challengeMap)) {
+        setPhase("最终奖励已选", "等待确认离开挑战地图，暂不重新报名");
+        return;
+      }
+    }
     run.lastMenuFp = "";
     run.lastNextFp = "";
     run.settleUntil = 0;
     run.settleSeen = false;
     if (run.cycleEnd) return endCycle("本轮 " + (run.round || 0) + " 轮已结算");
-    enterBattleStage(); // V2.38.13 FIX-5：结算完成回到战斗阶段必须重新打开自动拾取
+    enterBattleStage(); // 结算后先观察，下一轮出怪公告之前不启动战斗或拾取
     run.noMobWarned = false;
-    setPhase("继续战斗", "");
-    logLine("结算完成，继续战斗");
+    setPhase("等待本轮出怪公告", "结算完成");
+    logLine("结算完成，等待服务器确认下一轮");
   }
 
   function endCycle(reason) {
@@ -1180,8 +1214,17 @@
     var out = { round: null, remaining: null, completed: null };
     var m = s.match(/第\s*(\d+)\s*[轮层波]/);
     if (m) { run.round = Math.max(run.round || 0, Number(m[1])); out.round = run.round; }
+    var mentionedRound = m ? Number(m[1]) : 0;
     m = s.match(/(?:还剩|剩余)\s*[:：]?\s*(\d+)/);
     if (m) { run.remaining = Number(m[1]); out.remaining = run.remaining; }
+    if (run.stage === "battle" && /第[ ]*[0-9]+[ ]*[轮层波].*(?:开始|出怪)|(?:开始|出怪).*第[ ]*[0-9]+[ ]*[轮层波]/.test(s) && mentionedRound > run.lastCompletedRound) {
+      var current = call(api(), "snapshot", [OWNER]);
+      if (current && current.ready && run.challengeMap && sameMap(current.map, run.challengeMap)) {
+        if (!run.roundActive) call(api(), "requestPickup", [OWNER, { on: true, types: [4, 5, 6] }]);
+        run.roundActive = true; run.noMobSince = 0; run.noMobWarned = false;
+        logLine("已确认第 " + mentionedRound + " 轮出怪，允许助手战斗");
+      }
+    }
     m = s.match(/(?:完成|通过)\s*第?\s*(\d+)\s*[轮层波]|第\s*(\d+)\s*[轮层波]\s*(?:完成|结束|通过)/);
     if (m) {
       var r = Number(m[1] || m[2]);
@@ -1194,6 +1237,12 @@
     return out;
   }
   function onRoundDone(round, now) {
+    if (run.stage !== "battle" || !run.roundActive || round <= run.lastCompletedRound) return;
+    run.lastCompletedRound = round;
+    run.roundActive = false;
+    if (run.combatOn) { call(api(), "assistCombat", [OWNER, false]); run.combatOn = false; }
+    call(api(), "clearBattleTarget", [OWNER]);
+    call(api(), "requestPickup", [OWNER, { on: false }]);
     if (cfg.stop100 && round >= cfg.maxRound) {
       run.cycleEnd = true;
       logLine("已达 " + cfg.maxRound + " 轮，结算后开始下一轮循环");
