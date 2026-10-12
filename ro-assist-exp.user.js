@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         仙境传说 · 原站插件模式（游戏助手 · 实验版）
 // @namespace    dsh.ro-plugin
-// @version      2.38.74
+// @version      2.38.75
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
 // @description  在 post.lastro.cn / game.lastro.cn 原站以插件模式启动《仙境的传说》ROBrowser 客户端并连接原服务器；数据自动走本地镜像（127.0.0.1:8973）避免加载卡死，支持自动登录。PC 版直接打开 https://post.lastro.cn/ro/api.html 或备用线路 https://game.lastro.cn/ro/api.html?69.8；手机版打开 https://post.lastro.cn/?r=mn/index（登录页可选择平台与线路）。 新增私有本机客户端入口匹配（环回主机 127.0.0.1 / localhost，端口以页面自身 origin 为准、不写死）。
@@ -705,7 +705,7 @@
   }
   var LS_KEY = "dsh_ro_plugin_v1";
   var VERSION_RE = /\?([0-9.]+)/;
-  var VER = "2.38.74"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
+  var VER = "2.38.75"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
   try { window.__dshCombinedActive = true; } catch (e) {} // V2.30.0 防双浮层让位旗标：独立版词条色脚本见旗标即让位
   // ==================== 统一采集器注册表（dsh-collect v1 · 内部命名空间，不新增 window 全局）====================
   // 五方法：register 注册 / sample 采集 / query 查询 / refresh 刷新 / release 释放
@@ -2616,15 +2616,16 @@ function createRoItemCapture(env) {
       //   + 尾刀线；瞬移间隔控件已上移到「防御瞬移总开关」之前一行
       '<div class="row"><span class="lb">BOSS 出现</span><select id="dsh-z-bossact" style="flex:0 0 130px"><option>瞬移</option><option>优先攻击</option><option>等待残血补尾刀</option><option selected>保持距离逃离</option></select>' +
       '<span class="lb" style="min-width:40px">判定距离</span><input id="dsh-z-bossdist" type="number" value="14" min="5" max="40" style="flex:0 0 44px"><span style="color:#5a6b7f;font-size:11px">格</span>' +
-      '<button class="ghost" id="dsh-z-bossdiag" style="flex:0 0 auto;padding:0 8px;font-size:11px">首领诊断</button><span class="st">用法：点「首领诊断」后把下面文本框里的内容复制出来（只读）</span></div>' +
+      '</div>' +
+      '<div class="row"><button class="ghost" id="dsh-z-bossdiag" style="flex:0 0 auto;padding:0 8px;font-size:11px">首领诊断</button><span class="st">用法：点「首领诊断」后把下面文本框里的内容复制出来（只读）</span></div>' +
       '<div class="row"><textarea id="dsh-z-bossdiagbox" readonly style="width:100%;height:56px;font-size:10px;font-family:monospace"></textarea></div>' +
       // V2.38.20：保持距离上下界——下界默认 10、上界默认 14；上界联动首领判定距离
       //   （实现取 上界/判定距离/寻怪范围-1 的最小值，保证上界 < 寻怪范围；越界钳制并给一次可见提示）
       '<div class="row"><span class="lb">保持距离</span><input id="dsh-z-bosskeepmin" type="number" value="10" min="1" max="40" style="flex:0 0 40px"><span style="color:#5a6b7f">~</span><input id="dsh-z-bosskeepmax" type="number" value="14" min="1" max="40" style="flex:0 0 40px"><span style="color:#5a6b7f">格（上界默认跟随判定距离，且必须小于寻怪范围）</span></div>' +
       // V2.38.21：保持距离采样（默认关 · 仅本机内存）与保持距离自适应（默认关）——采样只管诊断记录，
       //   自适应只用自己的近期观测窗口在 [下界, 上界] 内微调；两者互不依赖，关闭时都不做任何额外动作
+      '<div class="row"><label class="switch"><input id="dsh-z-bosskeepauto" type="checkbox">保持距离自适应</label></div>' +
       '<div class="row"><label class="switch"><input id="dsh-z-bosskeepsmp" type="checkbox">保持距离采样</label>' +
-      '<label class="switch"><input id="dsh-z-bosskeepauto" type="checkbox">保持距离自适应</label>' +
       '<button class="ghost" id="dsh-z-bosskeepsmpcopy" style="flex:0 0 auto;padding:0 8px;font-size:11px">复制采样</button>' +
       '<span class="st" style="font-size:10px">只在本机内存，关掉就一点不记</span></div>' +
       '<div class="row"><textarea id="dsh-z-bosskeepsmpbox" readonly style="width:100%;height:56px;font-size:10px;font-family:monospace"></textarea></div>' +
@@ -2969,7 +2970,8 @@ function createRoItemCapture(env) {
       '<div style="position:relative;flex:1 1 150px;min-width:120px"><input id="dsh-map" placeholder="输入地图名/拼音（读地图后联想）" autocomplete="off" style="width:100%;box-sizing:border-box;padding:3px 22px 3px 6px">' +
       '<span id="dsh-maptog" title="展开/收起联想" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);cursor:pointer;color:#5a6b7f;font-size:11px;user-select:none">▾</span>' +
       '<div id="dsh-maplist" style="display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;z-index:99;background:#fff;border:1px solid #b8c6d4;border-radius:4px;max-height:180px;overflow:auto;box-shadow:0 3px 8px rgba(0,0,0,.18)"></div></div></div>' +
-      '<div class="row" style="margin-top:8px;gap:7px"><button class="ghost" id="dsh-mapload" style="flex:0 0 auto">读地图</button><button id="dsh-tp-map" style="flex:0 0 auto">传送</button><button class="ghost" id="dsh-tp-walk" style="flex:0 0 auto">走去</button><button class="ghost" id="dsh-geardiag" title="读不到装备栏时点这里，把结果发我" style="flex:0 0 auto">装备诊断</button><span class="st" id="dsh-tpmsg2" style="font-size:11px"></span></div>' +
+      '<div class="row" style="margin-top:8px;gap:7px"><button class="ghost" id="dsh-mapload" style="flex:0 0 auto">读地图</button><button id="dsh-tp-map" style="flex:0 0 auto">传送</button><button class="ghost" id="dsh-tp-walk" style="flex:0 0 auto">走去</button><span class="st" id="dsh-tpmsg2" style="font-size:11px"></span></div>' +
+      '<div class="row"><button class="ghost" id="dsh-geardiag" title="手动补采装备诊断；异常自动留证无需点击" style="flex:0 0 auto">装备诊断</button><span class="st">手动补采；异常自动留证无需点击</span></div>' +
       '<div id="dsh-geardiagbox" style="display:none;margin-top:6px"><textarea id="dsh-geardiagout" readonly rows="5" style="width:100%;box-sizing:border-box;font-size:10px;line-height:1.35"></textarea></div>' +
       '<div class="st" id="dsh-route" style="font-size:11px;margin-top:6px">路线：-</div>' +
       '<div class="sec">指定坐标（同图走路 / 跨图助手直发）</div>' +
@@ -4979,6 +4981,13 @@ function createRoItemCapture(env) {
     host.appendChild(node); roProbeMoved.push({ node: node, anchor: anchor });
     return true;
   }
+  function roProbePark(id) {
+    // 只在首次迁移：浮窗打开后 host 归 fwState 管理，重绘菜单不得再触碰它。
+    if (document.getElementById("dsh-probe-parking")) return;
+    var host = document.getElementById(id); if (!host || !host.parentNode) return;
+    var parking = document.createElement("div"); parking.id = "dsh-probe-parking"; parking.style.display = "none";
+    document.body.appendChild(parking); parking.appendChild(host);
+  }
   function roMenuBuild() {
     if (roMenuEl && roMenuEl.parentNode) return roMenuEl;
     try {
@@ -5192,28 +5201,42 @@ function createRoItemCapture(env) {
     probeHub.style.cssText = "margin-top:9px;border-top:1px solid #8e8e8e;padding-top:5px";
     var probeTitle = document.createElement("summary"); probeTitle.textContent = "探针功能（默认关闭 · 点击展开）"; probeHub.appendChild(probeTitle);
     var probeBody = document.createElement("div"); probeHub.appendChild(probeBody); body.appendChild(probeHub);
+    var autoInfo = document.createElement("div"); autoInfo.className = "ro-info";
+    autoInfo.textContent = "战斗状态未知、回执异常或停住仍不走时自动把有限快照写到本机；无需点击。以下手动探针默认关闭，不影响保命与入场保护。";
+    probeBody.appendChild(autoInfo);
     var autoGear = document.createElement("input"); autoGear.id = "dsh-probe-auto-gear"; autoGear.type = "checkbox";
     autoGear.checked = !!diagAutoProbeOn;
     autoGear.addEventListener("change", function () { diagAutoProbeOn = autoGear.checked === true; if (!diagAutoProbeOn) diagLastKey = ""; });
     roMenuRow(probeBody, "自动装备巡检（需手动开启）", autoGear);
-    roProbeMove(probeBody, "dsh-z-bossdiag", "self");
+    roProbeMove(probeBody, "dsh-z-bossdiag", ".row");
     roProbeMove(probeBody, "dsh-z-bossdiagbox", ".row");
-    roProbeMove(probeBody, "dsh-z-bosskeepsmp", "label");
-    roProbeMove(probeBody, "dsh-z-bosskeepsmpcopy", "self");
+    roProbeMove(probeBody, "dsh-z-bosskeepsmp", ".row");
     roProbeMove(probeBody, "dsh-z-bosskeepsmpbox", ".row");
     roProbeMove(probeBody, "dsh-z-diag", ".row");
     roProbeMove(probeBody, "dsh-z-diagbox", ".row");
     roProbeMove(probeBody, "dsh-bt-diag", "details");
     roProbeMove(probeBody, "dsh-fw-btn-losprobe", ".row");
-    roProbeMove(probeBody, "dsh-geardiag", "self");
+    var losBtn = document.getElementById("dsh-fw-btn-losprobe");
+    if (losBtn && !losBtn.__dshProbeDirectBound) {
+      losBtn.__dshProbeDirectBound = true;
+      losBtn.addEventListener("click", function (ev) { ev.stopPropagation(); fwToggle("losprobe"); });
+    }
+    roProbePark("dsh-fw-losprobe"); // 持久隐藏停放：浮窗打开后菜单重绘不得把宿主抢走
+    roProbeMove(probeBody, "dsh-geardiag", ".row");
     roProbeMove(probeBody, "dsh-geardiagbox", "self");
+    var keyProbeHeading = document.createElement("div"); keyProbeHeading.className = "sec"; keyProbeHeading.textContent = "键位检测"; probeBody.appendChild(keyProbeHeading);
     roProbeMove(probeBody, "dsh-hkprobe", ".row");
+    var keyProbeHelp = document.createElement("div"); keyProbeHelp.className = "log";
+    keyProbeHelp.textContent = "按任意键显示键码、按键、修饰键和是否命中功能；用于区分收不到按键与判定出错。命中但功能没反应时检查功能总开关。";
+    probeBody.appendChild(keyProbeHelp);
     var packetBtn = document.createElement("button"); packetBtn.type = "button"; packetBtn.textContent = "打开数据抓包（进入浮窗后再点开始）";
     packetBtn.addEventListener("click", function () { roModOpen("txcap"); });
     roMenuRow(probeBody, "数据抓包", packetBtn);
     var probeStatus = document.createElement("div"); probeStatus.id = "dsh-probe-geardiag-status"; probeStatus.className = "ro-info";
     probeStatus.textContent = "装备诊断未运行"; probeBody.appendChild(probeStatus);
   }
+  // 启动时即建立隐藏的统一入口，原设置页中的探针行立即迁走，不必等用户点开菜单。
+  try { roMenuBuild(); } catch (e) {}
 
   // 鼠标→触摸模拟层 + 视角控制（手机页 r=mn，V2.38.9）
   // 事实依据（Online_mn.js 逐模块核对，非猜测）与两条路的取舍见上方 V2.38.9 变更摘要第 2/3 条。
@@ -11047,6 +11070,7 @@ function createRoItemCapture(env) {
     try {
       var a = npAckWait, note = { reason: reason, on: !!on, want: a ? a.want : npLastIntent, ageMs: a ? at - a.at : npBattleLastSentAt > 0 ? at - npBattleLastSentAt : null, chatFramesSince: a && typeof a.chatFrames === "number" ? npChatFrameCount - a.chatFrames : null, epoch: npServerAutoAtk.epoch };
       dshDiag("np-ack-mismatch", note);
+      if (typeof expBattleProbe === "function") expBattleProbe("ack-" + reason, { ageMs: note.ageMs, want: note.want, on: note.on });
       if (at - npAckAnomalyAt < (reason === "unknown-state" ? 30000 : 2000)) return;
       npAckAnomalyAt = at;
       DSHCollect.post("http://127.0.0.1:8899/api/probe-collect", { t: "np-ack-mismatch", ver: VER, at: at, detail: note });
@@ -13682,6 +13706,29 @@ function createRoItemCapture(env) {
     if (npSeedAllowed()) npSeedStateOnce();
     return npBattleState();
   }
+  // 实验版自动异常留证：无常驻扫描，异常发生时节流采样，失败不能阻塞战斗/保命。
+  var expBattleProbeAt = Object.create(null);
+  function expBattleProbe(event, extra) {
+    try {
+      if (!clientReady() || !activeProfileKey() || !getMapName()) return;
+      var cid = selfCharId(); if (!Number.isSafeInteger(cid) || cid <= 0) return;
+      var at = Date.now(), scope = event + ":" + cid + ":" + npServerAutoAtk.epoch + ":" + getMapName(), last = expBattleProbeAt[scope];
+      if (last != null && at - last < 30000) return;
+      expBattleProbeAt[scope] = at;
+      var ent = CLIENT.SS && CLIENT.SS.Entity, pos = ent && ent.position;
+      DSHCollect.post("http://127.0.0.1:8899/api/probe-collect", {
+        t: "exp-battle-probe", ver: VER, at: at, event: event,
+        charId: cid, epoch: npServerAutoAtk.epoch, map: getMapName(), mode: npHuntMode(),
+        known: !!npBattleKnown, on: npBattleKnown ? !!npHuntOn : null,
+        reportAgeMs: npServerAutoAtk.at ? at - npServerAutoAtk.at : null,
+        pending: npAckWait ? { want: npAckWait.want, ageMs: at - npAckWait.at } : null,
+        stuckMs: zStuckSince ? at - zStuckSince : null,
+        pos: pos && pos.length >= 2 ? [Number(pos[0]), Number(pos[1])] : null,
+        lastMoveAgeMs: zWalkState && zWalkState.lastMove ? at - zWalkState.lastMove : null,
+        fallback: extra || null
+      });
+    } catch (e) {}
+  }
   var npVerifyLastAt = 0, npVerifyStallSeen = false, npVerifyStallMap = "", npVerifyModeStartAt = 0, npVerifyUnresolved = false;
   function npVerifyHuntOn(reason) {
     try {
@@ -13696,6 +13743,7 @@ function createRoItemCapture(env) {
       npVerifyLastAt = now;
       if (npBattleKnown && !npHuntOn) return npEnsureHunt(); // 已有「关」的真回执：只发一次开，不先切成关
       if (npBattleKnown && npHuntOn) return "already"; // 旧 ON 回执仍代表本会话已知开：试切会把正在工作的内挂关掉
+      if (typeof expBattleProbe === "function") expBattleProbe("unknown-" + reason);
       return "unconfirmed"; // 未知状态绝不发翻转包；持续停滞由自研走位独立处理
     } catch (e) { npAckClear(); return "failed"; }
   }
@@ -15027,6 +15075,7 @@ function createRoItemCapture(env) {
       var zIdleFlyOn = !!($id("dsh-z-idlefly") && $id("dsh-z-idlefly").checked) && zFlyKillOnNow && !zSitYieldNow;
       // 内挂回执未知且已停滞：自研移动作为并联兜底；远处旧锁定怪不能持续清空无目标瞬移计时。
       var npFallbackWalk = npMode && npBattleState() !== true && zStuckSince && now - zStuckSince >= 3000 && !escapePending();
+      if (npFallbackWalk && typeof expBattleProbe === "function") expBattleProbe("stationary-fallback");
       if (npFallbackWalk && !zWalkState.noTargetSince) zWalkState.noTargetSince = zStuckSince; // 远处旧锁定怪刚失效时，从实际停住时算无目标时间，不额外重新等满配置秒数
       function zIdleMoveSecNow() {
         try {
@@ -15074,6 +15123,7 @@ function createRoItemCapture(env) {
       }
       var zIdleR = zIdleFlyDecide(now);
       if (npFallbackWalk && (zIdleR === "wait" || (zIdleR === "ok" && !zEngagedNow(now))) && defSnap.isCombatMap) zIdleR = "move"; // 真正停住且未交战：旧锁定怪即使在射程内也不能永久拦自研走位
+      if (npFallbackWalk && typeof expBattleProbe === "function") expBattleProbe("stationary-decision", { decision: zIdleR });
       if (zIdleR === "fly") {
         zWalkState.noTargetSince = 0; zWalkState.lastIdleFly = now; // 飞完 → 无目标计时清零 + 刷新「上次自动换点」
         if (doFly()) markFlyOk(); else markFlyFail();
