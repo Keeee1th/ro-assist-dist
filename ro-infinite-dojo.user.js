@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         仙境传说 · 脚本入口（独立版）
 // @namespace    dsh.ro-plugin
-// @version      1.0.10
+// @version      1.0.12
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-infinite-dojo.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-infinite-dojo.user.js
-// @description  脚本入口（无限挑战本地测试版）：到报名点报名，服务器确认本轮出怪后才代打；无怪不猜结算，付费选项需手动确认；需要先启用 RO 助手。
+// @description  无限挑战（独立脚本）：到报名点报名，服务器确认本轮出怪后才代打；无怪不猜结算，付费选项需手动确认；需要先启用 RO 助手。
 // @author       DSH
 // @match        http://post.lastro.cn/*
 // @match        https://post.lastro.cn/*
@@ -61,7 +61,11 @@
 // ---------------- V1.0.4 ----------------
 // 1. 修启动按钮点一下就跳到左边并卡住；现在点一下位置不动，并且会跟着悬浮球走。
 // ---------------- V1.0.5 ----------------
-// 用户可见名称改为「脚本入口」，内部标识不变（下载地址 / 存储键 / 元素 id 照旧，老用户的设置与自动更新都不受影响）。
+// 用户可见名称统一为「无限挑战（独立脚本）」，内部标识不变（下载地址 / 存储键 / 元素 id 照旧，老用户的设置与自动更新都不受影响）。
+// ---------------- V1.0.12 ----------------
+// 1. 去掉自建常驻悬浮按钮：按钮元素、容器、样式表、跟随助手悬浮球的定位与位置记录整层删除，
+//    入口只保留「助手功能菜单 → 无限挑战（独立脚本）」这一条；面板照旧不自动弹出。
+// 2. 可见名称统一为「无限挑战（独立脚本）」：@name、助手浮窗标题、自建面板标题与助手通知文案一律用新名，不再保留旧名。
 
 (function () {
   'use strict';
@@ -107,13 +111,12 @@
 
   /* ==================== 常量 ==================== */
 
-  var VERSION        = "1.0.10";
+  var VERSION        = "1.0.12";
   var API_PROTOCOL   = 1;
   var OWNER          = "ro-infinite-dojo";      // 控制权属主，全程一致
   var SCOPES         = ["dojo", "battle", "movement", "dialog", "fly"];
   var CLIENT_TAG     = "ro-infinite-dojo";
   var CFG_KEY        = "dsh-ro-dojo-standalone-v1";
-  var UI_KEY         = "dsh-ro-dojo-ui-v2";          // 启动按钮位置（与面板配置分开，互不影响；v1 里可能留下点一下跳位的坏坐标，不再读）
   var WIN_ID         = "ro-infinite-dojo";
   var REPO_URL       = "https://github.com/Keeee1th/Lro-user-scripts";
   var CONFIG_URL     = "file:///dsh-ro-infinite-dojo.config.json";
@@ -219,7 +222,6 @@
   };
   var mode = "none";                     // none / window / standalone
   var root = null, holder = null, wrap = null;
-  var launcherBox = null, launcherBtn = null;    // 独立中性设置入口，与精灵共用锚点
   var panelOpen = false;                         // 面板是否已由用户打开（拿不到助手浮窗节点时用它跟随）
   var statusEl = null, logEl = null, startBtn = null, stopBtn = null;
   var ctrls = {};
@@ -567,30 +569,11 @@
       " blocked=" + (out.blocked ? "true" : "false");
     return out;
   }
-  // 本轮新增：入场前物品保护（与 RO助手内置道场共用同一判定函数：助手门面 dojoGuard → 助手内部 dojoGuardCapture）。
-  //   拿不到门面能力 / 判定失败一律 fail-closed：不自动入场；助手内也会据此不启动丢弃。
-  //   助手侧采集的是「进入道场前的可信完整背包整表」，本脚本只读结论，不自己读背包、不发任何包。
-  function dojoGuardCheck(a) {
-    if (!a) return { ok: false, reason: "助手通道不可用" };
-    var c = null;
-    try { c = a.capabilities(); } catch (e) { c = null; }
-    if (!c || c.dojoGuard !== true || typeof a.dojoGuard !== "function") {
-      return { ok: false, reason: "助手未提供「入场前物品保护」能力（助手版本过旧），无法证明入场前背包完整" };
-    }
-    var g = null;
-    try { g = a.dojoGuard(OWNER); } catch (e2) { g = null; }
-    if (!g || g.ok !== true) return { ok: false, reason: (g && g.reason) || "助手未给出可信的入场前背包快照" };
-    return { ok: true, n: Number(g.n) || 0, reason: "" };
-  }
-
   function doStart() {
     if (run.on) return;
     var rep = apiReport();
     if (!rep.ok) return doStop(rep.reason, "api-missing");
     var a = rep.api;
-    // 本轮新增：入场前物品保护 —— 拿不到可信完整的入场前背包快照就不进场（fail-closed）
-    var bagGuard = dojoGuardCheck(a);
-    if (!bagGuard.ok) return doStop("入场前物品保护未建立：" + bagGuard.reason + "（按要求 fail-closed：不自动入场、不启动丢弃）", "bag-guard");
     var r = call(a, "acquire", [OWNER, SCOPES.slice()]);
     if (!r || r.ok !== true) return doStop(acquireReason(r), "acquire-refused");
     var s = null;
@@ -602,7 +585,6 @@
     run.startedAt = nowMs();
     run.log = [];
     logLine("已拿到控制权，开始运行（" + VERSION + "）");
-    logLine("入场前物品保护已建立：入场前已有 " + bagGuard.n + " 种物品按 ITID 受保护");
     var pf = arrowPreflight(s);
     run.preflight = pf;
     logLine(pf.text);
@@ -637,7 +619,7 @@
     run.settleUntil = 0;
     setPhase("已停止：" + reason + (code ? "（" + code + "）" : ""), run.cycle ? "第 " + run.cycle + " 轮循环" : "");
     logLine("停止：" + reason + (code ? "（" + code + "）" : ""), "err");
-    if (wasOn) pushNotice("脚本入口已停止：" + reason);
+    if (wasOn) pushNotice("无限挑战已停止：" + reason);
     render();
     return reason;
   }
@@ -997,7 +979,7 @@
         run.noMobWarned = true;
         logLine("本图识别到的 NPC：" + npcDigest(s.npcs), "warn");
         logLine(NO_MOB_HINT, "warn");
-        pushNotice("脚本入口：" + NO_MOB_HINT);
+        pushNotice("无限挑战：" + NO_MOB_HINT);
       }
       setPhase("道场内没有目标", "无怪 " + sec(waited));
       return;
@@ -1188,8 +1170,6 @@
   function endCycle(reason) {
     logLine("本轮结束：" + reason);
     if (cfg.autoSignup && run.on) {
-      var nextGuard = dojoGuardCheck(api());
-      if (!nextGuard.ok) return doStop("入场前物品保护未建立：" + nextGuard.reason + "（不自动进入下一轮）", "bag-guard");
       logLine("自动开始下一轮报名");
       beginEntry(run.cycle + 1);
       return;
@@ -1281,14 +1261,6 @@
     "#ro-dojo-standalone .tip{color:#5a6b7f;font-size:12px;line-height:1.55}" +
     "#ro-dojo-standalone .tip a{color:#1259b3}";
 
-  // 助手缺失时的固定设置入口：普通中性 RO 按钮，绝不表示脚本正在运行。
-  var LAUNCHER_CSS_TEXT =
-    "#ro-dojo-launcher-box{position:fixed;right:28px;bottom:146px;z-index:2147483645;display:flex;align-items:center}" +
-    "#ro-dojo-launcher{padding:4px 10px;border-radius:3px;background:#eee;border:1px solid #8e8e8e;color:#111;" +
-    "font:12px/1.5 'Microsoft YaHei',system-ui,sans-serif;font-weight:700;cursor:pointer;user-select:none;" +
-    "box-shadow:0 4px 12px rgba(0,0,0,.35);white-space:nowrap}" +
-    "#ro-dojo-launcher:hover{background:#ddd}";
-
   function el(tag, props, kids) {
     var n = document.createElement(tag), k;
     if (props) {
@@ -1305,7 +1277,7 @@
     if (kids) for (var i = 0; i < kids.length; i++) if (kids[i]) n.appendChild(kids[i]);
     return n;
   }
-  function sep() { return el("div", { cls: "sec", text: "脚本入口（独立版）" }); }
+  function sep() { return el("div", { cls: "sec", text: "无限挑战（独立脚本）" }); }
   function check(id, label) {
     var box = el("input", { type: "checkbox", id: id });
     return { node: el("label", { cls: "switch" }, [box, el("span", { text: label })]), box: box };
@@ -1382,10 +1354,10 @@
     buildPanel();
     injectCss(PANEL_CSS_TEXT);
     var close = el("button", { text: "收起", on: { click: function () { showPanel(false); } } });
-    var bar = el("div", { cls: "bar" }, [el("span", { cls: "sp", text: "脚本入口（独立版）" }), close]);
+    var bar = el("div", { cls: "bar" }, [el("span", { cls: "sp", text: "无限挑战（独立脚本）" }), close]);
     var body = el("div", { cls: "bd" }, [root]);
     wrap = el("div", { id: "ro-dojo-standalone" }, [bar, body]);
-    try { wrap.style.display = "none"; } catch (e) {}      // 开局一律隐藏：只有用户点按钮才显示
+    try { wrap.style.display = "none"; } catch (e) {}      // 开局一律隐藏：任何路径都不得让它自己变得可见
     dragify(wrap, bar);
     document.body.appendChild(wrap);
     mode = "standalone";
@@ -1397,15 +1369,10 @@
   }
   function dragify(node, handle) {
     try {
-      var dragging = false, moved = false, sx = 0, sy = 0, ox = 0, oy = 0, prev = null, anchor = null, ar = null, sc = 1, prevOffset = null;
+      var dragging = false, moved = false, sx = 0, sy = 0, ox = 0, oy = 0, prev = null;
       handle.addEventListener("mousedown", function (ev) {
         if ((ev.button !== undefined && ev.button !== 0) || (ev.target && ev.target.tagName === "BUTTON")) return;
         if (ev.stopPropagation) ev.stopPropagation();
-        if (launcherDragEnd && node === launcherBox) launcherDragEnd();
-        anchor = node === launcherBox && node.parentNode && node.parentNode.id === "dsh-ball" ? node.parentNode : null;
-        ar = anchor ? anchor.getBoundingClientRect() : { left: 0, top: 0, width: 0 };
-        sc = anchor ? ar.width / (anchor.offsetWidth || ar.width) || 1 : 1;
-        prevOffset = launcherOffset;
         dragging = true;
         moved = false;
         try { node.__dshDragged = false; } catch (e) {}
@@ -1416,8 +1383,8 @@
         // 顺序不能反：先把当前视口坐标钉成 left/top（此时 right/bottom 还在，视觉零变化），
         // 再让 right/bottom 让位。绝不允许出现「right 已 auto 而 left 还没写」的中间状态 ——
         // 那会让固定定位元素退回静态位置（左边缘），看起来就是「点一下就飞到左边并卡住」。
-        node.style.left = (ox - ar.left) / sc + "px";
-        node.style.top = (oy - ar.top) / sc + "px";
+        node.style.left = ox + "px";
+        node.style.top = oy + "px";
         node.style.right = "auto";
         node.style.bottom = "auto";
         ev.preventDefault();
@@ -1427,18 +1394,16 @@
         document.addEventListener("mouseout", onLeave, true);
         window.addEventListener("blur", onUp);
         window.addEventListener("pagehide", onUp);
-        if (node === launcherBox) launcherDragEnd = onUp;
       });
       function onMove(ev) {
         if (!dragging) return;
-        if ((typeof ev.buttons === "number" && !(ev.buttons & 1)) || document.hidden || !node.parentNode || (anchor && anchor.style.display === "none")) { onUp(); return; }
+        if ((typeof ev.buttons === "number" && !(ev.buttons & 1)) || document.hidden || !node.parentNode) { onUp(); return; }
         if (Math.abs(ev.clientX - sx) > 3 || Math.abs(ev.clientY - sy) > 3) {
           moved = true;
           try { node.__dshDragged = true; } catch (e) {}
         }
         var x = Math.max(0, ox + ev.clientX - sx), y = Math.max(0, oy + ev.clientY - sy);
-        if (anchor) { launcherOffset = { dx: (x - ar.left) / sc, dy: (y - ar.top) / sc }; placeLauncher(); }
-        else { node.style.left = x + "px"; node.style.top = y + "px"; }
+        node.style.left = x + "px"; node.style.top = y + "px";
       }
       function onLeave(ev) {
         // mouseout bubbles from ordinary children too; only a missing destination leaves the viewport.
@@ -1454,14 +1419,8 @@
         document.removeEventListener("mouseout", onLeave, true);
         window.removeEventListener("blur", onUp);
         window.removeEventListener("pagehide", onUp);
-        if (node === launcherBox) launcherDragEnd = null;
-        if (moved) {
-          // 拖过 >3px 才算拖动：只给启动按钮记位置（面板位置不落盘，与 1.0.3 一致）
-          if (node === launcherBox) saveUiPos();
-          return;
-        }
-        // 没移动的单击：位置保持原样（把按下时钉的四项还原回去），也不写记住的位置
-        if (node === launcherBox) launcherOffset = prevOffset;
+        if (moved) return;                                  // 拖过 >3px 才算拖动（面板位置不落盘，与 1.0.3 一致）
+        // 没移动的单击：位置保持原样（把按下时钉的四项还原回去）
         if (prev) {
           node.style.left = prev.left || "";
           node.style.top = prev.top || "";
@@ -1472,15 +1431,14 @@
     } catch (e) {}
   }
   // 优先复用助手浮窗；不可用时退回自建面板。
-  // 这里只注册，不替用户打开；菜单与小按钮只打开，收起沿用窗口关闭按钮。
+  // 这里只注册，不替用户打开；功能菜单那行只负责打开，收起沿用窗口关闭按钮。
   function registerWindowMode() {
     var a = api();
     if (!a || !isFn(a.registerWindow) || !isFn(a.openWindow)) return false;
     buildPanel();
-    var reg = call(a, "registerWindow", [WIN_ID, "脚本入口（独立版）", function () { return root; }]);
+    var reg = call(a, "registerWindow", [WIN_ID, "无限挑战（独立脚本）", function () { return root; }]);
     if (!reg || reg.ok !== true) return false;
     mode = "window";
-    placeLauncher();
     return true;
   }
   function openAssistantWindow() {
@@ -1493,68 +1451,6 @@
     return true;
   }
 
-  // ponytail: 父子共用锚点同帧移动，无轮询或后台 RAF；同步通知只负责边缘夹限。
-  var launcherOffset = null, launcherDragEnd = null;
-  function removeLauncher() {
-    if (launcherDragEnd) launcherDragEnd();
-    try { if (launcherBox && launcherBox.parentNode) launcherBox.parentNode.removeChild(launcherBox); } catch (e) {}
-    launcherBox = null; launcherBtn = null;
-  }
-  function loadUiPos() {
-    try { return JSON.parse(localStorage.getItem(UI_KEY) || "null"); } catch (e) { return null; }
-  }
-  function saveUiPos() {
-    try {
-      var p = launcherOffset || { lx: parseFloat(launcherBox.style.left), ly: parseFloat(launcherBox.style.top) };
-      localStorage.setItem(UI_KEY, JSON.stringify(p));
-    } catch (e) {}
-  }
-  function placeLauncher() {
-    if (!launcherBox) return;
-    var anchor = document.getElementById("dsh-ball"), p = loadUiPos();
-    if (anchor) {
-      if (launcherBox.parentNode !== anchor) anchor.appendChild(launcherBox);
-      if (!launcherOffset) launcherOffset = p && typeof p.dx === "number" && typeof p.dy === "number" && isFinite(p.dx) && isFinite(p.dy) ? { dx: p.dx, dy: p.dy } : { dx: -40, dy: -34 };
-      var r = anchor.getBoundingClientRect(), sc = r.width / (anchor.offsetWidth || r.width) || 1;
-      var w = launcherBox.offsetWidth || 96, h = launcherBox.offsetHeight || 26;
-      // Reserve both ends of the center-origin hover transition, without changing the sprite or polling.
-      var maxSc = Math.max(1.08, sc), minSc = Math.min(1, sc);
-      var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-      var ax = (anchor.offsetWidth || r.width / sc) / 2, ay = (anchor.offsetHeight || r.height / sc) / 2;
-      var vw = window.innerWidth || 1280, vh = window.innerHeight || 800;
-      var loX = Math.max(ax - cx / minSc, ax - cx / maxSc), loY = Math.max(ay - cy / minSc, ay - cy / maxSc);
-      var hiX = Math.min(ax + (vw - cx) / minSc - w, ax + (vw - cx) / maxSc - w);
-      var hiY = Math.min(ay + (vh - cy) / minSc - h, ay + (vh - cy) / maxSc - h);
-      var dx = Math.max(loX, Math.min(hiX, launcherOffset.dx)), dy = Math.max(loY, Math.min(hiY, launcherOffset.dy));
-      launcherBox.style.position = "absolute";
-      launcherBox.style.left = dx + "px";
-      launcherBox.style.top = dy + "px";
-      launcherBox.style.right = "auto"; launcherBox.style.bottom = "auto";
-    } else {
-      launcherBox.style.position = "fixed";
-      if (p && typeof p.lx === "number" && typeof p.ly === "number" && isFinite(p.lx) && isFinite(p.ly)) {
-        launcherBox.style.left = p.lx + "px"; launcherBox.style.top = p.ly + "px";
-        launcherBox.style.right = "auto"; launcherBox.style.bottom = "auto";
-      } else { launcherBox.style.right = "28px"; launcherBox.style.bottom = "146px"; }
-    }
-  }
-  function mountLauncher() {
-    if (launcherBox && launcherBox.parentNode) { placeLauncher(); return launcherBox; }
-    injectCss(LAUNCHER_CSS_TEXT);
-    launcherBtn = el("div", { id: "ro-dojo-launcher", cls: "ro-dojo-launcher", text: "脚本入口", title: "打开脚本入口设置" });
-    launcherBox = el("div", { id: "ro-dojo-launcher-box" }, [launcherBtn]);
-    launcherBox.setAttribute("data-dsh-ui", "1");
-    launcherBtn.addEventListener("click", function (ev) {
-      if (ev.stopPropagation) ev.stopPropagation();
-      if (launcherBox && launcherBox.__dshDragged) { launcherBox.__dshDragged = false; return; }
-      if (mode === "window") openAssistantWindow(); else showPanel(true);
-    });
-    launcherBtn.addEventListener("pointerdown", function (ev) { if (ev.button === 0) ev.stopPropagation(); });
-    dragify(launcherBox, launcherBtn);
-    try { document.body.appendChild(launcherBox); } catch (e) { document.documentElement.appendChild(launcherBox); }
-    placeLauncher();
-    return launcherBox;
-  }
   // 面板是否处于打开状态：拿得到助手浮窗节点就以它为准，拿不到退化为本地标记
   function winNode() {
     try { return document.getElementById("dsh-win-fw-" + WIN_ID) || null; } catch (e) { return null; }
@@ -1626,8 +1522,7 @@
     try { document.body.appendChild(holder); } catch (e) { try { document.documentElement.appendChild(holder); } catch (e2) {} }
     // 助手可用只注册浮窗，不替用户打开；不可用退回自带面板，同样先隐藏 —— 任何路径都不得让面板可见
     if (!registerWindowMode()) mountStandalone();
-    mountLauncher();
-    logLine("脚本已就绪（" + VERSION + "）；请从助手功能菜单打开「脚本入口」设置；助手未就绪时可用右下角设置按钮");
+    logLine("脚本已就绪（" + VERSION + "）；请从助手功能菜单打开「无限挑战（独立脚本）」");
     render();
 
     var tries = 0;
@@ -1654,10 +1549,7 @@
       window.addEventListener("dsh-ro-assist-notice", function (ev) {
         try { onNotice(ev && ev.detail && (ev.detail.text || ev.detail.message)); } catch (e) {}
       });
-      window.addEventListener("dsh-ro-assist-anchor", placeLauncher);
-      window.addEventListener("resize", placeLauncher);
       window.addEventListener("dsh-ro-assist-ready", function () {
-        placeLauncher();
         if (mode !== "window" && api() && registerWindowMode()) {
           detachStandalone();
           logLine("已切换到助手浮窗显示");
@@ -1665,15 +1557,13 @@
         }
       });
       window.addEventListener("pagehide", function () {
-        clearInterval(t); removeLauncher();
-        window.removeEventListener("dsh-ro-assist-anchor", placeLauncher);
-        window.removeEventListener("resize", placeLauncher);
+        clearInterval(t);
         if (run.on) doStop("页面离开", "pagehide");
       });
     } catch (e) {}
   }
 
-  try { boot(); } catch (e) { try { console.error("[脚本入口] 启动失败", e); } catch (e2) {} }
+  try { boot(); } catch (e) { try { console.error("[无限挑战] 启动失败", e); } catch (e2) {} }
 
   /* ==================== 测试钩子（只在显式打开时挂上） ==================== */
 
@@ -1693,7 +1583,7 @@
         statusText: statusText, logLines: function () { return run.log.slice(); }, root: function () { return root; },
         mode: function () { return mode; }, applyCfg: applyCfg,
         togglePanel: togglePanel, panelShown: panelShown, wrap: function () { return wrap; },
-        launcher: function () { return launcherBox; }, winShown: winShown
+        winShown: winShown
       };
     }
   } catch (e) {}

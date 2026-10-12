@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         仙境传说 · 原站插件模式（游戏助手 · 实验版）
 // @namespace    dsh.ro-plugin
-// @version      2.38.73
+// @version      2.38.77.4
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
-// @description  在 post.lastro.cn / game.lastro.cn 原站以插件模式启动《仙境的传说》ROBrowser 客户端并连接原服务器；数据自动走本地镜像（127.0.0.1:8973）避免加载卡死，支持自动登录。PC 版直接打开 https://post.lastro.cn/ro/api.html 或备用线路 https://game.lastro.cn/ro/api.html?69.8；手机版打开 https://post.lastro.cn/?r=mn/index（登录页可选择平台与线路）。 新增私有本机客户端入口匹配（环回主机 127.0.0.1 / localhost，端口以页面自身 origin 为准、不写死）。
+// @description  本地新UI实验版（不发布）。在 post.lastro.cn / game.lastro.cn 原站以插件模式启动《仙境的传说》ROBrowser 客户端并连接原服务器；数据自动走本地镜像（127.0.0.1:8973）避免加载卡死，支持自动登录。PC 版直接打开 https://post.lastro.cn/ro/api.html 或备用线路 https://game.lastro.cn/ro/api.html?69.8；手机版打开 https://post.lastro.cn/?r=mn/index（登录页可选择平台与线路）。 新增私有本机客户端入口匹配（环回主机 127.0.0.1 / localhost，端口以页面自身 origin 为准、不写死）。
 // @author       DSH
 // @match        http://post.lastro.cn/*
 // @match        https://post.lastro.cn/*
@@ -705,7 +705,7 @@
   }
   var LS_KEY = "dsh_ro_plugin_v1";
   var VERSION_RE = /\?([0-9.]+)/;
-  var VER = "2.38.73"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
+  var VER = "2.38.77.4"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
   try { window.__dshCombinedActive = true; } catch (e) {} // V2.30.0 防双浮层让位旗标：独立版词条色脚本见旗标即让位
   // ==================== 统一采集器注册表（dsh-collect v1 · 内部命名空间，不新增 window 全局）====================
   // 五方法：register 注册 / sample 采集 / query 查询 / refresh 刷新 / release 释放
@@ -719,8 +719,12 @@
     function post(url, body, cb) {
       try {
         if (typeof fetch !== "function") { if (cb) cb(false); return; }
-        fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-          .then(function (r) { if (cb) cb(!!(r && r.ok)); })
+  // UNIFIED-PROBE-BEGIN unified-transport ORIGINAL:ICAgICAgICBmZXRjaCh1cmwsIHsgbWV0aG9kOiAiUE9TVCIsIGhlYWRlcnM6IHsgIkNvbnRlbnQtVHlwZSI6ICJhcHBsaWNhdGlvbi9qc29uIiB9LCBib2R5OiBKU09OLnN0cmluZ2lmeShib2R5KSB9KQo=
+        fetch(url, { method: "POST", headers: { "Content-Type": body && body.t === "unified-probe" ? "text/plain; charset=utf-8" : "application/json" }, body: JSON.stringify(body) })
+  // UNIFIED-PROBE-END unified-transport INLINE
+  // UNIFIED-PROBE-BEGIN unified-receipt ORIGINAL:ICAgICAgICAgIC50aGVuKGZ1bmN0aW9uIChyKSB7IGlmIChjYikgY2IoISEociAmJiByLm9rKSk7IH0p
+          .then(function (r) { if (body && body.t === "unified-probe") { if (!r || !r.ok) { if (cb) cb(false); return; } return r.json().then(function (receipt) { if (cb) cb(!!(receipt && receipt.ok === true)); }); } if (cb) cb(!!(r && r.ok)); })
+  // UNIFIED-PROBE-END unified-receipt
           .catch(function () { if (cb) cb(false); });
       } catch (e) { if (cb) cb(false); }
     }
@@ -746,6 +750,57 @@
     return { NS: NS, VERSION: VERSION, register: register, sample: sample, query: query, refresh: refresh, release: release, ringPush: ringPush, ringUnshift: ringUnshift, post: post };
   })();
 
+
+  // UNIFIED-PROBE-BEGIN core ORIGINAL:
+  // Record-only: live PacketStructure NPC/Quest contracts; existing scheduler, dedicated observational taps, no game sends.
+  var UP={on:false,battle:true,npc:true,ring:[],archive:[],archiveBytes:0,incomplete:null,queue:[],recent:[],seq:0,gen:0,scope:null,chain:null,challengeNpc:null,move:null,pos:null,posAt:0,stallAt:0,dirty:false,busy:null,revision:0,failures:0,refused:0,overflow:0,storageError:"",error:"",hooks:"",questStatus:"not sampled",lastTick:null,lastWall:null,hidden:false,scopeNotice:null};
+  var UP_ARCHIVE_MAX=1000,UP_ARCHIVE_BYTES=2000000,UP_INDEX_MAX=32,UP_INDEX="dsh_ro_unified_index_v1",UP_ALIAS_KEY="dsh_ro_unified_aliases_v1",upTaps=new WeakMap(),upSendObserved=new WeakSet(),upQuestPending=false;
+  var UP_MAX=240,UP_RETRIES=3,upSources=new WeakMap(),upSource="unknown",upSinks={},upSession="";
+  try{upSession=sessionStorage.getItem("dsh_ro_unified_session_v1")||"";}catch(e){}
+  if(!upSession){upSession=Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,12);try{sessionStorage.setItem("dsh_ro_unified_session_v1",upSession);}catch(e){UP.storageError="session persistence unavailable";}}
+  var upKey="dsh_ro_unified_probe_v1:"+upSession;
+  function upAllowed(c){return !!(UP.on&&UP[c]);}
+  function upText(v,max){var s=String(v==null?"":v).replace(/[\u0000-\u001f\u007f]/g," "),limit=max||1200;return /password|passwd|authorization|bearer\s|api[ _-]?key|token\s*[:=]|密码|口令|恢复码/i.test(s)?"[redacted sensitive text]":s.length>limit?s.slice(0,limit)+" [clipped length="+s.length+" limit="+limit+"]":s;}
+  function upXY(v){return v&&v.length>=2&&v[0]!=null&&v[1]!=null&&Number.isFinite(Number(v[0]))&&Number.isFinite(Number(v[1]))?[Number(v[0]),Number(v[1])]:null;}
+  function upIdentity(){try{var id=resolveSelfIdentity(),role=activeProfileKey();if(!id||id.known!==true||!id.oneId||!id.realm||!id.account||!(id.charId>0)||role!==id.oneId||!profileTrusted(role)||!getMapName())return null;return {role:String(id.oneId),world:String(id.realm),charId:Number(id.charId),epoch:identityEpoch,map:String(getMapName())};}catch(e){return null;}}
+  function upSync(){var id=upIdentity();if(!id){if(UP.scope)UP.scopeNotice={transition:"known-to-unknown-to-known",result:"unknown identity interval; no cross-chain attribution"};UP.scope=null;UP.chain=null;UP.challengeNpc=null;UP.move=null;UP.pos=null;return null;}var sig=[id.role,id.epoch,id.map].join("|");if(!UP.scope||UP.scope.sig!==sig||UP.entity!==(CLIENT.SS&&CLIENT.SS.Entity)){if(UP.scope)UP.scopeNotice={transition:"role/map/epoch/entity changed",roleChanged:UP.scope.role!==id.role,mapChanged:UP.scope.map!==id.map,epochChanged:UP.scope.epoch!==id.epoch,result:"scope boundary; prior chain reset"};UP.gen++;UP.scope=id;UP.scope.sig=sig;UP.entity=CLIENT.SS&&CLIENT.SS.Entity;UP.chain=null;UP.challengeNpc=null;UP.move=null;UP.pos=null;UP.recent=[];UP.posAt=upNow();UP.stallAt=0;}return UP.scope;}
+  function upPersist(){if(!UP.dirty)return;try{var index=upSessions();if(index.length>UP_INDEX_MAX)throw Error("session history capacity; export existing records");if(index.indexOf(upSession)<0){if(index.length>=UP_INDEX_MAX)throw Error("session index full");index.push(upSession);}localStorage.setItem(upKey,JSON.stringify({schema:1,session:upSession,seq:UP.seq,ring:UP.ring,archive:UP.archive,incomplete:UP.incomplete,queue:UP.queue}));localStorage.setItem(UP_INDEX,JSON.stringify(index));UP.dirty=false;UP.saved=true;UP.storageError="";}catch(e){UP.saved=false;UP.storageError="local persistence/index failed; memory/export retained (not saved)";}}
+  function upRecord(category,kind,detail){if(!upAllowed(category))return null;var scope=upSync();if(!scope){UP.refused++;upRender();return null;}if(UP.queue.length>=UP_MAX)return upIncomplete("pending queue full");var ev={id:upSession+":"+(UP.seq+1),session:upSession,generation:UP.gen,role:scope.role,world:scope.world,charId:scope.charId,epoch:scope.epoch,map:scope.map,state:{selfXY:upXY(CLIENT.SS&&CLIENT.SS.Entity&&CLIENT.SS.Entity.position),battleCached:typeof npBattleKnown!=="undefined"&&npBattleKnown?!!npHuntOn:null},at:Date.now(),category:category,kind:kind,chain:UP.chain?UP.chain.id:null,detail:detail};ev=JSON.parse(JSON.stringify(ev));var size=JSON.stringify(ev).length*2;if(category==="npc"&&(UP.archive.length>=UP_ARCHIVE_MAX||UP.archiveBytes+size>UP_ARCHIVE_BYTES))return upIncomplete("NPC/task local archive full");UP.seq++;upFreeze(ev);if(category==="npc"){UP.archive.push(ev);UP.archiveBytes+=size;}DSHCollect.ringPush(UP.ring,ev,UP_MAX);UP.queue.push({event:ev,attempts:0,nextAt:0});UP.dirty=true;DSHCollect.ringPush(UP.recent,{id:ev.id,kind:kind,at:ev.at},12);upPersist();return ev;}
+  function upFlush(){if(!UP.on||UP.busy)return;var scope=upSync();if(!scope)return;var q=UP.queue.filter(function(v){return v.event.role===scope.role&&UP[v.event.category]&&v.attempts<UP_RETRIES&&v.nextAt<=Date.now();})[0];if(!q)return;var wire=upWire(q.event);if(!wire)return;q.attempts++;q.nextAt=Date.now()+5000*q.attempts;UP.dirty=true;upPersist();var ticket={q:q,revision:UP.revision,at:Date.now()};UP.busy=ticket;DSHCollect.post("http://127.0.0.1:8899/api/probe-collect",{t:"unified-probe",schema:2,ver:VER,session:upSession,summaryOnly:true,events:[wire]},function(ok){if(UP.busy!==ticket||ticket.revision!==UP.revision)return;UP.busy=null;if(ok){var i=UP.queue.indexOf(q);if(i>=0)UP.queue.splice(i,1);UP.error="";UP.receipt="loopback summary accepted; NOT raw text durability";}else{UP.failures++;UP.error="receiver failed; queued, bounded retries; restart to retry";}UP.dirty=true;upPersist();upRender();});}
+  function upSet(on){UP.on=on===true&&!UP.incomplete;UP.chain=null;UP.move=null;UP.pos=null;UP.posAt=upNow();UP.lastTick=null;UP.lastWall=null;if(UP.on){UP.queue.forEach(function(q){q.attempts=0;q.nextAt=0;});UP.dirty=true;upInstall();upSnapshot("start");}try{txCap.on=false;btDiagOn=false;diagAutoProbeOn=false;zKeepSmp.on=false;}catch(e){}["dsh-z-diag","dsh-z-bosskeepsmp","dsh-bt-diagon"].forEach(function(id){var el=document.getElementById(id);if(el)el.checked=false;});upPersist();upRender();}
+  function upClear(){UP.revision++;UP.busy=null;UP.ring=[];UP.archive=[];UP.archiveBytes=0;UP.incomplete=null;UP.queue=[];UP.recent=[];UP.chain=null;UP.move=null;UP.overflow=0;UP.error="";UP.dirty=true;upPersist();upRender();}
+  function upExport(){return JSON.stringify({schema:2,ver:VER,session:upSession,enabled:UP.on,failures:UP.failures,refused:UP.refused,overflow:UP.overflow,incomplete:UP.incomplete,persistence:UP.storageError,saved:UP.saved===true,delivery:UP.error,receiver:"diagnostic summary only; raw NPC/task text is browser-local",questSnapshot:UP.questStatus,localNpcTaskArchive:UP.archive,events:UP.ring,pending:UP.queue},null,2);}
+  function upRender(){var el=document.getElementById("dsh-unified-status");if(el)el.textContent=(UP.on?"已开启（只读；暂停仍观察）":"已关闭")+" · 战斗 "+(UP.battle?"开":"关")+" / NPC任务 "+(UP.npc?"开":"关")+" · 待发送 "+UP.queue.length+" · 失败 "+UP.failures+" · 拒绝未知身份 "+UP.refused+" · "+(UP.storageError||(UP.saved?"浏览器本地已保存":"本地尚未保存"))+" · NPC原文本地 "+UP.archive.length+" · 接收器仅诊断摘要 · 任务快照 "+UP.questStatus+(UP.error?" · "+UP.error:"")+(UP.hooks?" · "+UP.hooks:"")+(UP.on&&!UP.scope?" · 身份未知：拒绝归属采集":"");var cb=document.getElementById("dsh-unified-master");if(cb)cb.checked=UP.on;}
+  function upMenu(host){var label=document.createElement("label"),cb=document.createElement("input");cb.type="checkbox";cb.id="dsh-unified-master";cb.checked=UP.on;cb.addEventListener("change",function(){upSet(cb.checked);});label.appendChild(cb);label.appendChild(document.createTextNode("统一探针总开关（默认关）"));host.appendChild(label);[["battle","战斗停滞证据"],["npc","NPC任务录制"]].forEach(function(v){var l=document.createElement("label"),c=document.createElement("input");c.type="checkbox";c.checked=UP[v[0]];c.addEventListener("change",function(){var prior=UP[v[0]];UP[v[0]]=c.checked;UP.chain=null;UP.move=null;UP.pos=null;UP.posAt=upNow();if(UP.on)upRecord(UP.battle?"battle":"npc","scope-change",{scope:v[0],enabled:c.checked,wasEnabled:prior,result:"observation category changed; chain reset"});upRender();});l.appendChild(c);l.appendChild(document.createTextNode(v[1]));host.appendChild(l);});var out=document.createElement("textarea");out.id="dsh-unified-view";out.readOnly=true;out.style.cssText="display:none;width:100%;height:180px;font:10px monospace";[["开始",function(){upSet(true);}],["停止",function(){upSet(false);}],["查看",function(){out.style.display="block";out.value=upExport();}],["导出",function(){var url=URL.createObjectURL(new Blob([upExport()],{type:"application/json"})),a=document.createElement("a");a.href=url;a.download="ro-unified-probe-"+Date.now()+".json";a.click();setTimeout(function(){URL.revokeObjectURL(url);},1000);}],["清空",function(){if(confirm("清空本地记录与待发送队列？"))upClear();}]].forEach(function(v){var b=document.createElement("button");b.type="button";b.textContent=v[0];b.addEventListener("click",v[1]);host.appendChild(b);});var st=document.createElement("div");st.id="dsh-unified-status";st.className="ro-info";host.appendChild(st);host.appendChild(out);upRecoveryMenu(host,out);upInvRowControl(host);var note=document.createElement("div");note.className="log";note.textContent="NPC/任务完整已捕获文本仅在浏览器本地记录；8899只收诊断摘要，HTTP成功不代表原文保存。不录输入/私聊/密码/验证码。只读，暂停仍观察；容量满停录并标记不完整。";host.appendChild(note);upRender();}
+  function upTag(p,source){if(p&&typeof p==="object")upSources.set(p,source);return p;}
+  function upWithSource(source,fn){var old=upSource;upSource=source;try{return fn();}finally{upSource=old;}}
+  function upNPC(naid){var n=Number(naid)>>>0,found=null;try{var em=CLIENT.EM||requireDB("Renderer/EntityManager");if(em&&em.forEach)em.forEach(function(e){if(e&&(Number(e.GID)>>>0)===n&&(Number(e.objecttype)===6||Number(e.objecttype)===12))found=e;});}catch(e){}return {id:n||null,name:found?upText(found.displayName||found.name||(found.display&&found.display.name),100):null,map:getMapName(),observedXY:found?upXY(found.position):null,provenance:found?"packet.NAID matched live NPC entity.GID":"packet.NAID; entity identity/coordinates unresolved",uncertainty:!found};}
+  function upTargets(text,source){var out=[],s=upText(text).replace(/&lt;/gi,"<").replace(/&gt;/gi,">"),re=/<NAVI>([\s\S]*?)<INFO>([a-z][a-z0-9_]{1,31}(?:\.gat)?),(-?\d+),(-?\d+),([^,<]*),([^,<]*),([^<]*)<\/INFO><\/NAVI>/gi,m;while((m=re.exec(s))&&out.length<8)out.push({map:m[2],x:Number(m[3]),y:Number(m[4]),name:upText(m[1],160),zero:m[5],mask:m[6],flag:m[7],source:source,evidence:m[0],provenance:"NAVI.INFO map,x,y,0,000,flag",uncertainty:"declared navigation target; not NPC entity position"});s=s.replace(re,"");re=/\b([a-z][a-z0-9_]{1,31})(?:\.gat)?\s*[,:(（]\s*(\d{1,4})\s*[,， ]\s*(\d{1,4})\s*[)）]?/gi;while((m=re.exec(s))&&out.length<8)out.push({map:m[1],x:Number(m[2]),y:Number(m[3]),source:source,evidence:m[0],provenance:"generic mapXY text candidate",uncertainty:"text candidate only; destination/reachability unverified"});return out;}
+  function upNpcReceived(name,pkt){if(!upAllowed("npc"))return;if(!upSync()){UP.refused++;return;}var text=upText(pkt.msg),id=Number(pkt.NAID)>>>0;if(/验证码|验证算式|登录验证|captcha|verification|challenge/i.test(text)||(typeof capBusy!=="undefined"&&capBusy)){UP.chain=null;UP.challengeNpc=id;UP.gen++;return;}if(UP.challengeNpc===id){if(name==="CLOSE_SCRIPT")UP.challengeNpc=null;return;}if(!id)return;if(!UP.chain||UP.chain.npc!==id)UP.chain={id:upSession+":chain:"+(UP.seq+1),npc:id,lastRequest:null,options:[]};if(name==="MENU_LIST")UP.chain.options=text.split(":").slice(0,40).map(function(s){return upText(s,160);});upRecord("npc","received-"+name,{npc:upNPC(id),text:pkt.msg==null?null:text,options:name==="MENU_LIST"?UP.chain.options.slice():null,loss:{textLength:String(pkt.msg==null?"":pkt.msg).length,textLimit:1200,textClipped:String(pkt.msg==null?"":pkt.msg).length>1200,optionsTotal:name==="MENU_LIST"?String(pkt.msg).split(":").length:null,optionsLimit:40,optionTextLimit:160},targets:name==="SAY_DIALOG"?upTargets(text,"ZC.SAY_DIALOG"):[],evidence:"decoded ZC."+name,relatedRequest:UP.chain.lastRequest,result:"actual server dialogue; not proof of task completion"});if(name==="CLOSE_SCRIPT")UP.chain=null;}
+  function upSent(p){if(!UP.on||!p)return;var cz=CLIENT.PS&&CLIENT.PS.CZ,source=upSources.get(p)||upSource||"unknown";function is(n){return !!(cz&&typeof cz[n]==="function"&&p instanceof cz[n]);}if(is("WHISPER")){if(p.receiver==="NPC:setautoattack"&&p.msg==="0")upRecord("battle","battle-toggle-packet-request",{source:source,intent:"toggle; direction unknown without assistant intent",result:"unconfirmed"});else if(/^NPC:[a-z0-9_]+$/i.test(String(p.receiver))&&!/password|token|captcha|verify/i.test(p.receiver))upRecord("npc","task-command-request",{command:upText(p.receiver,96),source:source,result:"unconfirmed",message:"omitted for privacy"});return;}if(is("NOTIFY_UPDATEINFO")&&Number(p.id)===34)upRecord("battle","battle-toggle-packet-request",{source:source,intent:"toggle; wire value is not desired on/off",result:"unconfirmed"});if(is("REQUEST_MOVE")||is("REQUEST_MOVE2")){var ev=upRecord("battle","movement-request",{destination:upXY(p.dest),source:source,result:"unconfirmed"});if(ev)UP.move={id:ev.id,dest:upXY(p.dest),at:upNow(),generation:UP.gen};}if(is("REQUEST_ACT")||is("REQUEST_ACT2")||is("USE_SKILL")||is("USE_SKILL2")||is("USE_SKILL_TOGROUND")||is("USE_SKILL_TOGROUND2"))upRecord("battle","action-request",{source:source,packet:is("USE_SKILL2")?"CZ.USE_SKILL2":is("USE_SKILL_TOGROUND2")?"CZ.USE_SKILL_TOGROUND2":is("REQUEST_ACT2")?"CZ.REQUEST_ACT2":"CZ.action",action:upNum(p.action),target:upNum(p.targetID!=null?p.targetID:p.targetGID),skill:upNum(p.SKID),selectedLevel:upNum(p.selectedLevel),groundXY:upXY([p.xPos,p.yPos]),result:"unconfirmed"});["CONTACTNPC","CHOOSE_MENU","REQ_NEXT_SCRIPT","CLOSE_DIALOG"].forEach(function(n){if(!is(n)||!upAllowed("npc"))return;if(!upSync()){UP.refused++;return;}var id=Number(p.NAID)>>>0;if(!id||UP.challengeNpc===id||(typeof capBusy!=="undefined"&&capBusy))return;if(n==="CONTACTNPC"||!UP.chain||UP.chain.npc!==id)UP.chain={id:upSession+":chain:"+(UP.seq+1),npc:id,lastRequest:null,options:[]};var num=n==="CHOOSE_MENU"?Number(p.num):null;var ev=upRecord("npc","requested-"+n,{npc:upNPC(id),selectedProtocolIndex:num,selectedOption:num>0?UP.chain.options[num-1]||null:null,source:source,result:"unconfirmed"});if(ev)UP.chain.lastRequest=ev.id;});}
+  function upQuest(name,pkt){if(!upAllowed("npc"))return;var list=pkt.QuestList||(pkt.questID!=null?[pkt]:pkt.hunt||[]),keys=Object.keys(list);upRecord("npc","quest-update",{evidence:"decoded ZC."+name,quests:keys.slice(0,40).map(function(k){return upQuestEntry(list[k],"ZC."+name);}),loss:{total:keys.length,limit:40,clipped:keys.length>40},relatedRequest:UP.chain?UP.chain.lastRequest:null,result:"actual quest update; causal link unverified"});upQuestPending=true;}
+  function upInstall(){if(!UP.on)return;var defs=[["SAY_DIALOG","msg"],["MENU_LIST","msg"],["WAIT_DIALOG","NAID"],["CLOSE_DIALOG","NAID"],["CLOSE_SCRIPT","NAID"],["BROADCAST2","msg"],["COMPASS","color"]];["ALL_QUEST_LIST","ALL_QUEST_MISSION","ALL_QUEST_LIST_V2","ALL_QUEST_LIST_V3","ALL_QUEST_LIST_V4"].forEach(function(n){defs.push([n,"QuestList"]);});["ADD_QUEST","ADD_QUEST2","ADD_QUEST3","UPDATE_MISSION_HUNT","UPDATE_MISSION_HUNT2","UPDATE_MISSION_HUNT3","UPDATE_MISSION_HUNT4"].forEach(function(n){defs.push([n,"hunt"]);});defs.push(["ACTIVE_QUEST","active"],["DEL_QUEST","questID"],["HUNTINGLIST","HuntingList"]);var missing=[];defs.forEach(function(v){var n=v[0],S=npPktStruct(n);if(!S||!Number(S.id)){missing.push(n+":unavailable");return;}if(!upSinks[n])upSinks[n]=function(pkt){if(n==="BROADCAST2"){if(UP.chain&&/任务|委托|quest|mission/i.test(String(pkt.msg))&&Number(pkt.fontColor)===0x00ff00)upRecord("npc","task-green-text",{text:upText(pkt.msg),color:pkt.fontColor,evidence:"ZC.BROADCAST2 green + task keyword + active NPC chain",result:"received text; completion unverified"});}else if(n==="COMPASS")upRecord("npc","compass-target",{NAID:upNum(pkt.NAID),id:upNum(pkt.id),type:upNum(pkt.type),xPos:upNum(pkt.xPos),yPos:upNum(pkt.yPos),color:upNum(pkt.color),source:"ZC.COMPASS.NAID/id/type/xPos/yPos/color",provenance:"declared compass marker; NOT NPC position",result:"received marker; destination unverified"});else if(/QUEST|MISSION/.test(n))upQuest(n,pkt);else if(n==="HUNTINGLIST"){upQuestPending=true;upRecord("npc","quest-update",{evidence:"decoded ZC.HUNTINGLIST",hunts:upSafe(pkt.HuntingList,0),result:"received bounty snapshot; completion unverified"});}else upNpcReceived(n,pkt);};var reason=upTap(S,v[1],upSinks[n]);if(reason)missing.push(n+":"+reason);});try{if(!hookSendPacket())missing.push("outgoing:unavailable");}catch(e){missing.push("outgoing:failed");}UP.hooks=missing.length?"partial hooks: "+missing.join(", "):"all known packet hooks installed";}
+  function upLanding(map,x,y){if(!UP.on)return;UP.gen++;UP.chain=null;UP.challengeNpc=null;UP.move=null;UP.pos=null;UP.posAt=upNow();UP.stallAt=0;upRecord(UP.battle?"battle":"npc","server-map-landing",{map:upText(map,64),xy:[x,y],evidence:"ZC.NPCACK_MAPMOVE",result:"server landing including same-map teleport"});}
+  function upTick(){if(!UP.on)return;upInstall();if(!upSync()){upRender();return;}var wall=Date.now(),now=upNow(),hidden=document.hidden===true,gap=UP.lastTick!=null&&(now-UP.lastTick>5000||now<UP.lastTick||Math.abs((wall-UP.lastWall)-(now-UP.lastTick))>5000),visibility=hidden!==UP.hidden;if(gap||visibility||hidden){UP.pos=null;UP.posAt=now;UP.stallAt=0;UP.move=null;UP.chain=null;if(gap||visibility)upRecord(UP.battle?"battle":"npc","observation-gap",{elapsedMs:UP.lastTick==null?null:now-UP.lastTick,wallElapsedMs:UP.lastWall==null?null:wall-UP.lastWall,hidden:hidden,clockDiscontinuity:gap,result:"blind interval; continuous stationary duration reset"});}UP.lastTick=now;UP.lastWall=wall;UP.hidden=hidden;if(UP.scopeNotice){var notice=UP.scopeNotice;UP.scopeNotice=null;upRecord(UP.battle?"battle":"npc","scope-change",notice);}if(upQuestPending){upQuestPending=false;upSnapshot("after-server-update");}var pos=upXY(CLIENT.SS&&CLIENT.SS.Entity&&CLIENT.SS.Entity.position);if(!pos&&UP.pos){UP.pos=null;UP.posAt=now;UP.stallAt=0;UP.move=null;upRecord(UP.battle?"battle":"npc","observation-gap",{reason:"self position unavailable",result:"blind position interval; stationary reset"});}if(UP.battle&&pos&&!hidden){if(!UP.pos||pos[0]!==UP.pos[0]||pos[1]!==UP.pos[1]){if(UP.pos)upRecord("battle","position-change",{from:UP.pos,to:pos,evidence:"live self Entity.position",relatedRequest:UP.move?UP.move.id:null,result:UP.move&&UP.move.dest&&pos[0]===UP.move.dest[0]&&pos[1]===UP.move.dest[1]?"observed destination reached":"observed position change; causality unverified"});if(UP.move&&UP.move.dest&&pos[0]===UP.move.dest[0]&&pos[1]===UP.move.dest[1])UP.move=null;UP.pos=pos;UP.posAt=now;UP.stallAt=0;}else if(now-UP.posAt>=3000&&(!UP.stallAt||now-UP.stallAt>=10000)){UP.stallAt=now;upRecord("battle","stationary-diagnostic",{xy:pos,stationaryMs:now-UP.posAt,running:!!zRunning,cachedOn:npBattleKnown?!!npHuntOn:null,reportSource:upText(npServerAutoAtk&&npServerAutoAtk.src,80),reportAgeMs:npServerAutoAtk&&npServerAutoAtk.at?wall-npServerAutoAtk.at:null,pending:npAckWait?{want:npAckWait.want,ageMs:wall-npAckWait.at}:null,blockers:{sitting:!!isSitting(),movingRequest:!!(moveXY&&moveXY.busy),pickup:!!pendingPick,escape:!!escapePending(),dialogue:!!UP.chain},action:upText(zMon&&zMon.action,160),attackReason:upText(typeof zAtkWhy==="undefined"?"":zAtkWhy,160),recent:UP.recent.slice(),result:"stationary evidence only; cached ON does not prove healthy battle"});}if(UP.move&&now-UP.move.at>=5000){upRecord("battle","movement-outcome",{request:UP.move.id,xy:pos,destination:UP.move.dest,result:"destination not confirmed in observation window"});UP.move=null;}}if(UP.busy&&wall-UP.busy.at>=15000){UP.busy=null;UP.failures++;UP.error="receiver timeout; queued with duplicate-safe event id";UP.dirty=true;}upPersist();upFlush();upRender();}
+  function upNow(){try{return typeof performance!=="undefined"&&typeof performance.now==="function"?performance.now():Date.now();}catch(e){return Date.now();}}
+  function upNum(v){return v==null||!Number.isFinite(Number(v))?null:Number(v);}
+  function upFreeze(o){if(o&&typeof o==="object"&&!Object.isFrozen(o)){Object.keys(o).forEach(function(k){upFreeze(o[k]);});Object.freeze(o);}return o;}
+  function upIncomplete(reason){UP.on=false;UP.overflow++;UP.incomplete={at:Date.now(),reason:reason,rejectedNextSeq:UP.seq+1};UP.error=reason+"; stopped INCOMPLETE without overwriting evidence";UP.dirty=true;upPersist();upRender();return null;}
+  function upSessions(){var a=JSON.parse(localStorage.getItem(UP_INDEX)||"[]");if(!Array.isArray(a)||a.length>UP_INDEX_MAX||a.some(function(v){return typeof v!=="string"||!/^[a-z0-9-]{1,64}$/i.test(v);}))throw Error("invalid session index");if(typeof localStorage.key==="function"){for(var i=0;i<localStorage.length;i++){var key=localStorage.key(i),id=key&&key.indexOf("dsh_ro_unified_probe_v1:")===0?key.slice("dsh_ro_unified_probe_v1:".length):null;if(id&&/^[a-z0-9-]{1,64}$/i.test(id)&&a.indexOf(id)<0)a.push(id);}}return a;}
+  function upRecoveryMenu(host,out){var select=document.createElement("select"),button=document.createElement("button");button.type="button";button.textContent="查看历史本地会话（不启用/不重分配队列）";function refresh(){select.textContent="";try{upSessions().forEach(function(id){var op=document.createElement("option");op.value=id;op.textContent=id===upSession?"当前本地会话":id;select.appendChild(op);});}catch(e){UP.storageError="local session index unreadable (not saved)";}}button.addEventListener("click",function(){try{var data=localStorage.getItem("dsh_ro_unified_probe_v1:"+select.value);out.style.display="block";out.value=data||"本地会话不存在";}catch(e){UP.storageError="history recovery failed";upRender();}});select.addEventListener("focus",refresh);refresh();host.appendChild(select);host.appendChild(button);}
+  function upAlias(role){try{var a=JSON.parse(localStorage.getItem(UP_ALIAS_KEY)||"{}");if(!a||Array.isArray(a)||typeof a!=="object")throw Error("alias store invalid");if(a[role]&&/^r-[a-f0-9]{32}$/.test(a[role]))return a[role];if(Object.keys(a).length>=64)throw Error("alias capacity");var token="";if(typeof crypto!=="undefined"&&crypto.getRandomValues){var bytes=new Uint8Array(16);crypto.getRandomValues(bytes);bytes.forEach(function(v){token+=("0"+v.toString(16)).slice(-2);});}else{for(var i=0;i<32;i++)token+=Math.floor(Math.random()*16).toString(16);}a[role]="r-"+token;localStorage.setItem(UP_ALIAS_KEY,JSON.stringify(a));return a[role];}catch(e){UP.storageError="opaque alias persistence failed; wire delivery withheld";return null;}}
+  // Static non-sensitive diagnostic codes survive receiver string-value redaction; no text encoding.
+  var upKinds=["movement-request","action-request","position-change","stationary-diagnostic","movement-outcome","server-battle-report","battle-toggle-packet-request","server-map-landing","observation-gap","scope-change","quest-update","quest-snapshot","task-green-text","task-command-request","received-SAY_DIALOG","received-MENU_LIST","received-WAIT_DIALOG","received-CLOSE_DIALOG","received-CLOSE_SCRIPT","requested-CONTACTNPC","requested-CHOOSE_MENU","requested-REQ_NEXT_SCRIPT","requested-CLOSE_DIALOG","compass-target"];
+  function upWire(e){var alias=upAlias(e.role);if(!alias)return null;var d=e.detail||{},source=d.source||d.evidence||"",provenance=/^decoded ZC\.|^ZC\./.test(source)?2:/^assistant:/.test(source)?3:/Quest\.getUI/.test(source)?4:0;return {id:e.id,session:e.session,role:alias,generation:e.generation,epoch:e.epoch,at:e.at,category:e.category,kind:e.kind,categoryCode:e.category==="npc"?2:1,kindCode:upKinds.indexOf(e.kind)+1,provenanceCode:provenance,summaryOnly:true,flags:{received:provenance===2,request:/request/.test(e.kind),unconfirmed:true,localRawOnly:e.category==="npc",clipped:!!(d.loss&&(d.loss.clipped||d.loss.textClipped)),hidden:!!d.hidden,clockDiscontinuity:!!d.clockDiscontinuity},metrics:{stationaryMs:upNum(d.stationaryMs),elapsedMs:upNum(d.elapsedMs),action:upNum(d.action),target:upNum(d.target),skill:upNum(d.skill),selectedLevel:upNum(d.selectedLevel),NAID:upNum(d.NAID),markerId:upNum(d.id),markerType:upNum(d.type),xPos:upNum(d.xPos),yPos:upNum(d.yPos),on:typeof d.on==="boolean"?d.on:null,running:typeof d.running==="boolean"?d.running:null,cachedOn:typeof d.cachedOn==="boolean"?d.cachedOn:null,roleChanged:!!d.roleChanged,mapChanged:!!d.mapChanged,epochChanged:!!d.epochChanged,scopeEnabled:typeof d.enabled==="boolean"?d.enabled:null,blockers:d.blockers?{sitting:!!d.blockers.sitting,movingRequest:!!d.blockers.movingRequest,pickup:!!d.blockers.pickup,escape:!!d.blockers.escape,dialogue:!!d.blockers.dialogue}:null},selfXY:e.state&&e.state.selfXY,destination:upXY(d.destination),groundXY:upXY(d.groundXY),questCount:Array.isArray(d.quests)?d.quests.length:null};}
+  function upSafe(v,depth){if(v==null||typeof v==="boolean")return v==null?null:v;if(typeof v==="number")return Number.isFinite(v)?v:null;if(typeof v==="string")return upText(v,1200);if(depth>=6)return {incomplete:true,reason:"metadata depth limit 6"};var keys=Object.keys(v),out={};keys.slice(0,80).forEach(function(k){if(!/password|token|account|username|secret|captcha|input/i.test(k))out[k]=upSafe(v[k],depth+1);});if(keys.length>80)out.loss={total:keys.length,limit:80,clipped:true};return out;}
+  function upQuestUI(){try{var q=requireDB("UI/Components/Quest/Quest");if(!q&&typeof uiComp==="function")q=uiComp("Quest");return q&&typeof q.getUI==="function"?q.getUI():q&&typeof q.getQuest==="function"?q:null;}catch(e){return null;}}
+  function upQuestEntry(q,source){q=q||{};var id=upNum(q.questID),info=null,meta=null;try{if(id!=null&&CLIENT.DB&&CLIENT.DB.getQuestInfo)info=CLIENT.DB.getQuestInfo(id);if(id!=null&&CLIENT.DB&&CLIENT.DB.getQuestMetadata)meta=CLIENT.DB.getQuestMetadata(id);}catch(e){}var text=info?upText([info.Title,info.Summary,info.Description].join(" ")):upText([q.title,q.summary,q.description].filter(function(v){return v!=null;}).join(" ")),targets=upTargets(text,info?"DB.getQuestInfo("+id+")":source);if(info&&typeof info.NpcNavi==="string"&&/^[a-z][a-z0-9_]{1,31}(?:\.gat)?$/i.test(info.NpcNavi)&&upNum(info.NpcPosX)!=null&&upNum(info.NpcPosY)!=null)targets.push({map:info.NpcNavi,x:upNum(info.NpcPosX),y:upNum(info.NpcPosY),source:"DB.getQuestInfo.NpcNavi/NpcPosX/NpcPosY",uncertainty:"static quest metadata; not observed NPC location"});var hunts=q.hunt_list||q.hunt||(q.mobGID!=null||q.huntID!=null?{0:q}:{}),keys=Object.keys(hunts);return {id:id,active:upNum(q.active),startTime:upNum(q.start_time!=null?q.start_time:q.quest_svrTime),endTime:upNum(q.end_time!=null?q.end_time:q.quest_endTime),count:upNum(q.count),title:q.title!=null?upText(q.title):info?upText(info.Title):null,text:text,targets:targets,hunt:keys.slice(0,80).map(function(k){return {key:k,fields:upSafe(hunts[k],0),mobGID:upNum(hunts[k].mobGID),huntID:upNum(hunts[k].huntID),huntCount:upNum(hunts[k].huntCount),maxCount:upNum(hunts[k].maxCount)};}),currentFields:upSafe(q,0),metadata:{info:upSafe(info,0),routeAndType:upSafe(meta,0),infoSource:info?"DB.getQuestInfo("+id+")":null,routeSource:meta?"DB.getQuestMetadata("+id+")":null,unknownReason:!info?"quest DB metadata unavailable":null},provenance:source,loss:{huntTotal:keys.length,huntLimit:80,targetLimit:8,targetsPossiblyClipped:targets.length>=8,clipped:keys.length>80||targets.length>=8},unknownReason:id==null?"packet variant lacks questID; no invented attribution":null};}
+  function upSnapshot(reason){if(!upAllowed("npc")||!upSync())return;var ui=upQuestUI(),root=ui&&typeof ui.getRoot==="function"?ui.getRoot():null;if(!ui||typeof ui.getQuest!=="function"||!root||typeof root.querySelectorAll!=="function"){UP.questStatus="unsupported: Quest.getUI().getQuest(id)/root ID metadata unavailable";return;}var ids={},quests=[];Array.prototype.forEach.call(root.querySelectorAll('[id^="qid"],[id^="sid"],.quest-item'),function(el){var m=String(el.id||"").match(/^[qs]id(\d+)$/)||String(el.className||"").match(/\bqid(\d+)\b/);if(m)ids[m[1]]=true;});var keys=Object.keys(ids);keys.slice(0,80).forEach(function(k){var q=ui.getQuest(Number(k));if(q)quests.push(upQuestEntry(q,"Quest.getUI().getQuest("+k+"); QuestCommon closure via qid/sid metadata"));});UP.questStatus="partial: exposed qid/sid IDs; hidden closure not enumerable";upRecord("npc","quest-snapshot",{source:"Quest.getUI().getQuest(id)",reason:reason,quests:quests,complete:false,unknownReason:"private sparse _questList cannot be enumerated; UI IDs may omit hidden/unrendered quests",loss:{total:keys.length,limit:80,clipped:keys.length>80},result:"existing controller state after server handler; completion unverified"});}
+  function upTap(S,prop,sink){try{var proto=S&&S.prototype;if(!proto)return "no prototype";var slots=upTaps.get(proto);if(!slots){slots={};upTaps.set(proto,slots);}var current=Object.getOwnPropertyDescriptor(proto,prop),slot=slots[prop];if(slot&&current&&current.set===slot.set){slot.sink=sink;return "";}if(current&&(!current.configurable||("value" in current&&!current.writable)||(!("value" in current)&&!current.set)))return "unsafe descriptor refused";if(!current){var parent=Object.getPrototypeOf(proto);while(parent){if(Object.getOwnPropertyDescriptor(parent,prop))return "inherited descriptor refused";parent=Object.getPrototypeOf(parent);}}var prior=slot,values=new WeakMap(),fallback=current&&current.value,oldSet=current&&current.set,oldGet=current&&current.get;slot={sink:sink};slot.set=function(v){var result;if(oldSet)result=oldSet.call(this,v);else values.set(this,v);try{slot.sink(this);}catch(e){}return result;};Object.defineProperty(proto,prop,{configurable:current?current.configurable:true,enumerable:current?current.enumerable:true,get:current&&!("value" in current)?oldGet:function(){return values.has(this)?values.get(this):fallback;},set:slot.set});if(prior)prior.sink=function(){};slots[prop]=slot;return "";}catch(e){return "tap installation failed";}}
+  // Restore bounded evidence, never enabled state; preserve original role/world attribution.
+  try{var storedUP=JSON.parse(localStorage.getItem(upKey)||"null");if(storedUP&&storedUP.schema===1&&storedUP.session===upSession){function validUP(e){return e&&e.session===upSession&&typeof e.id==="string"&&typeof e.role==="string"&&/^ro1:/.test(e.role)&&typeof e.world==="string"&&(e.category==="battle"||e.category==="npc")&&typeof e.kind==="string"&&JSON.stringify(e).length*2<=UP_ARCHIVE_BYTES;}UP.ring=(storedUP.ring||[]).filter(validUP).slice(-UP_MAX);UP.queue=(storedUP.queue||[]).filter(function(q){return q&&validUP(q.event);}).slice(-UP_MAX).map(function(q){return {event:q.event,attempts:Math.min(UP_RETRIES,Number(q.attempts)||0),nextAt:Number(q.nextAt)||0};});if(!Array.isArray(storedUP.archive||[])||(storedUP.archive||[]).length>UP_ARCHIVE_MAX||(storedUP.archive||[]).some(function(e){return !validUP(e)||e.category!=="npc";}))throw Error("invalid archive; retained in local storage for history export");UP.archive=(storedUP.archive||[]).map(upFreeze);UP.archiveBytes=UP.archive.reduce(function(n,e){return n+JSON.stringify(e).length*2;},0);if(UP.archiveBytes>UP_ARCHIVE_BYTES)throw Error("archive byte bound exceeded; retained for history export");UP.incomplete=storedUP.incomplete||null;UP.seq=Math.max(Number(storedUP.seq)||0,UP.ring.length);UP.saved=true;}}catch(e){UP.saved=false;UP.incomplete={reason:"recovery validation failed; original local record retained for history export before explicit clear"};UP.storageError="local queue/archive unreadable; original local record retained (not saved)";}
+  try{window.addEventListener("pagehide",upPersist);}catch(e){}
+  // UNIFIED-PROBE-END core
 
   // V2.11.0：仓库+背包读取全局变量
   var inventoryReadTimer = null; // 仓库读取定时器
@@ -2616,15 +2671,16 @@ function createRoItemCapture(env) {
       //   + 尾刀线；瞬移间隔控件已上移到「防御瞬移总开关」之前一行
       '<div class="row"><span class="lb">BOSS 出现</span><select id="dsh-z-bossact" style="flex:0 0 130px"><option>瞬移</option><option>优先攻击</option><option>等待残血补尾刀</option><option selected>保持距离逃离</option></select>' +
       '<span class="lb" style="min-width:40px">判定距离</span><input id="dsh-z-bossdist" type="number" value="14" min="5" max="40" style="flex:0 0 44px"><span style="color:#5a6b7f;font-size:11px">格</span>' +
-      '<button class="ghost" id="dsh-z-bossdiag" style="flex:0 0 auto;padding:0 8px;font-size:11px">首领诊断</button><span class="st">用法：点「首领诊断」后把下面文本框里的内容复制出来（只读）</span></div>' +
+      '</div>' +
+      '<div class="row"><button class="ghost" id="dsh-z-bossdiag" style="flex:0 0 auto;padding:0 8px;font-size:11px">首领诊断</button><span class="st">用法：点「首领诊断」后把下面文本框里的内容复制出来（只读）</span></div>' +
       '<div class="row"><textarea id="dsh-z-bossdiagbox" readonly style="width:100%;height:56px;font-size:10px;font-family:monospace"></textarea></div>' +
       // V2.38.20：保持距离上下界——下界默认 10、上界默认 14；上界联动首领判定距离
       //   （实现取 上界/判定距离/寻怪范围-1 的最小值，保证上界 < 寻怪范围；越界钳制并给一次可见提示）
       '<div class="row"><span class="lb">保持距离</span><input id="dsh-z-bosskeepmin" type="number" value="10" min="1" max="40" style="flex:0 0 40px"><span style="color:#5a6b7f">~</span><input id="dsh-z-bosskeepmax" type="number" value="14" min="1" max="40" style="flex:0 0 40px"><span style="color:#5a6b7f">格（上界默认跟随判定距离，且必须小于寻怪范围）</span></div>' +
       // V2.38.21：保持距离采样（默认关 · 仅本机内存）与保持距离自适应（默认关）——采样只管诊断记录，
       //   自适应只用自己的近期观测窗口在 [下界, 上界] 内微调；两者互不依赖，关闭时都不做任何额外动作
+      '<div class="row"><label class="switch"><input id="dsh-z-bosskeepauto" type="checkbox">保持距离自适应</label></div>' +
       '<div class="row"><label class="switch"><input id="dsh-z-bosskeepsmp" type="checkbox">保持距离采样</label>' +
-      '<label class="switch"><input id="dsh-z-bosskeepauto" type="checkbox">保持距离自适应</label>' +
       '<button class="ghost" id="dsh-z-bosskeepsmpcopy" style="flex:0 0 auto;padding:0 8px;font-size:11px">复制采样</button>' +
       '<span class="st" style="font-size:10px">只在本机内存，关掉就一点不记</span></div>' +
       '<div class="row"><textarea id="dsh-z-bosskeepsmpbox" readonly style="width:100%;height:56px;font-size:10px;font-family:monospace"></textarea></div>' +
@@ -2701,8 +2757,13 @@ function createRoItemCapture(env) {
       '<div class="row" style="margin-top:2px"><button class="ghost" id="dsh-skillclear" style="flex:0 0 auto">清空</button>' +
       '<button class="ghost" id="dsh-skillimp" style="flex:0 0 auto">导入已学技能</button></div></div>' +
       '<details style="margin:6px 0"><summary>手动编辑技能顺序/条件（高级用法）</summary>' +
-      '<textarea id="dsh-skillorder" rows="3" placeholder="技能顺序：每行 技能ID:等级:条件:释放%:次数:锁定次数:冷却秒&#10;例：271  :5   :球5,爆气:80 :20 :3:2&#10;   技能ID :等级:条件    :概率:次数:锁定次数:冷却秒&#10;条件=释放前置，须全满足，可空；球源401=该技能补球只用狂蓄气 / 球源261=只用蓄气 / 球源自动=按缺口现算（缺1-2颗用蓄气、缺3颗以上用狂蓄气）；该词不是门槛&#10;例：267:1:球1,球源261:100；271:5:球5,球源401,爆气:80:20:3:2&#10;释放%=0-100（省略=100）&#10;次数=整轮最多放N次（0=不限，重开重置）；锁定次数=每只怪最多放N次（0=不限，换怪重置）&#10;冷却秒=该技能间隔兜底秒数（0/省略=自动跟随服务器2842真实后摇，无数据默认150ms）&#10;等级超已学自动降级、未学自动跳过；只填ID也能用"></textarea>' +
-      '<div class="log" style="margin-top:2px">写法说明：技能ID:等级:条件:释放%:次数:锁定次数:冷却秒。条件=释放前置（如阿修罗需球5,爆气，自动补状态）；释放%=0-100（省略=100）；次数=整轮上限（重开自动战斗即重置）；锁定次数=每只怪上限（换目标/解锁清零重计）；冷却秒=该技能释放间隔兜底（0/省略=自动跟随服务器2842真实后摇[动态]，无数据默认150ms）。技能按各自冷却独立释放，不再按攻击轮次重复出手。点选/拖拽会自动带入释放前置；气弹消耗技能默认补齐球N，手写球数与补球来源保留。例：271:5:球5,爆气:80:20:3:2 = 阿修罗5级，需5球+爆气，80%概率，整轮最多20次，每只怪最多3次，间隔兜底2秒。 条件里还能写补球来源词 球源401（该技能补球只用狂蓄气）/ 球源261（只用蓄气）/ 球源自动（缺 1-2 颗用蓄气、缺 3 颗以上用狂蓄气），优先级高于上面的「补球来源」下拉；不写则跟随全局默认。例：267:1:球1,球源261:100 = 该技能需 1 颗球，且补球只用蓄气。</div>' +
+      '<textarea id="dsh-skillorder" rows="4" placeholder="每行一个技能；只填技能ID也能用&#10;示例：267:1:球1,球源261:100&#10;示例：271:5:球5,爆气:80:20:3:2"></textarea>' +
+      '<div class="log" style="margin-top:6px;line-height:1.6">' +
+      '<div>最省事：在上方点选已学技能，拖动调整顺序；不用手写。</div>' +
+      '<div style="margin-top:5px">想手写：每行一个，依次填「技能ID:等级:条件:概率:本轮次数:每只怪次数:间隔秒」。后面不需要的可以省略。</div>' +
+      '<div style="margin-top:5px">示例：267:1:球1,球源261:100 —— 用1级弹指，至少要1颗气弹；需要补球时只用蓄气。</div>' +
+      '<div style="margin-top:5px">条件用逗号隔开，须同时满足；球源261=用蓄气，球源401=用狂蓄气，球源自动=按缺球数量选择。示例：271:5:球5,球源401,爆气:80:20:3:2。</div>' +
+      '<div style="margin-top:5px">概率填0到100；次数填0表示不限，本轮次数重新开战后重置、每只怪次数换目标后重置。间隔秒仅在无法读到游戏技能间隔时备用；不填或填0交给助手自动判断。未学的技能会跳过，等级超过已学等级会自动调低。</div></div>' +
       '</details>' +
       '<div class="sec">辅助技能（选技能自动加判定条件 · 按间隔施放）</div>' +
       '<div class="row"><span class="lb">技能</span><select id="dsh-askskill" style="flex:0 0 auto;max-width:130px"><option value="">选择技能…</option></select>' +
@@ -2797,7 +2858,9 @@ function createRoItemCapture(env) {
       '<div class="row"><label class="switch"><input id="dsh-z-deathguard" type="checkbox" checked>连续死亡自动下线（5 分钟死 3 次，默认开）</label></div>' +
       '<div class="log">在目标图开着自动战斗时若角色死亡：助手自动点「重新开始」回城复活（点不动会重试，最多 4 次，仍失败就等你手点），坐下回满血后传回目标地图。回图后按上面的开关继续：勾选=自动开助手挂机；不勾=按死亡前的方式恢复（助手/内挂）。状态不确定或超时即停。<br>连续死亡自动下线：5 分钟内死亡 3 次（只统计助手或内挂在跑时）就停掉助手/内挂，并按正确下线方式自动下线——地图内 ESC →「选择角色」→ 角色选择界面右下角「取消」→ 确认结束游戏；某一步走不完会提示你手动下线。</div>' +
       '<div class="sec">背包快照定期上报（V2.15.27）</div>' +
-      '<div class="row"><label class="switch"><input id="dsh-invshot" type="checkbox" checked>开启定期上报</label>' +
+  // UNIFIED-PROBE-BEGIN fix-invshot-html ORIGINAL:ICAgICAgJzxkaXYgY2xhc3M9InJvdyI+PGxhYmVsIGNsYXNzPSJzd2l0Y2giPjxpbnB1dCBpZD0iZHNoLWludnNob3QiIHR5cGU9ImNoZWNrYm94IiBjaGVja2VkPuW8gOWQr+Wumuacn+S4iuaKpTwvbGFiZWw+JyAr
+      '<div class="row"><label class="switch"><input id="dsh-invshot" type="checkbox">开启定期上报（默认关 · 需底部探针总开关）</label>' +
+  // UNIFIED-PROBE-END fix-invshot-html
       '<span class="lb" style="margin-left:8px">间隔</span><input id="dsh-invshotint" type="number" value="120" style="flex:0 0 44px"><span style="color:#5a6b7f">秒</span></div>' +
       '<div class="row"><span class="st" id="dsh-invshotlog" style="font-size:10px"></span></div>' +
       '<div class="sec">辅助对象 · 自动跟随玩家</div>' +
@@ -2969,7 +3032,8 @@ function createRoItemCapture(env) {
       '<div style="position:relative;flex:1 1 150px;min-width:120px"><input id="dsh-map" placeholder="输入地图名/拼音（读地图后联想）" autocomplete="off" style="width:100%;box-sizing:border-box;padding:3px 22px 3px 6px">' +
       '<span id="dsh-maptog" title="展开/收起联想" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);cursor:pointer;color:#5a6b7f;font-size:11px;user-select:none">▾</span>' +
       '<div id="dsh-maplist" style="display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;z-index:99;background:#fff;border:1px solid #b8c6d4;border-radius:4px;max-height:180px;overflow:auto;box-shadow:0 3px 8px rgba(0,0,0,.18)"></div></div></div>' +
-      '<div class="row" style="margin-top:8px;gap:7px"><button class="ghost" id="dsh-mapload" style="flex:0 0 auto">读地图</button><button id="dsh-tp-map" style="flex:0 0 auto">传送</button><button class="ghost" id="dsh-tp-walk" style="flex:0 0 auto">走去</button><button class="ghost" id="dsh-geardiag" title="读不到装备栏时点这里，把结果发我" style="flex:0 0 auto">装备诊断</button><span class="st" id="dsh-tpmsg2" style="font-size:11px"></span></div>' +
+      '<div class="row" style="margin-top:8px;gap:7px"><button class="ghost" id="dsh-mapload" style="flex:0 0 auto">读地图</button><button id="dsh-tp-map" style="flex:0 0 auto">传送</button><button class="ghost" id="dsh-tp-walk" style="flex:0 0 auto">走去</button><span class="st" id="dsh-tpmsg2" style="font-size:11px"></span></div>' +
+      '<div class="row"><button class="ghost" id="dsh-geardiag" title="手动补采装备诊断；异常自动留证无需点击" style="flex:0 0 auto">装备诊断</button><span class="st">手动补采；异常自动留证无需点击</span></div>' +
       '<div id="dsh-geardiagbox" style="display:none;margin-top:6px"><textarea id="dsh-geardiagout" readonly rows="5" style="width:100%;box-sizing:border-box;font-size:10px;line-height:1.35"></textarea></div>' +
       '<div class="st" id="dsh-route" style="font-size:11px;margin-top:6px">路线：-</div>' +
       '<div class="sec">指定坐标（同图走路 / 跨图助手直发）</div>' +
@@ -3037,9 +3101,7 @@ function createRoItemCapture(env) {
       '<div class="row"><span class="lb">状态</span><span id="dsh-status" class="warn">等待启动…</span></div>' +
       '<div class="row"><span class="lb">大小</span><span class="st">右下角 ↘ 拖动手柄可拉伸</span></div>' +
       '<div class="row"><span class="lb">快捷键</span><span class="st">在「功能菜单」里逐个功能设置（点悬浮球打开菜单，每行右侧的键位按钮）</span></div>' +
-      '<div class="sec">键位检测</div>' +
       '<div class="row"><span class="st" id="dsh-hkprobe" style="font-size:11px;word-break:break-all">最近按键：还没有收到按键（把浏览器标签页点到最前面再按）</span></div>' +
-      '<div class="log">按任意键会显示在这里：键码 / 按键 / 修饰键 / 是否命中功能。用来判断快捷键问题是「收不到按键」还是「判定错了」。命中但功能没反应，说明该功能的总开关被关掉了。</div>' +
       '<div class="log">V2.18.0：快捷键改为在「功能菜单」里按功能设置 —— 左键点键位按钮 → 按下组合键（支持 Ctrl/Alt/Shift/Win + 键，功能键 F1~F12 也可）；Esc 取消；右键键位按钮清除；20 秒不按自动取消。所有快捷键都是单键切换（按一次开、再按一次关）。同一组合不可重复绑定；功能总开关关掉后该功能的快捷键也不响应；输入框内打字时不触发。注意：浏览器标签页必须在最前面才收得到按键。</div>' +
       '<div class="sec">登录验证自动过</div>' +
       '<div class="row"><label class="switch"><input id="dsh-capauto" type="checkbox" checked>自动过验证</label><span class="st" id="dsh-capstate" style="font-size:10px;margin-left:auto">待命</span></div>' +
@@ -3689,7 +3751,10 @@ function createRoItemCapture(env) {
       // V2.17.1：透明度滑块统一（旧版只改背景色 alpha，效果很弱；现在调整个窗口）
       var opBox = roAlphaSlider(win, "fw-" + id);
       var x = document.createElement("button");
+  // UNIFIED-PROBE-BEGIN newui-close-class ORIGINAL:ICAgICAgeC50ZXh0Q29udGVudCA9ICIiOyAgLy8gUk8g5Y6f55Sf5YWz6Zet55CD77yI5L2N5Zu+77yJ77yM5LiN55SoIMOXIOWtl+espg==
       x.textContent = "";  // RO 原生关闭球（位图），不用 × 字符
+      x.className = "ro-fw-close";
+  // UNIFIED-PROBE-END newui-close-class
       x.title = "收回浮窗（回到设置抽屉原位）";
       x.style.cssText = "flex:0 0 auto;width:11px;height:11px;min-width:11px;padding:0;border:0;border-radius:50%;" +
         "background:var(--dsh-close) no-repeat;background-size:11px 11px;cursor:pointer;font-size:0;line-height:0;color:transparent;";
@@ -3732,6 +3797,7 @@ function createRoItemCapture(env) {
         ax: Math.max(0, Math.round((roVw() - gw * roScale()) / 2) + 60),
         ay: Math.max(0, Math.round(roVh() * 0.12))
       });
+      roExpDecorate(id, win);
       return win;
     } catch (e) {
       var bad = fwState[id] && fwState[id].win;
@@ -3753,6 +3819,7 @@ function createRoItemCapture(env) {
       if (!st) return fwError(id, "登记", new Error("模块未登记"), quiet);
       if (fwActualOpen(id)) { fwSyncState(id); return true; }
       if (!st.host || !st.host.isConnected) return fwError(id, "打开", new Error("内容节点未就绪"), quiet);
+      roExpCloseOthers(id);
       if (fwSingleOn()) fwCloseOthers(id);   // V2.38.52：单窗模式
       var win = fwMakeWin(id, st.title);
       if (!win || !st.body) return fwError(id, "创建", new Error("窗口容器未创建"), quiet);
@@ -3765,8 +3832,13 @@ function createRoItemCapture(env) {
       if (!fwSyncState(id)) return fwError(id, "校验", new Error("内容未进入窗口"), quiet);
       fwPersist();
       try { roBringFront(win); } catch (e0) {}
+  // UNIFIED-PROBE-BEGIN probe-fwopen-hooks ORIGINAL:ICAgICAgdHJ5IHsgbG9jYWxTdG9yYWdlLnNldEl0ZW0oImRzaF9yb19md3BvcyIsIEpTT04uc3RyaW5naWZ5KChmdW5jdGlvbiAoKSB7IHZhciBtID0ge307IGZvciAodmFyIGsgaW4gZndTdGF0ZSkgeyB2YXIgdyA9IGZ3U3RhdGVba10ud2luOyBpZiAodykgbVtrXSA9IHsgbDogdy5vZmZzZXRMZWZ0LCB0OiB3Lm9mZnNldFRvcCB9OyB9IHJldHVybiBtOyB9KSgpKSk7IH0gY2F0Y2ggKGUxKSB7fQogICAgICByZXR1cm4gdHJ1ZTs=
       try { localStorage.setItem("dsh_ro_fwpos", JSON.stringify((function () { var m = {}; for (var k in fwState) { var w = fwState[k].win; if (w) m[k] = { l: w.offsetLeft, t: w.offsetTop }; } return m; })())); } catch (e1) {}
+      // 浮窗打开后：板面该行立即收起（互斥四项），并把搬迁失败项各重试一次。
+      try { roExpMonSync(); } catch (eMS) {}
+      try { roProbeRetryAll(); } catch (ePR) {}
       return true;
+  // UNIFIED-PROBE-END probe-fwopen-hooks
     } catch (e) { fwOpenIds[id] = false; return fwError(id, "打开", e, quiet); }
   }
   function fwClose(id) {
@@ -3788,7 +3860,12 @@ function createRoItemCapture(env) {
     try { if (fwActualOpen(id)) return fwClose(id); return fwOpen(id, false); }
     catch (e) { return fwError(id, "切换", e, false); }
   }
+  // UNIFIED-PROBE-BEGIN probe-fwclose-hook ORIGINAL:ICBmdW5jdGlvbiBmd0Nsb3NlQWxsKCkgeyBmb3IgKHZhciBpZCBpbiBmd1N0YXRlKSBpZiAoZndBY3R1YWxPcGVuKGlkKSkgZndDbG9zZShpZCk7IH0=
+  // 关闭浮窗的每条路径（标题栏 ×、全部收回、单窗互斥）都走 fwClose：包一层，关闭后立即同步板面行状态。
+  var fwCloseHook0 = fwClose;
+  fwClose = function (id) { var r = fwCloseHook0.apply(null, arguments); try { roExpMonSync(); } catch (eMC) {} return r; };
   function fwCloseAll() { for (var id in fwState) if (fwActualOpen(id)) fwClose(id); }
+  // UNIFIED-PROBE-END probe-fwclose-hook
   // V2.23.0：浮窗开启状态持久化 —— 挂机时重开客户端后「当前目标/队伍血条」等浮窗自动回来
   var fwRestored = false;
   function fwPersist() {
@@ -4745,7 +4822,10 @@ function createRoItemCapture(env) {
     } catch (e) { push("探针内部异常：" + (e && e.message ? e.message : e)); }
     return L.join("\n");
   }
+  // UNIFIED-PROBE-BEGIN gate-losProbeFill ORIGINAL:ICBmdW5jdGlvbiBsb3NQcm9iZUZpbGwoKSB7
   function losProbeFill() {
+    if(!upAllowed("battle"))return;
+  // UNIFIED-PROBE-END gate-losProbeFill
     try {
       var txt = losProbeRun();
       var out = null; try { out = $id("dsh-losprobe-out"); } catch (e0) {}
@@ -4861,7 +4941,9 @@ function createRoItemCapture(env) {
     { id: "np",    name: "内挂自动战斗",    kind: "act", noToggle: true, sec: "常用" },
     { id: "zhu",   name: "助手自动战斗",    kind: "act", noToggle: true, sec: "常用" },
     { id: "scr",   name: "脚本执行",        kind: "fw", sec: "常用" },
-    { id: "ro-infinite-dojo", name: "脚本入口（独立版）", kind: "fw", noSwitch: true, openOnly: true, sec: "常用" },
+  // UNIFIED-PROBE-BEGIN mod-table-drop ORIGINAL:ICAgIHsgaWQ6ICJyby1pbmZpbml0ZS1kb2pvIiwgbmFtZTogIuiEmuacrOWFpeWPo++8iOeLrOeri+eJiO+8iSIsIGtpbmQ6ICJmdyIsIG5vU3dpdGNoOiB0cnVlLCBvcGVuT25seTogdHJ1ZSwgc2VjOiAi5bi455SoIiB9LA==
+    { id: "ro-infinite-dojo", name: "无限挑战（独立脚本）", kind: "fw", noSwitch: true, openOnly: true, sec: "常用" },
+  // UNIFIED-PROBE-END mod-table-drop
     { id: "arrowrules", name: "换箭设置", kind: "fw", sec: "战斗功能" },
     { id: "mlock", name: "攻击名单",        kind: "fw", sec: "战斗功能" },
     { id: "zhu2",  name: "战斗设置",        kind: "fw", sec: "战斗功能" },
@@ -4883,7 +4965,6 @@ function createRoItemCapture(env) {
     { id: "tgt",   name: "目标状态",        kind: "fw", sec: "提示" },
     { id: "znear", name: "附近怪物实时列表", kind: "fw", sec: "提示" },
     { id: "perf",  name: "画面性能",        kind: "fw", sec: "其他" },    { id: "memclean", name: "内存清理", kind: "fw", sec: "其他" }, // V2.38.42 定期清理客户端内存
-    { id: "txcap", name: "数据抓包",        kind: "fw", sec: "其他" },
     { id: "mvp",   name: "MVP 计时",        kind: "custom", sec: "其他" },
     { id: "profins", name: "档体检 · 老档归并", kind: "fw", sec: "其他" }, // V2.38.46（任务E）
     { id: "panel", name: "高级设置",        kind: "page", sec: "其他" }
@@ -4919,11 +5000,14 @@ function createRoItemCapture(env) {
     return fwSyncState(id);
   }
   function roModOpen(id) {
+    roExpCloseOthers(id);
+  // UNIFIED-PROBE-BEGIN mod-open-drop ORIGINAL:ICAgIGlmIChpZCA9PT0gInJvLWluZmluaXRlLWRvam8iKSB7CiAgICAgIHZhciBvcCA9IGFwaU9wZW5XaW5kb3coaWQpOwogICAgICBpZiAoIW9wLm9rKSBzZXRTdGF0dXMob3AuZXJyb3IgPT09ICJ1bmtub3duLXdpbmRvdyIgPyAi6ISa5pys5YWl5Y+j77ya54us56uL6ISa5pys5pyq5a6J6KOF5oiW5pyq5bCx57uq77yM6K+35ZCv55So54us56uL6ISa5pys5ZCO5YaN5omT5byA77yI5LiN5Lya6Ieq5Yqo6L+Q6KGM77yJIiA6ICLohJrmnKzlhaXlj6PvvJrorr7nva7mta7nqpfmmoLml7bmiZPkuI3lvIDvvIzor7fnqI3lkI7ph43or5XvvIjkuI3kvJroh6rliqjov5DooYzvvIkiLCAid2FybiIpOwogICAgICByZXR1cm47CiAgICB9
     if (id === "ro-infinite-dojo") {
       var op = apiOpenWindow(id);
       if (!op.ok) setStatus(op.error === "unknown-window" ? "脚本入口：独立脚本未安装或未就绪，请启用独立脚本后再打开（不会自动运行）" : "脚本入口：设置浮窗暂时打不开，请稍后重试（不会自动运行）", "warn");
       return;
     }
+  // UNIFIED-PROBE-END mod-open-drop
     /* V2.38.52：按用户要求删除「加入丢弃名单快捷操作」弹窗；提示改为自动丢弃浮窗内一行小字 */
     var pg = roModPage(id);
     if (pg) {
@@ -4960,9 +5044,78 @@ function createRoItemCapture(env) {
   }
   // V2.24.1：恢复 2.24.0 误删的总调度。菜单每行的「打开」按钮与快捷键 hkAction 都调用它，
   //   缺了它两者全部 ReferenceError → 表现为「所有打开都没反应、所有快捷键全失效」。
-  function roModToggle(id) { if (id === "ro-infinite-dojo") return roModOpen(id); if (roModIsOpen(id)) roModClose(id); else roModOpen(id); }
+  // UNIFIED-PROBE-BEGIN mod-toggle-sync ORIGINAL:ICBmdW5jdGlvbiByb01vZFRvZ2dsZShpZCkgeyBpZiAoaWQgPT09ICJyby1pbmZpbml0ZS1kb2pvIikgcmV0dXJuIHJvTW9kT3BlbihpZCk7IGlmIChyb01vZElzT3BlbihpZCkpIHJvTW9kQ2xvc2UoaWQpOyBlbHNlIHJvTW9kT3BlbihpZCk7IH0=
+    // 悬浮层（tgt/ztip）不走 fwOpen/fwClose：给「打开/关闭」各补一次板面行状态即时同步。幂等，不新增计时器。
+    var roModOpen0 = roModOpen, roModClose0 = roModClose;
+    roModOpen = function (id) { var r = roModOpen0.apply(null, arguments); try { roExpMonSync(); } catch (eMO) {} return r; };
+    roModClose = function (id) { var r = roModClose0.apply(null, arguments); try { roExpMonSync(); } catch (eMC) {} return r; };
+    function roModToggle(id) { if (id === "ro-infinite-dojo") return roModOpen(id); if (roModIsOpen(id)) roModClose(id); else roModOpen(id); }
+  // UNIFIED-PROBE-END mod-toggle-sync
 
   var roMenuEl = null;
+  // Experimental UI only: move existing bound probe nodes, never clone controls or their event handlers.
+  // UNIFIED-PROBE-BEGIN probe-move-retry ORIGINAL:ICB2YXIgcm9Qcm9iZU1vdmVkID0gW107CiAgZnVuY3Rpb24gcm9Qcm9iZVJlc3RvcmUoKSB7CiAgICBmb3IgKHZhciBpID0gMDsgaSA8IHJvUHJvYmVNb3ZlZC5sZW5ndGg7IGkrKykgewogICAgICB2YXIgcGFpciA9IHJvUHJvYmVNb3ZlZFtpXTsKICAgICAgaWYgKHBhaXIuYW5jaG9yLnBhcmVudE5vZGUpIHsgcGFpci5hbmNob3IucGFyZW50Tm9kZS5pbnNlcnRCZWZvcmUocGFpci5ub2RlLCBwYWlyLmFuY2hvcik7IHBhaXIuYW5jaG9yLnBhcmVudE5vZGUucmVtb3ZlQ2hpbGQocGFpci5hbmNob3IpOyB9CiAgICB9CiAgICByb1Byb2JlTW92ZWQgPSBbXTsKICB9CiAgZnVuY3Rpb24gcm9Qcm9iZU1vdmUoaG9zdCwgaWQsIHBhcnQpIHsKICAgIHZhciBlbCA9IGRvY3VtZW50LmdldEVsZW1lbnRCeUlkKGlkKTsKICAgIGlmICghZWwpIHJldHVybiBmYWxzZTsKICAgIHZhciBub2RlID0gcGFydCA9PT0gInNlbGYiID8gZWwgOiAoZWwuY2xvc2VzdCA/IGVsLmNsb3Nlc3QocGFydCB8fCAiLnJvdyIpIDogbnVsbCk7CiAgICBpZiAoIW5vZGUgfHwgIW5vZGUucGFyZW50Tm9kZSkgcmV0dXJuIGZhbHNlOwogICAgdmFyIGFuY2hvciA9IGRvY3VtZW50LmNyZWF0ZUNvbW1lbnQoInByb2JlLW9yaWdpbmFsOiIgKyBpZCk7CiAgICBub2RlLnBhcmVudE5vZGUuaW5zZXJ0QmVmb3JlKGFuY2hvciwgbm9kZSk7CiAgICBob3N0LmFwcGVuZENoaWxkKG5vZGUpOyByb1Byb2JlTW92ZWQucHVzaCh7IG5vZGU6IG5vZGUsIGFuY2hvcjogYW5jaG9yIH0pOwogICAgcmV0dXJuIHRydWU7CiAgfQ==
+  var roProbeMoved = [];
+  // 搬迁名单是唯一真源：名单里每一项都必须落在探针中心（#dsh-probe-hub）内。
+  // 判重用现有注释锚点 probe-original:<id>：锚点还在 = 已经搬过，不重复搬。
+  var RO_PROBE_MOVE_LIST = [{ id: "dsh-invshot", part: ".row" }, { id: "dsh-z-bossdiag", part: ".row" }, { id: "dsh-z-bossdiagbox", part: ".row" }, { id: "dsh-z-bosskeepsmp", part: ".row" }, { id: "dsh-z-bosskeepsmpbox", part: ".row" }, { id: "dsh-z-diag", part: ".row" }, { id: "dsh-z-diagbox", part: ".row" }, { id: "dsh-bt-diag", part: "details" }, { id: "dsh-fw-btn-losprobe", part: ".row" }, { id: "dsh-geardiag", part: ".row" }, { id: "dsh-geardiagbox", part: "self" }, { id: "dsh-hkprobe", part: ".row" }];
+  // 搬迁失败不得静默：失败目标留在内存待办里，等菜单打开 / 浮窗打开时各重试一次。
+  var roProbePending = [];
+  function roProbeRestore() {
+    for (var i = 0; i < roProbeMoved.length; i++) {
+      var pair = roProbeMoved[i];
+      if (pair.anchor.parentNode) { pair.anchor.parentNode.insertBefore(pair.node, pair.anchor); pair.anchor.parentNode.removeChild(pair.anchor); }
+    }
+    roProbeMoved = [];
+  }
+  function roProbeAnchored(id) {
+    for (var i = 0; i < roProbeMoved.length; i++) { var m = roProbeMoved[i]; if (m.id === id && m.anchor && m.anchor.parentNode) return true; }
+    return false;
+  }
+  function roProbeFail(host, id, part, why) {
+    for (var i = 0; i < roProbePending.length; i++) {
+      if (roProbePending[i].id === id) { roProbePending[i].why = why; roProbePending[i].tries++; return roProbePending[i]; }
+    }
+    var rec = { host: host, id: id, part: part, why: why, tries: 1 };
+    roProbePending.push(rec);
+    return rec;
+  }
+  function roProbeMove(host, id, part) {
+    var el = document.getElementById(id);
+    if (!el) { roProbeFail(host, id, part, "row-missing"); return false; }
+    var node = part === "self" ? el : (el.closest ? el.closest(part || ".row") : null);
+    if (!node || !node.parentNode) { roProbeFail(host, id, part, "container-missing"); return false; }
+    if (node.parentNode === host) return true;
+    if (roProbeAnchored(id)) return true;
+    var anchor = document.createComment("probe-original:" + id);
+    node.parentNode.insertBefore(anchor, node);
+    host.appendChild(node); roProbeMoved.push({ node: node, anchor: anchor, id: id });
+    for (var k = roProbePending.length - 1; k >= 0; k--) { if (roProbePending[k].id === id) roProbePending.splice(k, 1); }
+    return true;
+  }
+  function roProbeApply(host, list) {
+    list = list || RO_PROBE_MOVE_LIST;
+    var out = {};
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i] || {};
+      try { out[it.id] = roProbeMove(host, it.id, it.part) === true; } catch (eA) { out[it.id] = false; }
+    }
+    return out;
+  }
+  function roProbeRetryAll() {
+    // 每次机会只跑一轮；已搬过的项在 roProbeMove 里直接返回 true 并从待办摘掉 —— 幂等。
+    if (!roProbePending || !roProbePending.length) return;
+    var list = roProbePending.slice();
+    for (var i = 0; i < list.length; i++) { try { roProbeMove(list[i].host, list[i].id, list[i].part); } catch (eR) {} }
+  }
+  // UNIFIED-PROBE-END probe-move-retry
+  function roProbePark(id) {
+    // 只在首次迁移：浮窗打开后 host 归 fwState 管理，重绘菜单不得再触碰它。
+    if (document.getElementById("dsh-probe-parking")) return;
+    var host = document.getElementById(id); if (!host || !host.parentNode) return;
+    var parking = document.createElement("div"); parking.id = "dsh-probe-parking"; parking.style.display = "none";
+    document.body.appendChild(parking); parking.appendChild(host);
+  }
   function roMenuBuild() {
     if (roMenuEl && roMenuEl.parentNode) return roMenuEl;
     try {
@@ -5006,12 +5159,14 @@ function createRoItemCapture(env) {
       return el;
     } catch (e) { return null; }
   }
+  // UNIFIED-PROBE-BEGIN menu-open-retry ORIGINAL:ICBmdW5jdGlvbiByb01lbnVUb2dnbGUoKSB7CiAgICB2YXIgZWwgPSByb01lbnVCdWlsZCgpOwogICAgaWYgKCFlbCkgcmV0dXJuOwogICAgaWYgKGVsLnN0eWxlLmRpc3BsYXkgPT09ICJub25lIikgeyByb0V4cENsb3NlT3RoZXJzKCJtZW51Iik7IGVsLnN0eWxlLmRpc3BsYXkgPSAiZmxleCI7IHJvTWVudVJlbmRlcigpOyByb0V4cENsYW1wKGVsKTsgfQogICAgZWxzZSB7IGVsLnN0eWxlLmRpc3BsYXkgPSAibm9uZSI7IH0KICB9
   function roMenuToggle() {
     var el = roMenuBuild();
     if (!el) return;
-    if (el.style.display === "none") { el.style.display = "flex"; roMenuRender(); }
+    if (el.style.display === "none") { roExpCloseOthers("menu"); el.style.display = "flex"; roMenuRender(); roExpClamp(el); try { roProbeRetryAll(); } catch (ePR) {} }
     else { el.style.display = "none"; }
   }
+  // UNIFIED-PROBE-END menu-open-retry
   function roMenuRow(parent, labelText, ctrl) {
     var row = document.createElement("div"); row.className = "ro-row";
     var nm = document.createElement("span"); nm.className = "nm"; nm.textContent = labelText;
@@ -5022,6 +5177,7 @@ function createRoItemCapture(env) {
   function roMenuRender() {
     var body = document.getElementById("dsh-menu-body");
     if (!body) return;
+    roProbeRestore(); // Menu rerenders must return controls before clearing old content.
     body.textContent = "";
     // V2.19.0：原说明行（勾选=启用 · 点键位=设快捷键 · 右键键位=清除）删除，改为「重启客户端」按钮。
     //   设置本来就是改一下自动存（按角色），不需要「保存设置」按钮。
@@ -5044,9 +5200,10 @@ function createRoItemCapture(env) {
     var fwBtn = document.createElement("button"); fwBtn.type = "button"; fwBtn.textContent = "全部收回";
     fwBtn.title = "收回所有已打开的浮窗（回到设置抽屉原位）";
     fwBtn.style.cssText = "flex:0 0 auto;height:20px;font-size:11px;";
-    fwBtn.addEventListener("click", function () { try { fwCloseAll(); } catch (e0) {} });
+    fwBtn.addEventListener("click", function () { roExpCloseAll(); });
     fwRow.appendChild(fwBtn);
     body.appendChild(fwRow);
+    if (roExpCfg) { var newBtn = document.createElement("button"); newBtn.type = "button"; newBtn.textContent = "新UI设置 / 恢复旧入口"; newBtn.addEventListener("click", roExpOpenSettings); roMenuRow(body, "本地新UI实验版", newBtn); }
     var lastSec = null;
     for (var i = 0; i < RO_MODULES.length; i++) {
       (function (m) {
@@ -5170,7 +5327,296 @@ function createRoItemCapture(env) {
     updateBtn.addEventListener("click", function () { lastroManifestCheck(); });
     roMenuRow(body, "助手更新（只检查，不自动安装）", updateBtn);
     var captureState=document.createElement("div");captureState.className="ro-info";captureState.id="dsh-item-evidence-state";captureState.textContent="物品采集：仅发送本机，收到写盘确认才算成功";body.appendChild(captureState);
+    // Test UI: optional probes live at the absolute bottom of the floating-ball feature menu.
+    var probeHub = document.createElement("details"); probeHub.id = "dsh-probe-hub";
+    probeHub.style.cssText = "margin-top:9px;border-top:1px solid #8e8e8e;padding-top:5px";
+    var probeTitle = document.createElement("summary"); probeTitle.textContent = "探针功能（默认关闭 · 点击展开）"; probeHub.appendChild(probeTitle);
+    var probeBody = document.createElement("div"); probeHub.appendChild(probeBody); body.appendChild(probeHub);
+  // UNIFIED-PROBE-BEGIN footer ORIGINAL:ICAgIHZhciBhdXRvSW5mbyA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoImRpdiIpOyBhdXRvSW5mby5jbGFzc05hbWUgPSAicm8taW5mbyI7CiAgICBhdXRvSW5mby50ZXh0Q29udGVudCA9ICLmiJjmlpfnirbmgIHmnKrnn6XjgIHlm57miaflvILluLjmiJblgZzkvY/ku43kuI3otbDml7boh6rliqjmiormnInpmZDlv6vnhaflhpnliLDmnKzmnLrvvJvml6DpnIDngrnlh7vjgILku6XkuIvmiYvliqjmjqLpkojpu5jorqTlhbPpl63vvIzkuI3lvbHlk43kv53lkb3kuI7lhaXlnLrkv53miqTjgIIiOwogICAgcHJvYmVCb2R5LmFwcGVuZENoaWxkKGF1dG9JbmZvKTsKICAgIHZhciBhdXRvR2VhciA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoImlucHV0Iik7IGF1dG9HZWFyLmlkID0gImRzaC1wcm9iZS1hdXRvLWdlYXIiOyBhdXRvR2Vhci50eXBlID0gImNoZWNrYm94IjsKICAgIGF1dG9HZWFyLmNoZWNrZWQgPSAhIWRpYWdBdXRvUHJvYmVPbjsKICAgIGF1dG9HZWFyLmFkZEV2ZW50TGlzdGVuZXIoImNoYW5nZSIsIGZ1bmN0aW9uICgpIHsgZGlhZ0F1dG9Qcm9iZU9uID0gYXV0b0dlYXIuY2hlY2tlZCA9PT0gdHJ1ZTsgaWYgKCFkaWFnQXV0b1Byb2JlT24pIGRpYWdMYXN0S2V5ID0gIiI7IH0pOwogICAgcm9NZW51Um93KHByb2JlQm9keSwgIuiHquWKqOijheWkh+W3oeajgO+8iOmcgOaJi+WKqOW8gOWQr++8iSIsIGF1dG9HZWFyKTsKICAgIHJvUHJvYmVNb3ZlKHByb2JlQm9keSwgImRzaC16LWJvc3NkaWFnIiwgIi5yb3ciKTsKICAgIHJvUHJvYmVNb3ZlKHByb2JlQm9keSwgImRzaC16LWJvc3NkaWFnYm94IiwgIi5yb3ciKTsKICAgIHJvUHJvYmVNb3ZlKHByb2JlQm9keSwgImRzaC16LWJvc3NrZWVwc21wIiwgIi5yb3ciKTsKICAgIHJvUHJvYmVNb3ZlKHByb2JlQm9keSwgImRzaC16LWJvc3NrZWVwc21wYm94IiwgIi5yb3ciKTsKICAgIHJvUHJvYmVNb3ZlKHByb2JlQm9keSwgImRzaC16LWRpYWciLCAiLnJvdyIpOwogICAgcm9Qcm9iZU1vdmUocHJvYmVCb2R5LCAiZHNoLXotZGlhZ2JveCIsICIucm93Iik7CiAgICByb1Byb2JlTW92ZShwcm9iZUJvZHksICJkc2gtYnQtZGlhZyIsICJkZXRhaWxzIik7CiAgICByb1Byb2JlTW92ZShwcm9iZUJvZHksICJkc2gtZnctYnRuLWxvc3Byb2JlIiwgIi5yb3ciKTsKICAgIHZhciBsb3NCdG4gPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgiZHNoLWZ3LWJ0bi1sb3Nwcm9iZSIpOwogICAgaWYgKGxvc0J0biAmJiAhbG9zQnRuLl9fZHNoUHJvYmVEaXJlY3RCb3VuZCkgewogICAgICBsb3NCdG4uX19kc2hQcm9iZURpcmVjdEJvdW5kID0gdHJ1ZTsKICAgICAgbG9zQnRuLmFkZEV2ZW50TGlzdGVuZXIoImNsaWNrIiwgZnVuY3Rpb24gKGV2KSB7IGV2LnN0b3BQcm9wYWdhdGlvbigpOyBmd1RvZ2dsZSgibG9zcHJvYmUiKTsgfSk7CiAgICB9CiAgICByb1Byb2JlUGFyaygiZHNoLWZ3LWxvc3Byb2JlIik7IC8vIOaMgeS5hemakOiXj+WBnOaUvu+8mua1rueql+aJk+W8gOWQjuiPnOWNlemHjee7mOS4jeW+l+aKiuWuv+S4u+aKoui1sAogICAgcm9Qcm9iZU1vdmUocHJvYmVCb2R5LCAiZHNoLWdlYXJkaWFnIiwgIi5yb3ciKTsKICAgIHJvUHJvYmVNb3ZlKHByb2JlQm9keSwgImRzaC1nZWFyZGlhZ2JveCIsICJzZWxmIik7CiAgICB2YXIga2V5UHJvYmVIZWFkaW5nID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudCgiZGl2Iik7IGtleVByb2JlSGVhZGluZy5jbGFzc05hbWUgPSAic2VjIjsga2V5UHJvYmVIZWFkaW5nLnRleHRDb250ZW50ID0gIumUruS9jeajgOa1iyI7IHByb2JlQm9keS5hcHBlbmRDaGlsZChrZXlQcm9iZUhlYWRpbmcpOwogICAgcm9Qcm9iZU1vdmUocHJvYmVCb2R5LCAiZHNoLWhrcHJvYmUiLCAiLnJvdyIpOwogICAgdmFyIGtleVByb2JlSGVscCA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoImRpdiIpOyBrZXlQcm9iZUhlbHAuY2xhc3NOYW1lID0gImxvZyI7CiAgICBrZXlQcm9iZUhlbHAudGV4dENvbnRlbnQgPSAi5oyJ5Lu75oSP6ZSu5pi+56S66ZSu56CB44CB5oyJ6ZSu44CB5L+u6aWw6ZSu5ZKM5piv5ZCm5ZG95Lit5Yqf6IO977yb55So5LqO5Yy65YiG5pS25LiN5Yiw5oyJ6ZSu5LiO5Yik5a6a5Ye66ZSZ44CC5ZG95Lit5L2G5Yqf6IO95rKh5Y+N5bqU5pe25qOA5p+l5Yqf6IO95oC75byA5YWz44CCIjsKICAgIHByb2JlQm9keS5hcHBlbmRDaGlsZChrZXlQcm9iZUhlbHApOwogICAgdmFyIHBhY2tldEJ0biA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoImJ1dHRvbiIpOyBwYWNrZXRCdG4udHlwZSA9ICJidXR0b24iOyBwYWNrZXRCdG4udGV4dENvbnRlbnQgPSAi5omT5byA5pWw5o2u5oqT5YyF77yI6L+b5YWl5rWu56qX5ZCO5YaN54K55byA5aeL77yJIjsKICAgIHBhY2tldEJ0bi5hZGRFdmVudExpc3RlbmVyKCJjbGljayIsIGZ1bmN0aW9uICgpIHsgcm9Nb2RPcGVuKCJ0eGNhcCIpOyB9KTsKICAgIHJvTWVudVJvdyhwcm9iZUJvZHksICLmlbDmja7mipPljIUiLCBwYWNrZXRCdG4pOwogICAgdmFyIHByb2JlU3RhdHVzID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudCgiZGl2Iik7IHByb2JlU3RhdHVzLmlkID0gImRzaC1wcm9iZS1nZWFyZGlhZy1zdGF0dXMiOyBwcm9iZVN0YXR1cy5jbGFzc05hbWUgPSAicm8taW5mbyI7CiAgICBwcm9iZVN0YXR1cy50ZXh0Q29udGVudCA9ICLoo4XlpIfor4rmlq3mnKrov5DooYwiOyBwcm9iZUJvZHkuYXBwZW5kQ2hpbGQocHJvYmVTdGF0dXMpOw==
+    upMenu(probeBody);
+  // UNIFIED-PROBE-BEGIN invhovershot ORIGINAL:
+  // 物品栏悬停自检（只读）：只记录「这次悬停落在哪一格、最后显示还是隐藏、为什么」，绝不发游戏包、
+  //   不 preventDefault/stopPropagation、不改任何判定结果、不读写背包数据；每条记录与渲染都包 try/catch，
+  //   探针自己出错绝不影响浮窗、保命与入场保护。默认关，且必须有统一探针总开关才记一个字。
+  var INVHOVER_MAX = 30, INVHOVER_PRINT_MAX = 200, INVHOVER_SEND_MS = 60000;
+  var UP_INV = { row: false, recs: [], seq: 0, dirty: false, lastSendAt: 0, sent: 0, fail: 0, lastText: "" };
+  var UP_INV_STATS = { domItems: 0, withIndex: 0, withItid: 0, badIndex: 0, cells: 0, pkKeys: 0, pkRecs: 0, prints: {} };
+  function upInvEnabled() { try { return UP.on === true && UP_INV.row === true; } catch (e) { return false; } }
+  function upInvAttr(el, name) { try { return (el && el.getAttribute) ? el.getAttribute(name) : null; } catch (e) { return null; } }
+  function upInvNum(v) { try { if (v == null || v === "") return null; var n = Number(v); return isFinite(n) ? n : null; } catch (e) { return null; } }
+  function upInvItid(it) { try { if (!it || typeof it !== "object") return null; var v = (it.ITID != null) ? it.ITID : (it.itemid != null ? it.itemid : null); return (v == null) ? null : String(v); } catch (e) { return null; } }
+  // 三路对齐（仅背包格）：包流表 bagPktByIndex(格号) / 客户端组件 getItemByIndex(格号) / 打包表 itipInvMap()[格号]。
+  //   只有「两路以上都有值且 ITID 不一致」才算错位；一路有值、其余没有，一律记「单路可用」不报错位。
+  function upInvAlign(idx, mapIt) {
+    var out = { pkt: null, comp: null, map: null, hits: 0, route: "", misalign: false };
+    try {
+      if (idx == null) return out;
+      if (typeof bagPktByIndex === "function") { try { var p0 = bagPktByIndex(idx); out.pkt = upInvItid(p0); if (p0 && out.pkt != null) { out.hits++; out.route = "包流表"; } } catch (e0) {} }
+      try { var c = bagInvComp(); if (c && typeof c.getItemByIndex === "function") { var c0 = c.getItemByIndex(Number(idx)); out.comp = upInvItid(c0); if (out.comp != null) { out.hits++; out.route = "客户端组件"; } } } catch (e1) {}
+      var m0 = (mapIt != null) ? mapIt : null;
+      try { if (m0 == null) { var mm = itipInvMap(); m0 = mm ? mm[Number(idx)] : null; } if (m0) { out.map = upInvItid(m0); if (out.map != null) out.hits++; } } catch (e2) {}
+      out.misalign = ((out.pkt != null && out.comp != null && out.pkt !== out.comp) || (out.pkt != null && out.map != null && out.pkt !== out.map) || (out.comp != null && out.map != null && out.comp !== out.map));
+    } catch (e) {}
+    return out;
   }
+  // 格号指纹统计：同一格号只进一次，表上限 200 个键（不因为反复悬停无限增长）。
+  function upInvPrint(key) {
+    var s = String(key || "").slice(0, 64);
+    var t = UP_INV_STATS.prints;
+    if (t[s] == null) { var n = 0, k = ""; for (k in t) n++; if (n < INVHOVER_PRINT_MAX) t[s] = 0; }
+    if (t[s] != null) t[s]++;
+  }
+  function upInvChainCategory(el) {
+    var rec = { category: "其它", container: "" };
+    try {
+      var n = el, g = 0, ids = { NpcStore: 1, Storage: 1, Trade: 1, Equipment: 1, PlayerViewEquip: 1, ItemSelection: 1, Inventory: 1 };
+      while (n && g++ < 40) {
+        var id = "";
+        try { id = String(n.id || ""); } catch (e1) {}
+        if (id && ids[id]) {
+          rec.container = id;
+          rec.category = id === "NpcStore" ? "商店" : id === "Storage" ? "仓库" : id === "Trade" ? "交易" : id === "Inventory" ? "背包" : (id === "ItemSelection" ? "鉴定选择窗" : "装备窗");
+          break;
+        }
+        var root = null;
+        try { root = n.getRootNode ? n.getRootNode() : null; } catch (e2) {}
+        n = (root && root.host) ? root.host : (n.parentElement || null);
+      }
+    } catch (e) {}
+    return rec;
+  }
+  // 只读 DOM 统计：整段一次 querySelectorAll，不写任何属性、不改任何 DOM。
+  function upInvDomStats() {
+    var out = { items: 0, withIndex: 0, withItid: 0, badIndex: 0, roots: 0 };
+    try {
+      if (!document || typeof document.querySelectorAll !== "function") return out;
+      try { var roots = document.querySelectorAll("#Inventory"); out.roots = roots ? roots.length : 0; } catch (e0) { out.roots = 0; }
+      var els = document.querySelectorAll(".item[data-index]");
+      var n = els ? els.length : 0;
+      for (var i = 0; i < n && i < 400; i++) {
+        var el = els[i]; out.items++;
+        var si = upInvAttr(el, "data-index");
+        if (si != null && si !== "") out.withIndex++;
+        if (!/^[0-9]{1,10}$/.test(si == null ? "" : String(si).trim())) out.badIndex++;
+        var it = upInvAttr(el, "data-itid");
+        if (it != null && it !== "") out.withItid++;
+      }
+    } catch (e) {}
+    return out;
+  }
+  function upInvSummary() {
+    try {
+      var m = "";
+      try { var all = document.querySelectorAll(".item"); m = " 全文档物品格 " + (all ? all.length : 0) + "（统计只取前 400 格）"; } catch (e0) {}
+      var d = UP_INV_STATS.domItems, wi = UP_INV_STATS.withIndex, wt = UP_INV_STATS.withItid, bad = UP_INV_STATS.badIndex;
+      var keys = 0, k = ""; for (k in UP_INV_STATS.prints) keys++;
+      var pk = -1, pr = -1;
+      try { pk = (typeof bagPkt !== "undefined" && bagPkt.byIndex) ? Object.keys(bagPkt.byIndex).length : -1; } catch (e1) {}
+      try { pr = (typeof bagPkt !== "undefined") ? (bagPkt.n || 0) : -1; } catch (e2) {}
+      return "物品格 " + d + m + " · 带格号 " + wi + " · 带物品号 " + wt + " · 空格号或非数字格号 " + bad + " · 格号指纹 " + keys + "/" + INVHOVER_PRINT_MAX + "（本次记录 " + UP_INV.recs.length + "/" + INVHOVER_MAX + "）" +
+        " · 包流表键 " + (pk < 0 ? "读不到" : pk) + " 条 · 包流记录 " + (pr < 0 ? "读不到" : pr) + " 条 · " + (pk < 0 || pr < 0 ? "包流数据源不可用，无法比较" : (pk === pr ? "两边相等" : "两边不等（包流表按格号去重后条数不同）"));
+    } catch (e) { return "统计读取异常"; }
+  }
+  function upInvText() {
+    try {
+      var L = [];
+      try { var d = upInvDomStats(); UP_INV_STATS.domItems = d.items; UP_INV_STATS.withIndex = d.withIndex; UP_INV_STATS.withItid = d.withItid; UP_INV_STATS.badIndex = d.badIndex; } catch (e0) {}
+      if (!UP.on) L.push("总开关未开：本行不记录、不发送（打开功能菜单底部的「统一探针总开关」后才开始）。");
+      else if (!UP_INV.row) L.push("本行开关未开：不记录、不发送。");
+      var rs = UP_INV.recs, i = 0;
+      for (i = rs.length - 1; i >= 0 && L.length <= (INVHOVER_MAX + 3); i--) {
+        var r = rs[i], a = r.align;
+        L.push("#" + r.n + " " + r.decision + " · " + r.reason + " · 格类=" + r.category + (r.container ? "(" + r.container + ")" : "") + " 格号=" + r.attrIndex + " 物品号=" + r.attrItid);
+        if (r.category === "背包") L.push("    三路：包流=" + (a.pkt == null ? "无" : a.pkt) + " 组件=" + (a.comp == null ? "无" : a.comp) + " 打包表=" + (a.map == null ? "无" : a.map) + " 命中路线=" + (a.route || "无") + (a.misalign ? " 错位" : "") + (a.hits === 0 ? " 三路都无值" : ""));
+        if (r.diag) L.push("    实际命中=" + r.diag);
+      }
+      if (!rs.length) L.push("（还没有记录：把鼠标放到物品栏/装备栏的物品上看一眼，或打开背包再悬停）");
+      L.push("汇总：" + upInvSummary());
+      L.push("本机留证：已发送 " + UP_INV.sent + " 次，失败 " + UP_INV.fail + " 次 · 节流 " + (INVHOVER_SEND_MS / 1000) + " 秒一次 · 发送失败只在本地计数，绝不影响游戏");
+      return L.join("\n");
+    } catch (e) { return "探针读取异常（不影响游戏）：" + (e && e.message ? e.message : e); }
+  }
+  function upInvRender(force) {
+    try {
+      var el = document.getElementById("dsh-invhover-view");
+      if (!el) return;
+      var now = Date.now();
+      if (!force && now - (UP_INV.renderAt || 0) < 1000) { UP_INV.renderDue = true; return; }
+      UP_INV.renderAt = now; UP_INV.renderDue = false;
+      var t = "";
+      if (!UP.on) t = "总开关未开：本行不记录、不发送。";
+      else if (!UP_INV.row) t = "本行开关未开：不记录、不发送。";
+      else { var a = upInvDomStats(); UP_INV_STATS.domItems = a.items; UP_INV_STATS.withIndex = a.withIndex; UP_INV_STATS.withItid = a.withItid; UP_INV_STATS.badIndex = a.badIndex; t = upInvText(); }
+      el.value = t;
+    } catch (e) {}
+  }
+  // 本地留证：与「背包快照定期上报」同路（DSHCollect.post + INGEST_URL 这个 127.0.0.1 本机地址，绝不硬编码别的地址）。
+  function upInvShot() {
+    try {
+      if (!upInvEnabled() || !UP_INV.dirty) return;
+      var now = Date.now();
+      if (UP_INV.lastSendAt && now - UP_INV.lastSendAt < INVHOVER_SEND_MS) return;
+      if (typeof DSHCollect === "undefined" || !DSHCollect || typeof DSHCollect.post !== "function") return;
+      if (typeof INGEST_URL === "undefined") return;
+      UP_INV.lastSendAt = now; UP_INV.dirty = false;
+      UP_INV.recs.sort(function (a, b) { return a.n - b.n; });
+      var recs = [], i = 0;
+      for (i = 0; i < UP_INV.recs.length && i < INVHOVER_MAX; i++) {
+        var r = UP_INV.recs[i];
+        recs.push({ n: r.n, at: r.at, category: r.category, container: r.container, decision: r.decision, reason: r.reason, attrIndex: r.attrIndex, attrItid: r.attrItid, pkt: r.align.pkt, comp: r.align.comp, map: r.align.map, hits: r.align.hits, route: r.align.route, misalign: r.align.misalign, diag: r.diag });
+      }
+      var summary = upInvSummary();
+      try { DSHCollect.post(INGEST_URL, { type: "invhovershot", ver: VER, ts: new Date().toISOString(), summary: summary, records: recs }, function (ok) { try { if (ok) UP_INV.sent++; else UP_INV.fail++; upInvRender(true); } catch (e9) {} }); }
+      catch (e2) { UP_INV.fail++; }
+    } catch (e) {}
+  }
+  // 每次悬停只做一次分配与一次入队；总开关/本行开关任一没开就直接返回，一个字节都不记。
+  function upInvRecord(el, decision, reason, diag) {
+    try {
+      if (!upInvEnabled()) return;
+      var st = null;
+      try { st = itipChain(el); } catch (e0) { st = null; }
+      var cat = upInvChainCategory(el);
+      var attrIndex = upInvAttr(el, "data-index");
+      var attrItid = upInvAttr(el, "data-itid");
+      var idx = upInvNum(attrIndex);
+      var mapIt = null;
+      try { if (idx != null) mapIt = itipInvMap()[idx] || null; } catch (e1) {}
+      var rec = { n: ++UP_INV.seq, at: Date.now(), category: cat.category, container: cat.container, decision: decision, reason: String(reason || ""), attrIndex: (attrIndex == null ? "" : String(attrIndex)), attrItid: (attrItid == null ? "" : String(attrItid)), align: upInvAlign(idx, mapIt), diag: String(diag || ""), st: st ? st.length : 0 };
+      UP_INV.recs.push(rec);
+      if (UP_INV.recs.length > INVHOVER_MAX) UP_INV.recs.splice(0, UP_INV.recs.length - INVHOVER_MAX);
+      UP_INV.dirty = true;
+      upInvPrint(String(rec.category) + "|" + rec.attrIndex + "|" + (rec.container || ""));
+      upInvRender(false);
+      upInvShot();
+    } catch (e) {}
+  }
+  // 隐藏点补原因：itipOver 的四个隐藏分支与末尾空 html 都走这里；成功也各记一条做对照。
+  var upInvFallback = null;
+  function upInvMark(reason, diag) { try { upInvFallback = { reason: String(reason || ""), diag: String(diag || "") }; } catch (e) {} }
+  function upInvHide(reason, diag) { upInvRecord(ITIP.hover, "隐藏", reason, diag); upInvFallback = null; }
+  function upInvShow() { upInvRecord(ITIP.hover, "显示", "已显示", ""); upInvFallback = null; }
+  // 隐藏原因归类：只用上一次悬停的格类与「唯一 #Inventory 回退说明」即可判定，绝不参与任何显示判定。
+  function upInvTailReason(cont, note) {
+    try {
+      if (cont === "NpcStore") return "商店格空";
+      if (cont === "Storage") return "仓库格按格号查不到实例";
+      if (cont === "Trade") return "交易框格子认不出哪一侧或镜像里没有";
+      if (cont === "ItemSelection") return "按格号回查背包实例失败（鉴定选择窗格内查不到实例）" + (note || "");
+      if (cont === "Inventory") return "背包格按格号回查实例失败（打包表与包流表都没有这一格）";
+      if (cont === "Equipment" || cont === "PlayerViewEquip") {
+        var extra = /按格号回退/.test(note || "") ? "；" + note : "";
+        return "装备窗格：认不出格子（data-itid 为空且组件/背包回查都拿不到）" + extra;
+      }
+      return "认不出格子";
+    } catch (e) { return "认不出格子"; }
+  }
+  function upInvProbeTail() {
+    try {
+      if (upInvFallback) { upInvHide(upInvFallback.reason, upInvFallback.diag); return; }
+      var cont = "";
+      try { cont = upInvChainCategory(ITIP.hover).container; } catch (e0) {}
+      upInvHide(upInvTailReason(cont, upInvFallbackNote()), "");
+    } catch (e) {}
+  }
+  function upInvRowControl(host) {
+    var box = document.createElement("input"); box.type = "checkbox"; box.id = "dsh-invhover-shot"; box.checked = UP_INV.row === true;
+    box.addEventListener("change", function () { try { UP_INV.row = box.checked === true; upInvRender(true); } catch (e) {} });
+    try { roMenuRow(host, "物品栏悬停自检（只记本机 · 默认关）", box); } catch (e) { host.appendChild(box); }
+    var out = document.createElement("textarea"); out.id = "dsh-invhover-view"; out.readOnly = true;
+    out.style.cssText = "width:100%;height:120px;margin-top:3px;font:10px monospace;white-space:pre;overflow:auto";
+    host.appendChild(out);
+    var bar = document.createElement("div"); bar.className = "log";
+    var btn = document.createElement("button"); btn.type = "button"; btn.textContent = "查看最近记录与汇总（可整段复制）";
+    btn.addEventListener("click", function () { try { out.value = upInvText(); if (out.focus) { try { out.focus(); } catch (e2) {} } if (out.select) { try { out.select(); } catch (e3) {} } } catch (e) {} });
+    bar.appendChild(btn);
+    var tip = document.createElement("div"); tip.className = "log";
+    tip.textContent = "只读：只看格子上的格号与物品号，不发游戏包、不改浮窗判定。总开关没开时一个字节都不记。最近 30 条 + 汇总行可整段复制。";
+    host.appendChild(bar); host.appendChild(tip);
+    upInvRender(true);
+    return out;
+  }
+  function upInvDiagSet(text) { try { if (typeof upInvFallback !== "undefined" && upInvFallback) upInvFallback.diag = String(text || ""); } catch (e) {} }
+  // 全文档唯一 #Inventory：只有「一只容器」时才允许按格号回退到该容器对应格子的 data-itid/实例；
+  //   多个 #Inventory（含他人装备窗克隆）一律不按 id 认，维持 fail-closed（返回 null 即没有回退）。
+  var upInvDomNote = null;
+  function upInvDomRootUnique() {
+    try {
+      upInvDomNote = null;
+      if (!document || typeof document.querySelectorAll !== "function") { upInvDomNote = "本环境读不到 DOM，不按 #Inventory 回退"; return null; }
+      var roots = document.querySelectorAll("#Inventory");
+      var n = roots ? roots.length : 0;
+      if (n === 0) { upInvDomNote = "没有 #Inventory 容器，不按格号回退"; return null; }
+      if (n > 1) { upInvDomNote = "文档里有 " + n + " 个 #Inventory（含他人装备窗克隆），一律不按 id 回退"; return null; }
+      return roots[0] || null;
+    } catch (e) { upInvDomNote = "#Inventory 容器读取失败，不按格号回退"; return null; }
+  }
+  // 只读：容器内找 data-index 等于该格号的那一格，读它自己的 data-itid（唯一可采信的物品号来源）。
+  function upInvDomCellItid(root, idx) {
+    try {
+      if (!root || typeof root.querySelectorAll !== "function") return null;
+      var want = String(Number(idx));
+      var cells = root.querySelectorAll(".item[data-index]");
+      var n = cells ? cells.length : 0;
+      for (var i = 0; i < n && i < 400; i++) {
+        var el = cells[i], si = upInvAttr(el, "data-index");
+        if (si == null) continue;
+        if (String(Number(String(si).trim())) !== want) continue;
+        var it = upInvAttr(el, "data-itid");
+        return (it == null || it === "") ? null : String(it);
+      }
+    } catch (e) {}
+    return null;
+  }
+  try { this.upInvFallbackItem = upInvFallbackItem; } catch (e) {}
+  function upInvFallbackItem(idx) {
+    try {
+      var root = upInvDomRootUnique();
+      if (!root) return null;
+      var itid = upInvDomCellItid(root, idx);
+      if (itid == null) { upInvDomNote = "#Inventory 内没有写物品号的格子（格号 " + idx + "），不按 id 回退"; return null; }
+      var it = (typeof bagItemByIndex === "function") ? bagItemByIndex(idx) : null;
+      if (!it || typeof it !== "object") { upInvDiagSet("#Inventory 按格号回退失败：实例表里没有 " + idx + " 号实例"); return null; }
+      var have = upInvItid(it);
+      if (have == null || have !== String(itid)) { upInvDiagSet("#Inventory 按格号回退被一致性挡住：格子物品号 " + itid + " 与实例物品号 " + (have == null ? "无" : have) + " 不一致，不显示"); return null; }
+      upInvDiagSet("#Inventory 唯一：按格号回退到该格实例（物品号 " + itid + "）");
+      return it;
+    } catch (e) { return null; }
+  }
+  function upInvFallbackNote() { try { return upInvDomNote ? ("不按 #Inventory 回退：" + upInvDomNote) : ""; } catch (e) { return ""; } }
+  // 只读诊断：记录某次取值实际命中的是哪一路（不是取值来源，只写诊断字）。
+  function bagPlace(tag, it) {
+    try {
+      if (!it || typeof it !== "object") return false;
+      if (tag === "comp") bagRead.source = "客户端组件实例表.getItemByIndex";
+      else if (tag === "pkt") bagRead.source = "包流表（0x0b09 按格号）";
+      else if (tag === "mod") bagRead.source = "组件模块.getItemByIndex";
+      else bagRead.source = "背包列表扫描";
+      return true;
+    } catch (e) { return false; }
+  }
+  // UNIFIED-PROBE-END invhovershot
+    var invShotHeading = document.createElement("div"); invShotHeading.className = "sec"; invShotHeading.textContent = "背包快照定期上报"; probeBody.appendChild(invShotHeading);
+    var invShotMoved = false;
+    // 搬迁名单（RO_PROBE_MOVE_LIST）是唯一真源：只按名单搬；失败项进内存待办，
+    // 菜单打开时 / 每个浮窗打开后各重试一次；已有注释锚点 = 已搬过，不重复搬。
+    try { var invShotRes = roProbeApply(probeBody); invShotMoved = invShotRes["dsh-invshot"] === true; } catch (eISM) { invShotMoved = false; }
+    // V2.38.77：总开关没开时本行照旧不工作；只在确实搬进来之后补上最小外层的灰字说明，不克隆节点、不重建控件。
+    try {
+      if (invShotMoved) {
+        var invRow = document.getElementById("dsh-invshot");
+        var invBox = invRow && invRow.closest ? invRow.closest(".row") : null;
+        if (invBox && !document.getElementById("dsh-invshot-note")) {
+          var invNote = document.createElement("div"); invNote.id = "dsh-invshot-note"; invNote.className = "log";
+          invNote.textContent = "到达间隔后把当前背包/仓库快照写到本机；需上面的统一探针总开关，再勾这一行。默认关。";
+          invBox.appendChild(invNote);
+        }
+      }
+    } catch (eISN) {}
+  // UNIFIED-PROBE-END footer
+  }
+  // 启动时即建立隐藏的统一入口，原设置页中的探针行立即迁走，不必等用户点开菜单。
+  try { roMenuBuild(); } catch (e) {}
 
   // 鼠标→触摸模拟层 + 视角控制（手机页 r=mn，V2.38.9）
   // 事实依据（Online_mn.js 逐模块核对，非猜测）与两条路的取舍见上方 V2.38.9 变更摘要第 2/3 条。
@@ -5996,6 +6442,7 @@ function createRoItemCapture(env) {
       if (bn) { bn.className = "qs" + (neiOn === true ? " on" : (neiOn === null ? " unknown" : "")); bn.title = "内挂自动战斗：" + (neiOn === null ? "状态未知（等待游戏报告，不盲切）" : (neiOn ? "已开（点击关闭）" : "已关（点击开启）")); }
       if (bz) { bz.className = "qs" + (zRunning ? " on" : ""); bz.title = "助手自动战斗：" + (zRunning ? "已开（点击停止）" : "已关（点击启动）"); }
     } catch (e) {}
+    roExpPaint(); // 复用既有UI节拍，不增加采集循环。
   }
   try {
     var qswNei = $id("dsh-qs-nei"), qswZhu = $id("dsh-qs-zhu");
@@ -6015,7 +6462,8 @@ function createRoItemCapture(env) {
   } catch (e) {}
   ball.addEventListener("click", function () {
     if (ball.__dsDragged) { ball.__dsDragged = false; return; } // 拖动松手不弹菜单
-    roMenuToggle();
+    if (roExpOn()) { var showPetals = roExpRing.style.display === "none"; roExpCloseOthers("petals"); roExpRingOpen = showPetals; roExpRing.style.display = roExpRingOpen ? "block" : "none"; roExpLayout(); }
+    else roMenuToggle();
   });
   // V2.24.1：旧版设置界面入口 —— 启动不再自动弹出。
   // V2.29.0：启动一律按收起处理，与历史 collapsed 值解耦（旧逻辑 collapsed===false 会在每次刷新后自动弹出）。
@@ -6220,7 +6668,10 @@ function createRoItemCapture(env) {
 
   // V2.23.0 键位检测：记录最近 3 次按键，显示在系统页 —— 用来区分「收不到按键」和「收到了但判定错」
   var hkProbeLog = [];
+  // UNIFIED-PROBE-BEGIN gate-hkProbe ORIGINAL:ICBmdW5jdGlvbiBoa1Byb2JlKGUsIGhpdElkKSB7
   function hkProbe(e, hitId) {
+    return; // Retired optional parallel collector; unified bounded queue owns evidence.
+  // UNIFIED-PROBE-END gate-hkProbe
     try {
       var s = "键码 " + (e.code || e.key || "?") + " / " + (e.key || "?");
       if (e.ctrlKey) s += " +Ctrl";
@@ -6920,7 +7371,10 @@ function createRoItemCapture(env) {
   var btDiagOn = false;
   var askDiagOn = false; // V2.15.18：自动技能诊断日志开关（默认关——tickAskSkills 每秒全量 console.log 造成主线程阻塞→物品拖拽卡顿）
   var btRing = []; // 最近 60 条诊断
+  // UNIFIED-PROBE-BEGIN gate-btLog ORIGINAL:ICBmdW5jdGlvbiBidExvZyh0YWcsIG1zZykgew==
   function btLog(tag, msg) {
+    if(!upAllowed("battle"))return;
+  // UNIFIED-PROBE-END gate-btLog
     try {
       var line = '[' + tag + '] ' + msg;
       DSHCollect.ringPush(btRing, line, 60);
@@ -7275,6 +7729,11 @@ function createRoItemCapture(env) {
           } catch (eqk) {}
         }
       }
+      // Diagnostic probes are per-session opt-in even if older profiles had saved them enabled.
+      try { var oldDiag = $id("dsh-z-diag"); if (oldDiag) oldDiag.checked = false;
+        var oldSample = $id("dsh-z-bosskeepsmp"); if (oldSample) oldSample.checked = false;
+        var oldBattle = $id("dsh-bt-diag"); if (oldBattle) oldBattle.checked = false;
+        btDiagOn = false; diagAutoProbeOn = false; } catch (eProbeOff) {}
       // V2.38.41：healFirst 存的是 saved.healFirst（非 saved.ui 键），切角色后须显式回填复选框，否则显示不随档刷新
       try { var hfEl = $id("dsh-healfirst"); if (hfEl) hfEl.checked = saved.healFirst === true; } catch (ehf) {}
       // V1.9.4：高亮规则名单（localStorage dsh_ro_hlrules）随角色档重建样式与列表
@@ -9726,9 +10185,13 @@ function createRoItemCapture(env) {
   function renderInvShot() {
     try { var el = $id("dsh-invshotlog"); if (el) el.textContent = "已上报 " + invShotSent + " 次" + (invShotFail ? "，失败 " + invShotFail + " 次" : ""); } catch (e) {}
   }
+  // UNIFIED-PROBE-BEGIN fix-invshot-gate ORIGINAL:ICBmdW5jdGlvbiB0aWNrSW52U2hvdCgpIHsKICAgIHRyeSB7CiAgICAgIGlmICghY2xpZW50UmVhZHkoKSkgcmV0dXJuOw==
   function tickInvShot() {
     try {
+      // V2.38.77：本机背包上报并入统一探针总开关，默认关闭；总开关没开一个包都不发。
+      if (!UP.on) return;
       if (!clientReady()) return;
+  // UNIFIED-PROBE-END fix-invshot-gate
       var en = $id("dsh-invshot"); if (!en || !en.checked) return;
       var int = parseInt($id("dsh-invshotint") ? $id("dsh-invshotint").value : "120", 10);
       if (!(int > 0)) int = 120;
@@ -9749,7 +10212,9 @@ function createRoItemCapture(env) {
   }
   masterTickReg(function () { try { tickInvShot(); } catch (e) {} });
   try { renderInvShot(); } catch (e) {}
-  if (saved.invshot === false) { var iv = $id("dsh-invshot"); if (iv) iv.checked = false; }
+  // UNIFIED-PROBE-BEGIN fix-invshot-restore ORIGINAL:ICBpZiAoc2F2ZWQuaW52c2hvdCA9PT0gZmFsc2UpIHsgdmFyIGl2ID0gJGlkKCJkc2gtaW52c2hvdCIpOyBpZiAoaXYpIGl2LmNoZWNrZWQgPSBmYWxzZTsgfQ==
+  var iv0 = $id("dsh-invshot"); if (iv0) iv0.checked = (saved.invshot === true); // V2.38.77：默认关闭，只有明确存过「开」才重新勾上
+  // UNIFIED-PROBE-END fix-invshot-restore
 
   // ---------------- B5：自动使用技能（点选技能栏主动辅助 · 调序）----------------
   var askList = (function () {
@@ -10745,7 +11210,10 @@ function createRoItemCapture(env) {
       return best || els[0].parentElement;
     } catch (e) { return null; }
   }
+  // UNIFIED-PROBE-BEGIN gate-private-dom ORIGINAL:ICBmdW5jdGlvbiBuZWlQcm9iZSgpIHs=
   function neiProbe() {
+    return; // Full-page input values are outside privacy allowlist.
+  // UNIFIED-PROBE-END gate-private-dom
     var out = [];
     var items = [];
     try {
@@ -10802,7 +11270,7 @@ function createRoItemCapture(env) {
   //   「开启自动战斗 / 关闭自动战斗」（点下去 33~154ms 到）。现在这两句也算权威状态，且按角色落档兜底。
   //   玩家在内挂面板上勾选只表示「状态要变了」：先打回未知，等服务器推下一次报告，绝不拿面板勾选当依据。
   var npHuntOn = false, npBattleKnown = false, npBattleLastSentAt = -Infinity, npBattleConfirmedAt = 0;
-  var npLastIntent = null; // V2.38.41: 最近一次已发 toggle 的目标方向（报告未到时的乐观依据；报告到达即被权威值覆盖，无需再读）
+  var npLastIntent = null; // 最近一次已发 toggle 的目标方向；只用于防止回执缺失时误发反向 toggle，绝不当作已确认状态
   var NP_TOGGLE_DEBOUNCE = 700; // V2.38.41: 连点防抖——同一意图未确认前 700ms 内不发第二次 toggle
   var NP_TOGGLE_GRACE = 8000;   // V2.38.41: 乐观恢复窗口——发包后 8s 内报告未到仍按已发意图继续切换；窗口外回到 fail-closed 未知
   // 被动采集缓存：value=开关值（null=本连接内还没收到过报告）；at=到手时刻；src=来源；epoch=身份世代（换角/回列表/新连接 +1）
@@ -10955,13 +11423,97 @@ function createRoItemCapture(env) {
   //   「能开不能关」的根因，不是解析问题。op 0x008e 走 ZC.NOTIFY_PLAYERCHAT（op142）→ 本函数；
   //   玩家发言在同一通道里带「ID/姓名：」前缀，因此「全等匹配」天然排除玩家伪造（不是看聊天框猜，是读服务器原文）。
   var NP_ATK_CHAT_ON = "开启自动战斗", NP_ATK_CHAT_OFF = "关闭自动战斗", NP_ATK_CHAT_OFF2 = "已关闭自动战斗";
-  function npOffAck(text) {
-    var t = String(text == null ? "" : text).split(String.fromCharCode(0)).join("").trim();
-    if (t === NP_ATK_CHAT_ON) { try { npApplyBattleState(true, "chat-notice"); } catch (eN1) {} return; }
-    if (t === NP_ATK_CHAT_OFF || t === NP_ATK_CHAT_OFF2) { try { npApplyBattleState(false, "chat-notice"); } catch (eN2) {} return; }
-    var w = npOffWait;
-    if (!w || w.ack || !npAckOffText(t) || Date.now() - w.at >= 5000) return;
-    try { setStatus("收到关闭文字，等待2805/2806关闭报告（未确认）", "warn"); } catch (e) {}
+  var npRawAckRepeat = null, npAckAnomalyAt = 0, npChatFrameCount = 0;
+  // 助手发出的「开」与其后要求「停」的因果关系独立于 npAckWait；超时仅清等待，不抹掉停机义务。
+  var npAssistantOnSend = null, npShutdownDebt = null, npBattleOpSeq = 0;
+  function npStopDebtClear() { npShutdownDebt = null; }
+  function npOwnerIdentityValid(key) {
+    try { return !!key && identityReady() && profileKeyMatches(key, selfCharId()); } catch (e) { return false; }
+  } // 必须是真实当前角色，但新角色尚未建立设置档也不能丢失已发开包的停机义务
+  function npRememberAssistantOn(source, at) {
+    var key = activeProfileKey();
+    npAssistantOnSend = npOwnerIdentityValid(key) ? { key: key, epoch: npServerAutoAtk.epoch, session: npRuntimeKey, at: at, seq: ++npBattleOpSeq, source: String(source || ""), awaitingOnReport: true } : null;
+    npStopDebtClear(); // 新一次助手开启取代上一次停机债务
+  }
+  function npStopDebtArm(reason) {
+    var p = npAssistantOnSend, key = activeProfileKey();
+    if (!p || !npOwnerIdentityValid(key) || p.key !== key || p.epoch !== npServerAutoAtk.epoch || p.session !== npRuntimeKey) return false;
+    if (reason === "stopZhu" && !npZeroEnabled()) { npStopDebtClear(); return false; }
+    npShutdownDebt = { key: key, epoch: p.epoch, session: p.session, seq: p.seq, reason: reason, at: Date.now(), attempted: false };
+    return true;
+  }
+  function npStopDebtResult(result) {
+    if (npShutdownDebt && (result === "sent" || (result === "already" && !(npAssistantOnSend && npAssistantOnSend.offCouldBeStale)))) npShutdownDebt.attempted = true; // 真已发关闭不得补第二包；疑似旧 OFF 仅 already 不能证明最终关闭
+  }
+  function npStopDebtOnReport(on) {
+    var d = npShutdownDebt; if (!d) return;
+    if (!on) { npStopDebtClear(); npAssistantOnSend = null; return; }
+    if (d.attempted) {
+      npAckAnomaly("stop-close-unconfirmed", true, Date.now());
+      if (!zRunning) try { setStatus("已请求关闭内挂，但游戏仍报告开启；未再次翻转，请手动核实", "warn"); } catch (eStatus) {}
+      return; // 关闭包已发：重复翻转可能反而打开，只有新的可信「关」报告才能证明已停
+    }
+    var key = activeProfileKey();
+    if (d.epoch !== npServerAutoAtk.epoch || d.session !== npRuntimeKey || key !== d.key || !npOwnerIdentityValid(key) ||
+        !npAssistantOnSend || npAssistantOnSend.seq !== d.seq) { npStopDebtClear(); return; }
+    if (d.reason === "stopZhu" ? (zRunning || !npZeroEnabled()) : (npHuntMode() === "np" || isHybrid())) { npStopDebtClear(); return; }
+    if (externalAutomationOwns("battle") || (typeof apiCombatActive === "function" && apiCombatActive())) { npStopDebtClear(); return; }
+    if (npAckWait || npOffWait) return; // 关闭包仍在途时等服务器确认，不补第三次翻转
+    d.attempted = true; // 重入、原始包/解析包的重复观察都只能补一次
+    var result = npHuntStop("late-stop:" + d.reason, true);
+    if (result !== "sent" && result !== "already") npAckAnomaly("late-stop-unresolved", true, Date.now());
+  }
+  function npAckAnomaly(reason, on, at) {
+    try {
+      var a = npAckWait, note = { reason: reason, on: !!on, want: a ? a.want : npLastIntent, ageMs: a ? at - a.at : npBattleLastSentAt > 0 ? at - npBattleLastSentAt : null, chatFramesSince: a && typeof a.chatFrames === "number" ? npChatFrameCount - a.chatFrames : null, epoch: npServerAutoAtk.epoch };
+      dshDiag("np-ack-mismatch", note);
+      if (typeof expBattleProbe === "function") expBattleProbe("ack-" + reason, { ageMs: note.ageMs, want: note.want, on: note.on });
+      if (at - npAckAnomalyAt < (reason === "unknown-state" ? 30000 : 2000)) return;
+      npAckAnomalyAt = at;
+  // UNIFIED-PROBE-BEGIN legacy-ack-post ORIGINAL:ICAgICAgRFNIQ29sbGVjdC5wb3N0KCJodHRwOi8vMTI3LjAuMC4xOjg4OTkvYXBpL3Byb2JlLWNvbGxlY3QiLCB7IHQ6ICJucC1hY2stbWlzbWF0Y2giLCB2ZXI6IFZFUiwgYXQ6IGF0LCBkZXRhaWw6IG5vdGUgfSk7
+      upRecord("battle","battle-ack-mismatch",{reason:upText(reason,80),on:!!on,want:note.want,ageMs:note.ageMs,result:"received anomaly; no control changes"});
+  // UNIFIED-PROBE-END legacy-ack-post
+    } catch (e) {}
+  }
+  function npOffAck(text, fromRaw, receivedAt) {
+    var t = String(text == null ? "" : text);
+    if (t.charCodeAt(t.length - 1) === 0) t = t.slice(0, -1); // 仅容忍游戏包末尾的单个 NUL，绝不修剪空格或消除包内字节
+    if (t.indexOf(String.fromCharCode(0)) !== -1) return;
+    var on = t === NP_ATK_CHAT_ON;
+    if (!on && t !== NP_ATK_CHAT_OFF && t !== NP_ATK_CHAT_OFF2) return; // 掉落/经验/玩家发言都不属于开关回执
+    var at = typeof receivedAt === "number" ? receivedAt : Date.now();
+    if (!fromRaw && npRawAckRepeat && npRawAckRepeat.text === t && at - npRawAckRepeat.at >= 0 && at - npRawAckRepeat.at < 200) { npRawAckRepeat = null; return; }
+  // UNIFIED-PROBE-BEGIN battle-report ORIGINAL:ICAgIHZhciBhID0gbnBBY2tXYWl0OwogICAgaWYgKGEpIHs=
+    try{upRecord("battle","server-battle-report",{on:on,source:fromRaw?"ZC.NOTIFY_PLAYERCHAT raw exact whitelist":"ZC.NOTIFY_PLAYERCHAT decoded exact whitelist",receivedAt:at,result:"received server on/off; protection acceptance separate"});}catch(eUP){}
+    var a = npAckWait;
+    if (a) {
+  // UNIFIED-PROBE-END battle-report
+      var age = at - a.at;
+      if (a.epoch !== npServerAutoAtk.epoch || age < 0 || age >= NP_ACK_WINDOW || (!a.verify && on !== a.want)) {
+        npAckAnomaly("pending-direction-or-time", on, at);
+        if (!zRunning && !a.verify && a.want === false && on && a.epoch === npServerAutoAtk.epoch && age >= 0)
+          try { setStatus("关闭内挂期间收到相反的开启提示；关闭未确认，请手动核实", "warn"); } catch (eWarn) {}
+        return;
+      }
+    } else if (npLastIntent !== null && npBattleLastSentAt > 0 && at >= npBattleLastSentAt && at - npBattleLastSentAt < NP_TOGGLE_GRACE && on !== npLastIntent) {
+      npAckAnomaly("late-opposite", on, at);
+      if (!zRunning && on && npShutdownDebt) try { setStatus("停止后收到相反的开启提示；关闭未确认，请手动核实", "warn"); } catch (eWarn) {}
+      return;
+    }
+    if (fromRaw) npRawAckRepeat = { text: t, at: at };
+    try { npApplyBattleState(on, "chat-notice" + (fromRaw ? "-packet" : "-parsed")); } catch (eN) {}
+  }
+  // 网络帧到达的本机时间早于 ChatBox requestAnimationFrame 批量绘制时间；包中没有服务器逐句时间。
+  function npRawBattleNotice(bytes, op) {
+    if (op !== 142 || !bytes || bytes.byteLength < 5 || bytes.byteLength > 80 || typeof TextDecoder !== "function") return;
+    try {
+      var view = ArrayBuffer.isView(bytes) ? new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength) : new DataView(bytes);
+      if (view.getUint16(2, true) !== bytes.byteLength) return; // 多帧拼包或截断时只用引擎解析旁听，不猜边界
+      var u8 = new Uint8Array(view.buffer, view.byteOffset + 4, view.byteLength - 4);
+      if (u8[u8.length - 1] === 0) u8 = u8.subarray(0, u8.length - 1);
+      if (u8.indexOf(0) >= 0) return;
+      npOffAck(new TextDecoder("utf-8", { fatal: true }).decode(u8), true, Date.now());
+    } catch (e) {}
   }
   function npAckStruct() {
     try {
@@ -10997,10 +11549,23 @@ function createRoItemCapture(env) {
     if (preSend && preSend() === false) return "failed";
     try { npHookBattleAck(); } catch (eHK) {} // V2.38.47 r2（审计 P1-2）：发包前无条件重挂一次回执通道（幂等），否则开局第一件事就是「开」时整场收不到 op142 回执
     var w = want === false && npOffChatWanted(source) ? npOffPrepare(source) : null;
-    if (!npToggleHunt()) { npOffCancel(); return "failed"; }
-    npAckArm(want, source); // V2.38.47：发出后等服务器回执（开启/关闭自动战斗），事件驱动、上限 1.5 秒
-    npBattleKnown = false; npBattleLastSentAt = Date.now(); // 发包后状态重新变未知，等服务器推下一份报告；期间禁止再 toggle
-    npLastIntent = want; // V2.38.41: 记录本次已发方向（乐观依据；报告到达即覆盖）
+    // 先挂回执/归属再发送：发送函数若同步触发服务器回调，真报告不能被发送后的「未知态」覆盖。
+    var before = { known: npBattleKnown, on: npHuntOn, intent: npLastIntent, at: npBattleLastSentAt, owner: npAssistantOnSend, debt: npShutdownDebt };
+    var sentAt = Date.now();
+    npAckArm(want, source);
+    if (want) npRememberAssistantOn(source, sentAt);
+    npBattleKnown = false; npBattleLastSentAt = sentAt; npLastIntent = want; // 在途即未知，不能凭方向再发 toggle
+    var armed = npAckWait;
+  // UNIFIED-PROBE-BEGIN battle-send-source ORIGINAL:ICAgIGlmICghbnBUb2dnbGVIdW50KCkpIHs=
+    if (!upWithSource("assistant:"+upText(source,80),function(){return npToggleHunt();})) {
+  // UNIFIED-PROBE-END battle-send-source
+      if (npAckWait === armed) { // 未见同步真实回执：发送失败必须回滚刚设的状态与归属
+        npAckClear(); npBattleKnown = before.known; npHuntOn = before.on; npLastIntent = before.intent; npBattleLastSentAt = before.at;
+        npAssistantOnSend = before.owner; npShutdownDebt = before.debt;
+      }
+      npOffCancel(); return "failed";
+    }
+    if (!want) npStopDebtResult("sent");
     npSyncBattleCheckbox(want); // 仅客户端显示，不授权下一次动作
     if (w && npOffWait === w) { w.sent = true; if (w.ack) npOffDisplay(w); }
     try { tlog("np-toggle sent want=" + want + " source=" + source); } catch (e) {}
@@ -11016,7 +11581,7 @@ function createRoItemCapture(env) {
   // 身份真换代（换角色 / 回角色列表 / 新连接）：采集状态与在途关闭确认一起作废。
   function npResetBattleState() {
     npOffCancel(); npClearBattleIntent(); npDropServerAutoAtk(); npBattleLastSentAt = -Infinity; npLastIntent = null;
-    try { npAtkSeedKey = null; npAtkSeedAt = 0; npAckClear(); } catch (eSeed) {} // V2.38.47：换角色必须重新播种 + 丢掉旧角色的回执等待
+    try { npAtkSeedKey = null; npAtkSeedAt = 0; npVerifyUnresolved = false; npAckClear(); npStopDebtClear(); npAssistantOnSend = null; } catch (eSeed) {} // V2.38.47：换角色必须重新播种 + 丢掉旧角色的回执等待
     npOffArmAt = 0; npOffArmSrc = ""; npOffChatWin = -1; npOffChatMissWin = -1; npAckWarnWin = -1; // V2.38.33：换角色/复位必须解除武装并清时间片，否则旧角色那一次关闭动作的武装会活到新角色（第六轮 SC-6）
   }
   function npDropServerAutoAtk() {
@@ -11027,6 +11592,7 @@ function createRoItemCapture(env) {
   // V2.38.47：内挂开关状态「按角色落档」兜底——覆盖写的单字段（p.npAtk），不追历史、不按次建键、不建新存储键，
   //   所以一个角色永远只有这一条，不会随使用次数堆积；超过 7 天视为未知（逻辑过期，只影响采信、不做删除）。
   var NP_ATK_REC_MAX_AGE = 7 * 24 * 3600 * 1000, npAtkSeedKey = null, npAtkSeedAt = 0, npStateNote = "";
+  var npRuntimeAt = Date.now(), npRuntimeKey = npRuntimeAt.toString(36) + Math.random().toString(36).slice(2); // 只采本次页面与连接的真回执；DOM 无逐条时间。
   // create=false 只读、不物化（未识别/陈旧档键上绝不建空档）；create=true 也要先过 profileTrusted（与既有站点同口径）。
   function npAtkRecProfile(create) {
     try {
@@ -11042,7 +11608,7 @@ function createRoItemCapture(env) {
   function npAtkRecSave(on) {
     try {
       var p = npAtkRecProfile(true); if (!p) return false;
-      p.npAtk = { on: on ? 1 : 0, at: Date.now() };
+      p.npAtk = { on: on ? 1 : 0, at: Date.now(), epoch: npServerAutoAtk.epoch, session: npRuntimeKey };
       saveProfiles(); // 未识别身份时由 profWriteGuard 挡住（只读不写），这里不再重复判定
       return true;
     } catch (e) { return false; }
@@ -11052,37 +11618,19 @@ function createRoItemCapture(env) {
       var p = npAtkRecProfile(false), r = p && p.npAtk;
       if (!r || typeof r !== "object") return null;
       var at = Number(r.at) || 0;
-      if (!at || (Date.now() - at) > NP_ATK_REC_MAX_AGE) return null; // 陈旧记录不采信（不删除）
+      if (!at || at < npRuntimeAt || r.session !== npRuntimeKey || r.epoch !== npServerAutoAtk.epoch || (Date.now() - at) > NP_ATK_REC_MAX_AGE) return null; // 不采信上次页面/上个连接的旧回执
       if (r.on !== 0 && r.on !== 1 && r.on !== false && r.on !== true) return null;
       return { on: !!(r.on === 1 || r.on === true), at: at };
     } catch (e) { return null; }
   }
-  // 播种（兜底）顺序：先按角色档里的记录（角色归属明确、由服务器回执写入），
-  //   记录缺失/过期才回落「本次会话聊天框原文」。每代每 5 秒最多试一次，成功后不再试。
+  // 兜底仅允许本次页面、本连接服务器回执写下的角色记录；聊天 DOM 无逐条时间，不能认证旧消息。
   function npSourceLabel(src) {
     var s = String(src || "");
     if (s.indexOf("chat-notice") === 0) return "服务器回执";
     if (s.indexOf("profile-record") === 0) return "角色档记录";
-    if (s.indexOf("chat-history") === 0) return "聊天框历史";
     if (s.indexOf("loadinfo-2805") === 0) return "服务器配置";
     if (s.indexOf("reloadinfo-2806") === 0) return "服务器推送";
     return s || "未知来源";
-  }
-  function npSeedFromChatHistory() {
-    try {
-      for (var i = 0; i < CHAT_BATTLE_SELS.length; i++) {
-        var box = document.querySelector(CHAT_BATTLE_SELS[i]);
-        if (!box || typeof box.querySelectorAll !== "function") continue;
-        var rows = box.querySelectorAll("p, div"), last = null;
-        for (var j = 0; j < rows.length; j++) {
-          var t = String(rows[j].textContent == null ? "" : rows[j].textContent).split(String.fromCharCode(0)).join("").trim();
-          if (t === NP_ATK_CHAT_ON) last = true;
-          else if (t === NP_ATK_CHAT_OFF || t === NP_ATK_CHAT_OFF2) last = false;
-        }
-        if (last !== null) { npApplyBattleState(last, "chat-history"); return true; }
-      }
-    } catch (e) {}
-    return false;
   }
   // V2.38.47 r2（审计 P1-1）：播种的统一闸门。发包后的「未知窗口」与「回执在途」绝不允许播种——
   //   否则会拿发包前的档记录把状态改成「已知旧值」，绕过下面 npRequestBattle 的乐观方向保护，
@@ -11099,11 +11647,11 @@ function createRoItemCapture(env) {
     npAtkSeedKey = k; npAtkSeedAt = Date.now();
     var r = npAtkRecLoad();
     if (r) { npApplyBattleState(r.on, "profile-record"); return true; }
-    return npSeedFromChatHistory();
+    return false; // 聊天 DOM 不带每条消息的可信时间，也可能跨地图/角色遗留；绝不用于开关决策。
   }
   // V2.38.47：发 toggle 后的回执窗口——事件驱动（收到服务器提示立刻结束），上限 1.5 秒；
   //   超时只如实报「未确认」，绝不重发（连点会把 toggle 型开关翻回去）。
-  var NP_ACK_WINDOW = 1500, npAckWait = null;
+  var NP_ACK_WINDOW = IS_MN ? 3500 : 1500, npAckWait = null; // 手机端聊天解析/后台调度可能慢，超时前不补发 toggle
   function npAckClear() { try { if (npAckWait && npAckWait.timer) clearTimeout(npAckWait.timer); } catch (e) {} npAckWait = null; }
   // V2.38.47 r2：回执没到 = 这次 toggle 的真实结果未知，档里那条「发包前」的记录就不再可信 ——
   //   清掉它，避免 8 秒乐观窗口过后又被播种复活成「已知旧值」（与审计 P1-1 同源的二阶问题）。
@@ -11115,29 +11663,39 @@ function createRoItemCapture(env) {
       return true;
     } catch (e) { return false; }
   }
-  function npAckArm(want, source) {
+  function npAckArm(want, source, verify) {
     npAckClear();
-    var a = { want: !!want, source: String(source || ""), at: Date.now(), epoch: npServerAutoAtk.epoch, timer: null };
+    var a = { want: verify ? null : !!want, verify: !!verify, source: String(source || ""), at: Date.now(), epoch: npServerAutoAtk.epoch, chatFrames: npChatFrameCount, timer: null };
     npAckWait = a;
     a.timer = setTimeout(function () {
       if (npAckWait !== a) return;
+      npAckAnomaly("timeout", a.want, Date.now());
+      npVerifyUnresolved = true; // 任意 toggle 回执缺失都不能让停滞复核再发一包（尤其正常 npEnsureHunt 开包）
       npAckWait = null;
-      try { setStatus("已请求" + (a.want ? "开启" : "关闭") + "内挂自动战斗，但 " + (NP_ACK_WINDOW / 1000) + " 秒内没收到服务器回执（未确认，不重发" + (npAckHooked ? "" : "；本机回执通道未挂上") + "）", "warn"); } catch (e) {}
+      try { setStatus("已请求" + (a.verify ? "复核" : (a.want ? "开启" : "关闭")) + "内挂自动战斗，但 " + (NP_ACK_WINDOW / 1000) + " 秒内没收到服务器回执（未确认，不重发" + (npAckHooked ? "" : "；本机回执通道未挂上") + "）", "warn"); } catch (e) {}
       try { tlog("np-ack timeout want=" + a.want + " source=" + a.source + " recCleared=" + npAtkRecClear()); } catch (e2) {}
     }, NP_ACK_WINDOW);
   }
   function npAckResolve(on) {
     var a = npAckWait; if (!a) return false;
     if (a.epoch !== npServerAutoAtk.epoch) { npAckClear(); return false; } // 换角色/换连接的旧回执不兑现
-    if (!!on !== a.want) return false; // 回执方向与请求不一致：不兑现，继续等（窗口到点自然报未确认）
+    if (!a.verify && !!on !== a.want) return false; // 非复核的方向不符：继续等待
     npAckClear();
+    if (a.verify) npVerifyUnresolved = false;
     try { setStatus("内挂自动战斗已" + (on ? "开启" : "关闭") + "（服务器回执，用时 " + (Date.now() - a.at) + "ms）", "ok"); } catch (e) {}
+    if (a.verify) setTimeout(function () {
+      if (a.epoch !== npServerAutoAtk.epoch) return;
+      if (!zRunning || (npHuntMode() !== "np" && !isHybrid()) || zEngagedNow(Date.now()) || externalAutomationOwns("battle")) return;
+      if (!on) npEnsureHunt();
+    }, 0); // 「关」回执在仍由助手运行时才补开；停机后「开」由统一真实状态落点按债务、配置和租约处理
     return true;
   }
   // 服务器自动战斗状态的唯一落点：2805 整份配置、2806 单项推送、引擎自己的 vbk.setloadInfo，
   //   以及 V2.38.47 新增的两句服务器回执（开启/关闭自动战斗）都走这里。
   function npApplyBattleState(on, source) {
+  // UNIFIED-PROBE-BEGIN battle-config-report ORIGINAL:ICAgIG5wU2VydmVyQXV0b0F0ay52YWx1ZSA9ICEhb247IG5wU2VydmVyQXV0b0F0ay5hdCA9IERhdGUubm93KCk7IG5wU2VydmVyQXV0b0F0ay5zcmMgPSBTdHJpbmcoc291cmNlIHx8ICIiKTs=
     npServerAutoAtk.value = !!on; npServerAutoAtk.at = Date.now(); npServerAutoAtk.src = String(source || "");
+  // UNIFIED-PROBE-END battle-config-report
     npHuntOn = !!on; npBattleKnown = true; npBattleConfirmedAt = Date.now();
     try { dshDiag("np-battle-report", { on: !!on, source: source, epoch: npServerAutoAtk.epoch, pendingOff: !!npOffWait }); } catch (eDiag) {}
     try { qswPaint(); } catch (e) {}
@@ -11147,18 +11705,31 @@ function createRoItemCapture(env) {
     //   绝不写 #dsh-np-log —— 那一行是指令结果区（「未发送」/「已发送…」/失败原文），不能被状态播报顶掉。
     var isRealSrc = /^(loadinfo-2805|reloadinfo-2806|chat-notice)/.test(String(source || ""));
     if (isRealSrc) {
+      npVerifyUnresolved = false;
+      // 旧的关配置可能先于助手刚发出的开包到达；尚未收到「开」报告，不能据此抹掉开包归属和停机债务。
+      if (on && npAssistantOnSend) { npAssistantOnSend.awaitingOnReport = false; npAssistantOnSend.offCouldBeStale = false; }
+      var closingSnapshot = !on && npAssistantOnSend && (source === "loadinfo-2805" || source === "reloadinfo-2806") &&
+        ((npAckWait && npAckWait.want === false) || npOffWait);
+      var offCouldBeOld = !on && npAssistantOnSend && (closingSnapshot ||
+        ((!npAckWait || npAckWait.want !== false) && !npOffWait &&
+         (npAssistantOnSend.awaitingOnReport || Date.now() - npAssistantOnSend.at < NP_TOGGLE_GRACE)));
+      if (offCouldBeOld) npAssistantOnSend.offCouldBeStale = true;
+      else if (!on) { npStopDebtClear(); npAssistantOnSend = null; }
       try { npAtkRecSave(!!on); } catch (eS) {}
       // 玩家手动关闭内挂后，放弃寻怪循环缓存的「已在工作」状态；只信真实服务器来源，不用旧面板勾选值盲切。
       if (!on && typeof zWalkState !== "undefined" && zWalkState) { zWalkState.npOn = false; zWalkState.npMiss = 0; }
     }
     npStateNote = (on ? "开" : "关") + " · " + new Date().toTimeString().slice(0, 8) + " · " + npSourceLabel(source);
-    try { npAckResolve(!!on); } catch (eA) {} // V2.38.47：回执到达即结束等待（事件驱动）
-    if (!on) { try { npOffServerAck(); } catch (e3) {} } // 服务器报告已关 = 关闭结果确认（不必等 op142）
+    if (!closingSnapshot) try { npAckResolve(!!on); } catch (eA) {} // 旧配置快照不能冒充在途关闭的实际回执
+    if (!on && !closingSnapshot) { try { npOffServerAck(); } catch (e3) {} } // 确认关闭必须排除旧配置快照
+    if (isRealSrc && on) { try { npStopDebtOnReport(true); } catch (eDebt) { npAckAnomaly("late-stop-check-error", true, Date.now()); } }
   }
   // V2.38.47：状态未知时每 5 秒尝试播种一次（复用 1 秒 master 拍，不新增定时器）。
   try { masterTickReg(function () { try { if (npSeedAllowed()) npSeedStateOnce(); } catch (e) {} }); } catch (eTick) {}
   function npAutoAtkOn2805(pkt) {
-    try { var v = pkt ? pkt.startAutoAtk : undefined; if (v === 0 || v === 1) npApplyBattleState(v === 1, "loadinfo-2805"); } catch (e) {}
+  // UNIFIED-PROBE-BEGIN config-2805 ORIGINAL:ICAgIHRyeSB7IHZhciB2ID0gcGt0ID8gcGt0LnN0YXJ0QXV0b0F0ayA6IHVuZGVmaW5lZDsgaWYgKHYgPT09IDAgfHwgdiA9PT0gMSkgbnBBcHBseUJhdHRsZVN0YXRlKHYgPT09IDEsICJsb2FkaW5mby0yODA1Iik7IH0gY2F0Y2ggKGUpIHt9
+    try { var v = pkt ? pkt.startAutoAtk : undefined; if (v === 0 || v === 1) { try{upRecord("battle","server-battle-report",{on:v===1,source:"ZC.NOTIFY_LOADINFO",result:"received config; protection acceptance separate"});}catch(eUP){} npApplyBattleState(v === 1, "loadinfo-2805"); } } catch (e) {}
+  // UNIFIED-PROBE-END config-2805
   }
   // 旧引擎 ZC.NOTIFY_RELOADINFOS 的 id→选项名映射里，唯一的自动战斗项就是 34
   //   （Online.js ZC.NOTIFY_RELOADINFOS{id,value} → vbk.setReloadInfo switch case 34 → .openattack → x.startAutoAtk）。
@@ -11168,7 +11739,9 @@ function createRoItemCapture(env) {
     try {
       if (!pkt || Number(pkt.id) !== NP_RELOAD_ID_AUTOATK) return;
       var v = Number(pkt.value);
-      if (v === 0 || v === 1) npApplyBattleState(v === 1, "reloadinfo-2806");
+  // UNIFIED-PROBE-BEGIN config-2806 ORIGINAL:ICAgICAgaWYgKHYgPT09IDAgfHwgdiA9PT0gMSkgbnBBcHBseUJhdHRsZVN0YXRlKHYgPT09IDEsICJyZWxvYWRpbmZvLTI4MDYiKTs=
+      if (v === 0 || v === 1) { try{upRecord("battle","server-battle-report",{on:v===1,source:"ZC.NOTIFY_RELOADINFOS id=34",result:"received config; protection acceptance separate"});}catch(eUP){} npApplyBattleState(v === 1, "reloadinfo-2806"); }
+  // UNIFIED-PROBE-END config-2806
     } catch (e) {}
   }
   // 原型属性旁听：包结构在构造函数里 this.字段 = reader.read...()，赋值链命中原型 setter，
@@ -11226,7 +11799,10 @@ function createRoItemCapture(env) {
   // 决策（唯一入口）：状态可知 → 已关 already 零发包 / 在开最多发一次 toggle；
   //   状态未知（本连接内没见过 2805，或 2806 只推过别的 id，或已被身份换代作废）→ 零 toggle 并如实报未执行。
   function npRequestBattle(want, source, immediate, beforeToggle, preSend) {
+  // UNIFIED-PROBE-BEGIN battle-intent ORIGINAL:ICAgIHdhbnQgPSAhIXdhbnQ7IHNvdXJjZSA9IHNvdXJjZSB8fCAidW5rbm93biI7
     want = !!want; source = source || "unknown";
+    try{upRecord("battle","battle-toggle-intent",{want:want,source:upText(source,80),evidence:"npRequestBattle wrapper",result:"request only; dispatch and server report separate"});}catch(eUP){}
+  // UNIFIED-PROBE-END battle-intent
     // inc23839: 请求和真实报告分别采样，不猜测线上根因，不授权盲toggle。
     try { dshDiag("np-battle-request", { want: want, source: source, state: npBattleState(), report: npServerAutoAtk.src, reportAt: npServerAutoAtk.at, epoch: npServerAutoAtk.epoch, pendingOff: !!npOffWait }); } catch (eDiag) {}
     // V2.38.47：进入决策前先按兜底来源播种一次（角色档记录 > 本次会话聊天框原文），
@@ -11234,21 +11810,23 @@ function createRoItemCapture(env) {
     if (npSeedAllowed()) { try { npSeedStateOnce(); } catch (eS0) {} }
     if (want && typeof apiCombatActive === "function" && apiCombatActive()) return "suppressed";
     if (beforeToggle && beforeToggle() === false) return "failed";
-    if (npOffWait) return want ? "failed" : "queued"; // 已发送关闭：同向等待，相反方向明确拒绝（在途确认不因换图丢失）
+    if (npOffWait) return want ? "failed" : "queued"; // 已发送关闭：同向等待，相反方向明确拒绝
+    if (npAckWait) return "queued"; // 一个切换包的回执未决，不能在旁边再发第二次
     if (!npBattleKnown) {
       // V2.38.41：发包后报告若迟迟未到，用最近一次已发意图恢复切换方向，修「内挂快捷键能开不能关」。
       // 仅在乐观窗口内（且过了防抖）放行；窗口外/从未发过 toggle 仍 fail-closed，绝不盲切。
       var _recent = npLastIntent !== null && npBattleLastSentAt > 0 && (Date.now() - npBattleLastSentAt) < NP_TOGGLE_GRACE;
-      if (!_recent) return "unknown";
-      if (Date.now() - npBattleLastSentAt < NP_TOGGLE_DEBOUNCE) return "queued";
-      if (npLastIntent === want) return "already";
-      return npSendBattle(want, source, beforeToggle, preSend);
+      if (!_recent) { if (source === "npEnsureHunt") npAckAnomaly("unknown-state", want, Date.now()); return "unknown"; }
+      // 开关包是 toggle：缺回执时意图不能当作真实状态，同向只等待、反向绝不再发。
+      if (npLastIntent === want) return "queued";
+      return "unknown";
     }
     if (npHuntOn === want) return "already";
     return npSendBattle(want, source, beforeToggle, preSend);
   }
   function npResultKind(result, other) { return result === "suppressed" ? "warn" : other; } // V2.38.13 FIX-16：内挂开关结果 → 状态栏颜色，setBattle 与快捷键共用同一映射（同一句话不许两种颜色）
   function setBattle(on) {
+    if (on) { npStopDebtClear(); npAssistantOnSend = null; } // 玩家明确按助手「开」，旧停机意图不得关闭他的新选择
     var result = npRequestBattle(on, "setBattle", true);
     dshDiag("set-battle", { on: !!on, result: result });
     setStatus(result === "failed" ? "内挂自动战斗未执行：开关发送失败" : (result === "unknown" ? "内挂自动战斗未执行：还没收到游戏发来的内挂状态，不盲切开关" : (result === "suppressed" ? "外部代打进行中：不开内挂自动战斗（已抑制）" : (result === "already" ? "内挂自动战斗已处于目标状态" : (result === "queued" ? "内挂自动战斗：已发送关闭，等待游戏确认" : "内挂自动战斗：已发送")))), npResultKind(result, result === "failed" ? "err" : "ok"));
@@ -11275,8 +11853,11 @@ function createRoItemCapture(env) {
     try {
       if (!clientReady()) { npLog("游戏画面还没准备好"); return false; }
       var p = new (czp("WHISPER"))();
+  // UNIFIED-PROBE-BEGIN npc-wrapper-source ORIGINAL:ICAgICAgcC5yZWNlaXZlciA9IHJlY2VpdmVyOyBwLm1zZyA9ICIwIjsKICAgICAgQ0xJRU5ULk5NLnNlbmRQYWNrZXQocCk7
       p.receiver = receiver; p.msg = "0";
+      upTag(p,upSource!=="unknown"?upSource:"assistant:npSendWhisper");
       CLIENT.NM.sendPacket(p);
+  // UNIFIED-PROBE-END npc-wrapper-source
       return true;
     } catch (e) { npLog("动作异常: " + e.message); return false; }
   }
@@ -11414,6 +11995,7 @@ function createRoItemCapture(env) {
       var t = e.target;
       if (!t || !t.matches || !t.matches("#vbk input.openattack")) return;
       npBattleKnown = false; // 玩家点击只表示意图，未获服务器配置报告
+      npLastIntent = null; npBattleLastSentAt = -Infinity; npVerifyUnresolved = false; npAckClear(); npStopDebtClear(); npAssistantOnSend = null; // 玩家人工切换覆盖助手先前的停机意图
     });
   } catch (e) {}
   // toggle 一次自动战斗（发同一包：二转 id=34 value=1 / 三转 WHISPER msg="0"）
@@ -11472,12 +12054,15 @@ function createRoItemCapture(env) {
   try {
     onId("dsh-z-huntmode", "change", function () {
       if (this.value === "np" || this.value === "hybrid") {
+        npStopDebtClear(); // 重新选择内挂寻怪是新意图，废弃切走时的旧停机债务
         npCalibrate();               // 仅首次未知态校准，不周期覆盖
         npSyncTargets();             // 锁定目录同步给内挂（只追锁定怪）
+        if (zRunning) { npVerifyModeStartAt = Date.now(); npVerifyStallSeen = false; npVerifyHuntOn("mode-change"); }
         setStatus(this.value === "hybrid" ? "已切到混合寻怪（内挂长距离寻怪，锁定怪≤接管距离才由助手接管）" : "已切到内挂机制寻怪（点开自动战斗后由助手自动接管寻怪）", "ok");
         tlog("huntmode->" + this.value + " (no toggle until start)");
       } else {
-        npHuntStop("mode-change", true); // 既有入口：本档不新增/不修改任何内挂下发（手动走位同样不该让内挂继续驱动移动）
+        npStopDebtArm("mode-change");
+        npStopDebtResult(npHuntStop("mode-change", true)); // 显式切走内挂模式，即使置零设置关闭也要收回助手自己发出的迟到开回执
         // V2.38.40：手动走位是第四档，必须给对应的可见提示（其余档位文案一字不改）
         if (this.value === "manual") { setStatus("已切到手动走位（只打射程内的怪，助手不做寻怪移动）", "st"); tlog("huntmode->manual"); }
         else { setStatus("已切到自研直走寻怪", "st"); tlog("huntmode->self"); }
@@ -11675,11 +12260,22 @@ function createRoItemCapture(env) {
 
   // V2.38.24 B：卡死计时采样提到主循环（1s masterTick）——关掉侦查扫描时也能「卡住→计时→瞬移」。
   //   与 scanOnce 同口径：坐标没变才开始计时，一变就清零，坐着不算卡死（采样写回口径必须唯一，防永不判卡死/每 4s 空飞）。
+  // UNIFIED-PROBE-BEGIN flykeep-stationary-config-helper ORIGINAL:ICBmdW5jdGlvbiB6U3R1Y2tTYW1wbGUoKSB7Cg==
+  function zStationaryWaitMs() {
+    var el = $id("dsh-z-stucksec"), n = el ? parseInt(el.value, 10) : 4;
+    return (Number.isFinite(n) && n >= 0 ? Math.min(600, n) : 4) * 1000;
+  }
   function zStuckSample() {
+  // UNIFIED-PROBE-END flykeep-stationary-config-helper INLINE
     try {
       var ent = CLIENT.SS && CLIENT.SS.Entity;
       if (!ent || !ent.position) return;
+  // UNIFIED-PROBE-BEGIN flykeep-stationary-scope ORIGINAL:ICAgICAgdmFyIHB4ID0gZW50LnBvc2l0aW9uWzBdLCBweSA9IGVudC5wb3NpdGlvblsxXTsK
       var px = ent.position[0], py = ent.position[1];
+      var scope = String(activeProfileKey() || "") + "|" + String(getMapName() || "");
+      if (!zRunning || !activeProfileKey() || !getMapName() || !Number.isFinite(px) || !Number.isFinite(py)) { zLastPos = null; zStuckSince = null; zStuckSample.scope = ""; return; }
+      if (zStuckSample.scope !== scope) { zLastPos = null; zStuckSince = null; zStuckSample.scope = scope; npVerifyStallSeen = false; npVerifyLastAt = 0; }
+  // UNIFIED-PROBE-END flykeep-stationary-scope INLINE
       if (zLastPos && px === zLastPos[0] && py === zLastPos[1]) { if (!zStuckSince) zStuckSince = Date.now(); }
       else { zStuckSince = null; }
       zLastPos = [px, py];
@@ -12662,7 +13258,9 @@ function createRoItemCapture(env) {
   var ZKEEP_SMP_MAX = 200;
   var zKeepSmp = { on: false, ring: [], at: 0, lastHit: false, lastPress: false, entered: 0, lastEnterAt: 0 };
   function zKeepSmpSync() {
-    try { var el = $id("dsh-z-bosskeepsmp"); zKeepSmp.on = !!(el && el.checked); } catch (e) { zKeepSmp.on = false; }
+  // UNIFIED-PROBE-BEGIN gate-keepsmp ORIGINAL:ICAgIHRyeSB7IHZhciBlbCA9ICRpZCgiZHNoLXotYm9zc2tlZXBzbXAiKTsgektlZXBTbXAub24gPSAhIShlbCAmJiBlbC5jaGVja2VkKTsgfSBjYXRjaCAoZSkgeyB6S2VlcFNtcC5vbiA9IGZhbHNlOyB9
+    try { var el = $id("dsh-z-bosskeepsmp"); zKeepSmp.on = upAllowed("battle") && !!(el && el.checked); } catch (e) { zKeepSmp.on = false; }
+  // UNIFIED-PROBE-END gate-keepsmp
     return zKeepSmp.on;
   }
   function zKeepSmpClear() {
@@ -12872,7 +13470,10 @@ function createRoItemCapture(env) {
   // ================= V2.34.0 A7 / V2.34.1：战斗判定诊断（默认关 · 每秒一拍 · 环形 200 条 · 复用现成机制）+ 死亡自动取证（仅在角色死亡/满 10 分钟/手动按钮时 POST 到本机 127.0.0.1:8899，不出外网）=================
   var zDiagAt = 0; var zDiagDead = 0;
   var zDiagPostAt = 0;
+  // UNIFIED-PROBE-BEGIN gate-zDiagPost ORIGINAL:ICBmdW5jdGlvbiB6RGlhZ1Bvc3QodGFnKSB7
   function zDiagPost(tag) {
+    return; // Retired optional parallel collector; unified bounded queue owns evidence.
+  // UNIFIED-PROBE-END gate-zDiagPost
     try {
       if (typeof fetch !== "function") return;
       var arrP = window.__dshZDiag || [];
@@ -12945,7 +13546,10 @@ function createRoItemCapture(env) {
       prof: (function () { try { return { k: activeCharKey, n: Object.keys(profiles).length, ready: profUIApplied, lock: Object.keys(lockList || {}).length, ask: (askList || []).length }; } catch (eP) { return null; } })()
     };
   }
+  // UNIFIED-PROBE-BEGIN gate-zDiagTick ORIGINAL:ICBmdW5jdGlvbiB6RGlhZ1RpY2soKSB7
   function zDiagTick() {
+    return; // Retired optional parallel collector; unified bounded queue owns evidence.
+  // UNIFIED-PROBE-END gate-zDiagTick
     try {
       if (!($id("dsh-z-diag") && $id("dsh-z-diag").checked)) return;
       var nowD = Date.now();
@@ -12963,7 +13567,10 @@ function createRoItemCapture(env) {
   try { masterTickReg(function () { try { zDiagTick(); } catch (e) {} }); } catch (e) {}
   // 04-02 锁怪射程只读取证：仅在“档内有未学技能且它足以抬高射程”时上报一次到本机。
   var zRangeProbeSig = "", zRangeProbeAt = 0;
+  // UNIFIED-PROBE-BEGIN gate-zRangeProfileProbe ORIGINAL:ICBmdW5jdGlvbiB6UmFuZ2VQcm9maWxlUHJvYmUoKSB7
   function zRangeProfileProbe() {
+    return; // Retired optional parallel collector; unified bounded queue owns evidence.
+  // UNIFIED-PROBE-END gate-zRangeProfileProbe
     try {
       if (!zRunning || !clientReady() || String(selfName() || "").trim() !== "04-02") return;
       var cid = selfCharId(), ent = CLIENT.SS && CLIENT.SS.Entity;
@@ -13242,7 +13849,9 @@ function createRoItemCapture(env) {
         if (wingfb && useItemByIndex(wingfb.index)) {
           zWalkState.dir = Math.floor(Math.random() * 8); zWalkState.dirAt = Date.now(); // 瞬移后随机换方向，避免走回原地
           zWalkState.lastPos = null; zWalkState.stuckCnt = 0; zWalkState.tried = 0;
-          zTravelWingPendingStock = flyWingReserveNow() > 0 ? zTravelWingSeenStock : null;
+  // UNIFIED-PROBE-BEGIN flykeep-pending-regular-fallback ORIGINAL:ICAgICAgICAgIHpUcmF2ZWxXaW5nUGVuZGluZ1N0b2NrID0gZmx5V2luZ1Jlc2VydmVOb3coKSA+IDAgPyB6VHJhdmVsV2luZ1NlZW5TdG9jayA6IG51bGw7Cg==
+          zTravelWingPendingStock = flyWingReserveNow() > 0 && !wingfb.reusable ? zTravelWingSeenStock : null;
+  // UNIFIED-PROBE-END flykeep-pending-regular-fallback INLINE
           zFlyLastVia = "wing";
           tlog("fly-item-" + wingfb.itid);
           return true;
@@ -13255,7 +13864,9 @@ function createRoItemCapture(env) {
         if (wing && useItemByIndex(wing.index)) {
           zWalkState.dir = Math.floor(Math.random() * 8); zWalkState.dirAt = Date.now(); // 瞬移后随机换方向，避免走回原地
           zWalkState.lastPos = null; zWalkState.stuckCnt = 0; zWalkState.tried = 0;
-          zTravelWingPendingStock = flyWingReserveNow() > 0 ? zTravelWingSeenStock : null;
+  // UNIFIED-PROBE-BEGIN flykeep-pending-regular-priority ORIGINAL:ICAgICAgICAgIHpUcmF2ZWxXaW5nUGVuZGluZ1N0b2NrID0gZmx5V2luZ1Jlc2VydmVOb3coKSA+IDAgPyB6VHJhdmVsV2luZ1NlZW5TdG9jayA6IG51bGw7Cg==
+          zTravelWingPendingStock = flyWingReserveNow() > 0 && !wing.reusable ? zTravelWingSeenStock : null;
+  // UNIFIED-PROBE-END flykeep-pending-regular-priority INLINE
           zFlyLastVia = "wing";
           tlog("fly-item-" + wing.itid);
           return true;
@@ -13294,8 +13905,14 @@ function createRoItemCapture(env) {
         if (FLY_WING_DENY_IDS.indexOf(itid) >= 0) continue; // 蝴蝶 / 回城类 + 12212：按 ID 二次排除（显式覆盖也不能翻案）
         var info = null;
         try { info = DB && typeof DB.getItemInfo === "function" && DB.getItemInfo(itid); } catch (e) {}
-        var nm = (info && (info.identifiedDiSPlayName || info.name)) || "";
+  // UNIFIED-PROBE-BEGIN fly-name-alias ORIGINAL:ICAgICAgICB2YXIgbm0gPSAoaW5mbyAmJiAoaW5mby5pZGVudGlmaWVkRGlTUGxheU5hbWUgfHwgaW5mby5uYW1lKSkgfHwgIiI7Cg==
+        var nm = (info && (info.identifiedDisplayName || info.identifiedDiSPlayName || info.name)) || "";
+  // UNIFIED-PROBE-END fly-name-alias INLINE
+  // UNIFIED-PROBE-BEGIN flykeep-selected-item-type-safety ORIGINAL:ICAgICAgICB2YXIgaW5kZXggPSBpdC5pbmRleCAhPSBudWxsID8gaXQuaW5kZXggOiBpOwo=
         var index = it.index != null ? it.index : i;
+        var itemType = it.type != null ? it.type : it.itemType;
+        if (itemType != null && [0, 2, 11, 18].indexOf(Number(itemType)) < 0) continue; // 已知非使用道具不得因旧 ID 注释被选中
+  // UNIFIED-PROBE-END flykeep-selected-item-type-safety INLINE
         if (override) { if (override.indexOf(itid) >= 0) return { index: index, itid: itid, name: nm }; continue; }
         if (!nm) continue;                                    // 未鉴定 / 名称为空：跳过，绝不猜
         if (nm.indexOf("箱子") >= 0) continue;                 // 排除「…个箱子」等容器
@@ -13305,7 +13922,10 @@ function createRoItemCapture(env) {
         var qty = Number(it.count != null ? it.count : it.amount);
         if (Number.isFinite(qty) && qty <= 0) continue; // 背包槽还在但该堆已耗尽
         if (!keep) return { index: index, itid: itid, name: nm }; // 保命档不受预留限制
+  // UNIFIED-PROBE-BEGIN flykeep-known-reusable-wing ORIGINAL:ICAgICAgICBpZiAoIU51bWJlci5pc0Zpbml0ZShxdHkpIHx8IHF0eSA8IDApIHsgY291bnRVbmtub3duID0gdHJ1ZTsgY29udGludWU7IH0K
+        if (Number(itid) === 22104 && nm.replace(/\^[0-9a-fA-F]{6}/g, "").trim() === "魔法苍蝇翅膀") return { index: index, itid: itid, name: nm, reusable: true }; // 仅源中明确列出的魔法翼，不能按魔法二字泛化
         if (!Number.isFinite(qty) || qty < 0) { countUnknown = true; continue; }
+  // UNIFIED-PROBE-END flykeep-known-reusable-wing INLINE
         total += qty;
         if (!picked) picked = { index: index, itid: itid, name: nm };
       }
@@ -13400,34 +14020,37 @@ function createRoItemCapture(env) {
   //   但经 StatusIcons.manager → UIManager.getComponent("Inventory") 能拿到真实组件）。
   //   返回形状与旧契约完全一致（数组；元素 {ITID,index,count/amount,type,WearState,...}），下面几条旧路线全部保留为兜底。
   function bagInvComp(strict) { try { return uiComp("Inventory", strict); } catch (e) { if (strict) throw e; return null; } }
+  // UNIFIED-PROBE-BEGIN fix-bagitem-priority ORIGINAL:ICBmdW5jdGlvbiBiYWdJdGVtQnlJbmRleChpZHgpIHsKICAgIHRyeSB7CiAgICAgIGlmIChpZHggPT0gbnVsbCkgcmV0dXJuIG51bGw7CiAgICAgIHZhciBpID0gTnVtYmVyKGlkeCk7CiAgICAgIGlmIChpc05hTihpKSkgcmV0dXJuIG51bGw7CiAgICAgIC8vIOKTqiBWMi4zOC4xMO+8muWMhea1geaVtOihqOS8mOWFiO+8iOaJi+acuuerr+WUr+S4gOWPr+ihjO+8ie+8jOaLv+S4jeWIsOWGjei1sOWOn+adpeeahOe7hOS7tui3r+e6vwogICAgICB2YXIgcGl0ID0gKHR5cGVvZiBiYWdQa3RCeUluZGV4ID09PSAiZnVuY3Rpb24iKSA/IGJhZ1BrdEJ5SW5kZXgoaSkgOiBudWxsOwogICAgICBpZiAocGl0KSByZXR1cm4gcGl0OwogICAgICB2YXIgYyA9IGJhZ0ludkNvbXAoKTsKICAgICAgaWYgKGMgJiYgdHlwZW9mIGMuZ2V0SXRlbUJ5SW5kZXggPT09ICJmdW5jdGlvbiIpIHsgdHJ5IHsgdmFyIGl0ID0gYy5nZXRJdGVtQnlJbmRleChpKTsgaWYgKGl0KSByZXR1cm4gaXQ7IH0gY2F0Y2ggKGUxKSB7fSB9CiAgICAgIHZhciBtb2RzID0gWyJVSS9Db21wb25lbnRzL0ludmVudG9yeS9JbnZlbnRvcnkiLCAiVUkvQ29tcG9uZW50cy9CYXNpY0ludmVudG9yeS9CYXNpY0ludmVudG9yeSJdOwogICAgICBmb3IgKHZhciBtID0gMDsgbSA8IG1vZHMubGVuZ3RoOyBtKyspIHsKICAgICAgICB2YXIgbW9kID0gbnVsbDsgdHJ5IHsgbW9kID0gcmVxdWlyZURCKG1vZHNbbV0pOyB9IGNhdGNoIChlMikge30KICAgICAgICBpZiAobW9kICYmIHR5cGVvZiBtb2QuZ2V0SXRlbUJ5SW5kZXggPT09ICJmdW5jdGlvbiIpIHsgdHJ5IHsgdmFyIGl0MiA9IG1vZC5nZXRJdGVtQnlJbmRleChpKTsgaWYgKGl0MikgcmV0dXJuIGl0MjsgfSBjYXRjaCAoZTMpIHt9IH0KICAgICAgfQogICAgICB2YXIgbGlzdCA9IGJhZ0xpc3QoKTsKICAgICAgaWYgKGxpc3QpIGZvciAodmFyIGsgPSAwOyBrIDwgbGlzdC5sZW5ndGg7IGsrKykgeyB2YXIgeCA9IGxpc3Rba10gfHwge307IGlmIChOdW1iZXIoeC5pbmRleCkgPT09IGkpIHJldHVybiB4OyB9CiAgICB9IGNhdGNoIChlKSB7fQogICAgcmV0dXJuIG51bGw7CiAgfQo=
   function bagItemByIndex(idx) {
     try {
       if (idx == null) return null;
       var i = Number(idx);
       if (isNaN(i)) return null;
-      // ⓪ V2.38.10：包流整表优先（手机端唯一可行），拿不到再走原来的组件路线
-      var pit = (typeof bagPktByIndex === "function") ? bagPktByIndex(i) : null;
-      if (pit) return pit;
+      // ① V2.38.77-修法①：优先问客户端组件实例表（与格子 data-index 同一 index 空间）
       var c = bagInvComp();
-      if (c && typeof c.getItemByIndex === "function") { try { var it = c.getItemByIndex(i); if (it) return it; } catch (e1) {} }
+      if (c && typeof c.getItemByIndex === "function") { try { var it = c.getItemByIndex(i); if (it) { bagPlace("comp", it); return it; } } catch (e0) {} }
+      // ② 包流整表按格号（0x0b09/2825 的 index 字段；手机端组件全不可用时的唯一可行路线）
+      var pit = (typeof bagPktByIndex === "function") ? bagPktByIndex(i) : null;
+      if (pit) { bagPlace("pkt", pit); return pit; }
       var mods = ["UI/Components/Inventory/Inventory", "UI/Components/BasicInventory/BasicInventory"];
       for (var m = 0; m < mods.length; m++) {
         var mod = null; try { mod = requireDB(mods[m]); } catch (e2) {}
-        if (mod && typeof mod.getItemByIndex === "function") { try { var it2 = mod.getItemByIndex(i); if (it2) return it2; } catch (e3) {} }
+        if (mod && typeof mod.getItemByIndex === "function") { try { var it2 = mod.getItemByIndex(i); if (it2) { bagPlace("mod", it2); return it2; } } catch (e3) {} }
       }
       var list = bagList();
-      if (list) for (var k = 0; k < list.length; k++) { var x = list[k] || {}; if (Number(x.index) === i) return x; }
+      if (list) for (var k = 0; k < list.length; k++) { var x = list[k] || {}; if (Number(x.index) === i) { bagPlace("scan", x); return x; } }
     } catch (e) {}
     return null;
   }
+
+  // UNIFIED-PROBE-END fix-bagitem-priority  // UNIFIED-PROBE-BEGIN fix-baglist-priority ORIGINAL:ICBmdW5jdGlvbiBiYWdMaXN0KCkgewogICAgdmFyIGxpc3QgPSBudWxsOwogICAgYmFnUmVhZC5zb3VyY2UgPSAi6K+75Y+W5aSx6LSlIjsgYmFnUmVhZC5jb3VudCA9IDA7IGJhZ1JlYWQuYXJyb3dzID0gMDsKICAgIHRyeSB7CiAgICAgIC8vIOKTqiBWMi4zOC4xMCDmnIDpq5jkvJjlhYjnuqflj6ror7vmnaXmupDvvJrljIXmtYHmlbTooajvvIgweDBiMDkvMjgyNe+8jDM0QiDorrDlvZXvvInigJTigJTmiYvmnLrnq6/nu4Tku7blhajkuI3lj6/nlKjml7bnmoTllK/kuIDlj6/ooYzot6/nur8KICAgICAgdmFyIF9icGsgPSAodHlwZW9mIGJhZ1BrdFNuYXBzaG90ID09PSAiZnVuY3Rpb24iKSA/IGJhZ1BrdFNuYXBzaG90KCkgOiBudWxsOyAgIC8vIHR5cGVvZiDlrojljavvvJrlsYDpg6jliIfniYfmtYvor5Xnjq/looPlj6/nvLoKICAgICAgLy8g5YyF5rWB5pyJ5pWw5o2u5bCx55u05o6l6L+U5Zue77ya5ZCO57ut5Lu75LiA6Lev57q/77yI5ZCr5peg5pWI57uE5Lu2IC5saXN077yJ6YO95LiN5b6X6KaG55uW5oiW5oqK5a6D5riF5oiQIG51bGwKICAgICAgaWYgKF9icGspIHsgdmFyIF9wbGlzdCA9IGJhZ1NvdXJjZVRyeSgicGFja2V0LjB4MGIwOSIsIF9icGspOyBpZiAoQXJyYXkuaXNBcnJheShfcGxpc3QpICYmIF9wbGlzdC5sZW5ndGgpIHJldHVybiBfcGxpc3Q7IH0KICAgICAgLy8g4pGgIFYyLjM4LjQg6aaW6YCJ77yI5a6i5oi356uv6Lev57q/77yM5Y6f5qC35L+d55WZ5YWc5bqV77yJ77yadWlDb21wKCJJbnZlbnRvcnkiKe+8iOe6v+S4iuWUr+S4gOWPr+i+vueahOi3r+e6v++8iQogICAgICB2YXIgX2ljID0gYmFnSW52Q29tcCgpOwogICAgICBpZiAoX2ljKSBsaXN0ID0gYmFnU291cmNlVHJ5KCJ1aUNvbXAuSW52ZW50b3J5Lmxpc3QiLCBfaWMubGlzdCk7CiAgICAgIC8vIOKRoC/ikaEg57uE5Lu25qih5Z2X55qEIC5saXN077yI5YWIIHJlcXVpcmVEQu+8m+ahpeaOpeaooeWdlyByZXF1aXJlIOeZveWQjeWNleayoeaciei/meS6m+i3r+W+hOaXtumdmem7mOi3s+i/h++8iQogICAgICB2YXIgcGF0aHMgPSBbWyJVSS9Db21wb25lbnRzL0ludmVudG9yeS9JbnZlbnRvcnkiLCAiSW52ZW50b3J5Lmxpc3QiXSwgWyJVSS9Db21wb25lbnRzL0Jhc2ljSW52ZW50b3J5L0Jhc2ljSW52ZW50b3J5IiwgIkJhc2ljSW52ZW50b3J5Lmxpc3QiXV07CiAgICAgIGZvciAodmFyIGkgPSAwOyBpIDwgcGF0aHMubGVuZ3RoICYmICFsaXN0OyBpKyspIHsKICAgICAgICB2YXIgbW9kID0gbnVsbDsKICAgICAgICB0cnkgeyBtb2QgPSByZXF1aXJlREIocGF0aHNbaV1bMF0pOyB9IGNhdGNoIChlMSkge30KICAgICAgICBpZiAoIW1vZCkgeyB0cnkgeyBtb2QgPSByZXF1aXJlREIocGF0aHNbaV1bMF0pOyB9IGNhdGNoIChlMikge30gfQogICAgICAgIGlmIChtb2QpIGxpc3QgPSBiYWdTb3VyY2VUcnkocGF0aHNbaV1bMV0sIG1vZC5saXN0KTsKICAgICAgfQogICAgICAvLyDikaIgVUlNYW5hZ2VyIOe7hOS7tuihqO+8iHJlcXVpcmUg5Y+v6IO955u05o6l5oqb5byC5bi477yM5pW05Liq5YyF5L2P77yJCiAgICAgIGlmICghbGlzdCkgewogICAgICAgIHRyeSB7CiAgICAgICAgICBpZiAoIUNMSUVOVC5VSSkgQ0xJRU5ULlVJID0gcmVxdWlyZURCKCJVSS9VSU1hbmFnZXIiKTsKICAgICAgICAgIHZhciBVTSA9IENMSUVOVC5VSTsKICAgICAgICAgIHZhciBuYW1lcyA9IFsiSW52ZW50b3J5IiwgIkJhc2ljSW52ZW50b3J5Il07CiAgICAgICAgICBmb3IgKHZhciBjID0gMDsgYyA8IG5hbWVzLmxlbmd0aCAmJiAhbGlzdDsgYysrKSB7CiAgICAgICAgICAgIHZhciBjb21wID0gKFVNICYmIFVNLmNvbXBvbmVudHMpID8gVU0uY29tcG9uZW50c1tuYW1lc1tjXV0gOiBudWxsOwogICAgICAgICAgICBpZiAoY29tcCkgbGlzdCA9IGJhZ1NvdXJjZVRyeSgiVU0uY29tcG9uZW50cy4iICsgbmFtZXNbY10gKyAiLmxpc3QiLCBjb21wLmxpc3QpOwogICAgICAgICAgfQogICAgICAgICAgLy8g4pGjIFVNLmdldENvbXBvbmVudO+8iOivpeaWueazleS4jeWtmOWcqOaIluaKm+W8guW4uOmDveW/hemhu+iDvee7p+e7re+8iQogICAgICAgICAgaWYgKCFsaXN0ICYmIFVNICYmIHR5cGVvZiBVTS5nZXRDb21wb25lbnQgPT09ICJmdW5jdGlvbiIpIHsKICAgICAgICAgICAgZm9yICh2YXIgYzIgPSAwOyBjMiA8IG5hbWVzLmxlbmd0aCAmJiAhbGlzdDsgYzIrKykgewogICAgICAgICAgICAgIHZhciBpbnN0ID0gbnVsbDsKICAgICAgICAgICAgICB0cnkgeyBpbnN0ID0gVU0uZ2V0Q29tcG9uZW50KG5hbWVzW2MyXSk7IH0gY2F0Y2ggKGUzKSB7fQogICAgICAgICAgICAgIGlmIChpbnN0KSBsaXN0ID0gYmFnU291cmNlVHJ5KCJVTS5nZXRDb21wb25lbnQuIiArIG5hbWVzW2MyXSArICIubGlzdCIsIGluc3QubGlzdCk7CiAgICAgICAgICAgIH0KICAgICAgICAgIH0KICAgICAgICB9IGNhdGNoIChlNCkge30KICAgICAgfQogICAgICAvLyDikaQg5pen5a6i5oi356uvIFNlc3Npb25TdG9yYWdlIOmhtuWxguebtOaOpeaMgueahOiDjOWMheaVsOe7hAogICAgICBpZiAoIWxpc3QgJiYgQ0xJRU5ULlNTKSB7CiAgICAgICAgdmFyIGtleXMgPSBPYmplY3Qua2V5cyhDTElFTlQuU1MpOwogICAgICAgIGZvciAodmFyIGsgPSAwOyBrIDwga2V5cy5sZW5ndGggJiYgIWxpc3Q7IGsrKykgewogICAgICAgICAgdmFyIHYgPSBDTElFTlQuU1Nba2V5c1trXV07CiAgICAgICAgICBpZiAodiAmJiBBcnJheS5pc0FycmF5KHYpKSBsaXN0ID0gYmFnU291cmNlVHJ5KCJDTElFTlQuU1MuIiArIGtleXNba10sIHYpOwogICAgICAgIH0KICAgICAgfQogICAgfSBjYXRjaCAoZSkge30KICAgIGlmIChsaXN0KSByZXR1cm4gbGlzdDsKICAgIGJhZ1JlYWQuc291cmNlID0gIuivu+WPluWksei0pSI7IGJhZ1JlYWQuY291bnQgPSAwOyBiYWdSZWFkLmFycm93cyA9IDA7CiAgICByZXR1cm4gbnVsbDsKICB9
   function bagList() {
+    var list = null;
     var list = null;
     bagRead.source = "读取失败"; bagRead.count = 0; bagRead.arrows = 0;
     try {
-      // ⓪ V2.38.10 最高优先级只读来源：包流整表（0x0b09/2825，34B 记录）——手机端组件全不可用时的唯一可行路线
-      var _bpk = (typeof bagPktSnapshot === "function") ? bagPktSnapshot() : null;   // typeof 守卫：局部切片测试环境可缺
-      // 包流有数据就直接返回：后续任一路线（含无效组件 .list）都不得覆盖或把它清成 null
-      if (_bpk) { var _plist = bagSourceTry("packet.0x0b09", _bpk); if (Array.isArray(_plist) && _plist.length) return _plist; }
+      // ⓪ V2.38.77-修法①：组件路线提前到最前（组件不可用时才退包流表）；包流快照的可用性判据一字不改，
+      //   仍由 bagPktSnapshot()（complete 且条数 > 0 且表非空）决定，手机端组件全不可用 → 下面的包流兜底照旧生效。
       // ① V2.38.4 首选（客户端路线，原样保留兜底）：uiComp("Inventory")（线上唯一可达的路线）
       var _ic = bagInvComp();
       if (_ic) list = bagSourceTry("uiComp.Inventory.list", _ic.list);
@@ -13467,11 +14090,17 @@ function createRoItemCapture(env) {
           if (v && Array.isArray(v)) list = bagSourceTry("CLIENT.SS." + keys[k], v);
         }
       }
+      // ⓪′ 兜底：包流整表（0x0b09/2825，34B 记录）——组件路线全部拿不到时才用，可用性判据不变
+      if (!list) {
+        var _bpk = (typeof bagPktSnapshot === "function") ? bagPktSnapshot() : null;
+        if (_bpk) { var _plist = bagSourceTry("packet.0x0b09", _bpk); if (Array.isArray(_plist) && _plist.length) return _plist; }
+      }
     } catch (e) {}
     if (list) return list;
     bagRead.source = "读取失败"; bagRead.count = 0; bagRead.arrows = 0;
     return null;
   }
+  // UNIFIED-PROBE-END fix-baglist-priority
   // 只读诊断行：换箭设置浮窗、自动装箭矢栏共用（内容不变不重写，防闪）
   function bagDiagText() {
     if (!bagRead.source || bagRead.source === "读取失败") return "背包数据源：读取失败（所有路径都拿不到 list）";
@@ -13537,6 +14166,65 @@ function createRoItemCapture(env) {
     if (npSeedAllowed()) npSeedStateOnce();
     return npBattleState();
   }
+  // 实验版自动异常留证：无常驻扫描，异常发生时节流采样，失败不能阻塞战斗/保命。
+  var expBattleProbeAt = Object.create(null);
+  // UNIFIED-PROBE-BEGIN legacy-exp ORIGINAL:ICBmdW5jdGlvbiBleHBCYXR0bGVQcm9iZShldmVudCwgZXh0cmEpIHs=
+  function expBattleProbe(event, extra) {
+    try{upRecord("battle","battle-anomaly",{event:upText(event,80),result:"diagnostic only; no inferred root cause"});}catch(eUP){}
+    return; // Unified bounded queue replaces unqueued optional POST.
+  // UNIFIED-PROBE-END legacy-exp
+    try {
+      if (!clientReady() || !activeProfileKey() || !getMapName()) return;
+      var cid = selfCharId(); if (!Number.isSafeInteger(cid) || cid <= 0) return;
+      var at = Date.now(), scope = event + ":" + cid + ":" + npServerAutoAtk.epoch + ":" + getMapName(), last = expBattleProbeAt[scope];
+      if (last != null && at - last < 30000) return;
+      expBattleProbeAt[scope] = at;
+      var ent = CLIENT.SS && CLIENT.SS.Entity, pos = ent && ent.position;
+      DSHCollect.post("http://127.0.0.1:8899/api/probe-collect", {
+        t: "exp-battle-probe", ver: VER, at: at, event: event,
+        charId: cid, epoch: npServerAutoAtk.epoch, map: getMapName(), mode: npHuntMode(),
+        known: !!npBattleKnown, on: npBattleKnown ? !!npHuntOn : null,
+        reportAgeMs: npServerAutoAtk.at ? at - npServerAutoAtk.at : null,
+        pending: npAckWait ? { want: npAckWait.want, ageMs: at - npAckWait.at } : null,
+        stuckMs: zStuckSince ? at - zStuckSince : null,
+        pos: pos && pos.length >= 2 ? [Number(pos[0]), Number(pos[1])] : null,
+        lastMoveAgeMs: zWalkState && zWalkState.lastMove ? at - zWalkState.lastMove : null,
+        fallback: extra || null
+      });
+    } catch (e) {}
+  }
+  var npVerifyLastAt = 0, npVerifyStallSeen = false, npVerifyStallMap = "", npVerifyModeStartAt = 0, npVerifyUnresolved = false;
+  function npVerifyHuntOn(reason) {
+    try {
+      if (!zRunning || (npHuntMode() !== "np" && !isHybrid()) || !clientReady()) return "inactive";
+      if (externalAutomationOwns("battle") || (typeof apiCombatActive === "function" && apiCombatActive())) return "suppressed";
+      var now = Date.now();
+      if (npAckWait || npOffWait) return "queued";
+      if (npVerifyUnresolved && !npBattleKnown) return "unconfirmed"; // 首次校对没回执，不得 3 秒后再盲切一次
+      if (npVerifyLastAt && now - npVerifyLastAt < 3000) return "cooldown";
+      if (zEngagedNow(now) || isSitting() || needSitNow() || moveXY.busy || pendingPick || escapePending() || zEscape.until > now || (zDefenseFlyAt && now - zDefenseFlyAt < 1500)) return "unsafe";
+      if (!activeProfileKey() || !getMapName()) return "unknown-identity";
+      npVerifyLastAt = now;
+      if (npBattleKnown && !npHuntOn) return npEnsureHunt(); // 已有「关」的真回执：只发一次开，不先切成关
+      if (npBattleKnown && npHuntOn) return "already"; // 旧 ON 回执仍代表本会话已知开：试切会把正在工作的内挂关掉
+      if (typeof expBattleProbe === "function") expBattleProbe("unknown-" + reason);
+      return "unconfirmed"; // 未知状态绝不发翻转包；持续停滞由自研走位独立处理
+    } catch (e) { npAckClear(); return "failed"; }
+  }
+  function npVerifyStationaryTick() {
+    try {
+      if (!zRunning || (npHuntMode() !== "np" && !isHybrid())) { npVerifyStallSeen = false; return; }
+      var map = String(getMapName() || "");
+      if (!map || map !== npVerifyStallMap) { npVerifyStallMap = map; npVerifyStallSeen = false; return; }
+      if (!zStuckSince) { npVerifyStallSeen = false; return; }
+  // UNIFIED-PROBE-BEGIN flykeep-stationary-config-verification ORIGINAL:ICAgICAgaWYgKG5wVmVyaWZ5U3RhbGxTZWVuIHx8IERhdGUubm93KCkgLSBNYXRoLm1heCh6U3R1Y2tTaW5jZSwgbnBWZXJpZnlNb2RlU3RhcnRBdCkgPCAzMDAwKSByZXR1cm47Cg==
+      var waitMs = zStationaryWaitMs();
+      if (!waitMs || npVerifyStallSeen || Date.now() - Math.max(zStuckSince, npVerifyModeStartAt) < waitMs) return;
+  // UNIFIED-PROBE-END flykeep-stationary-config-verification INLINE
+      var result = npVerifyHuntOn("stationary");
+      if (result !== "unsafe" && result !== "queued" && result !== "cooldown") npVerifyStallSeen = true;
+    } catch (e) {}
+  }
   function startZhu() {
     if (zRunning) return;
     if (externalAutomationOwns("battle")) { setStatus("外部自动化持有战斗租约，助手战斗不启动", "warn"); return; }
@@ -13551,6 +14239,7 @@ function createRoItemCapture(env) {
       tlog("zhu-refuse cz-selfcheck " + _czchk.brief);
       return;
     }
+    npStopDebtClear(); npAssistantOnSend = null; // 新一轮模式接管之前的停机意图，避免旧回执误关玩家的新选择
     zRunning = true;
     $id("dsh-z-state").textContent = "助手运行中…";
     startScan();
@@ -13572,6 +14261,8 @@ function createRoItemCapture(env) {
     if (npHuntMode() === "np" || isHybrid()) {
       npCalibrate();
       npSyncTargets();
+      npVerifyModeStartAt = Date.now(); npVerifyStallSeen = false; npVerifyStallMap = "";
+      npVerifyHuntOn("start");
       tlog("zhu-start np-hunt");
     }
     var sec = Math.max(0.05, safeTimingValue($id("dsh-z-attint").value, 0.25, 1000));
@@ -13584,15 +14275,25 @@ function createRoItemCapture(env) {
     zRunning = false;
     stopScan();
     if (zAttTimer) { clearInterval(zAttTimer); zAttTimer = null; }
-    // 内挂机制寻怪：停止时关闭内挂自动战斗
-    npZeroBattle("stopZhu");
+    // 内挂机制寻怪：置零开关允许时，记录助手已发「开」的停机债务；超时后真实「开」仍须补关。
+    var npStopResult = "external";
+    if (externalAutomationOwns("battle") || (typeof apiCombatActive === "function" && apiCombatActive())) {
+      npStopDebtClear(); // 外部代打持有战斗控制权时，停止助手不能翻转外部的内挂开关
+    } else {
+      if (npZeroEnabled()) npStopDebtArm("stopZhu"); else npStopDebtClear();
+      npStopResult = npZeroBattle("stopZhu");
+      npStopDebtResult(npStopResult);
+    }
     zLock.gid = null; zLock.done = false; // 解除锁定/停手状态
     zUseCounts = {}; // V1.7.0 重置本轮技能释放次数（maxUses）
     zLockCounts = {}; // V1.7.5 重置锁定次数（开/停自动战斗清空）
     dshDiag("zhu-stop");
     zMon.action = "已停止";
     $id("dsh-z-state").textContent = "助手未启动";
-    setStatus("助手模式已停止", "st");
+    var npStillPending = npStopResult === "sent" || npStopResult === "queued" || npStopResult === "unknown" || npStopResult === "failed" ||
+      (npStopResult === "already" && npAssistantOnSend && npAssistantOnSend.offCouldBeStale);
+    setStatus(npStillPending ? "助手已停止；内挂关闭未确认，请等游戏回执或手动核实" : npStopResult === "external" ?
+      "助手已停止；外部代打接管内挂开关" : "助手模式已停止", npStillPending ? "warn" : "st");
   }
   // 无目标自动走路寻怪（2s 判定一次）
   // 直走策略：持续朝一个方向走 + A*避障，遇障碍/卡住才转向（不再 8 方向轮转兜圈）
@@ -14128,7 +14829,10 @@ function createRoItemCapture(env) {
     } catch (e) {}
   }
   masterTickReg(function () { try { tickRein(); } catch (e) {} });
-  masterTickReg(function () { try { zStuckSample(); } catch (e) {} }); // V2.38.24 B：卡死计时采样（关掉侦查扫描也生效）
+  // UNIFIED-PROBE-BEGIN tick ORIGINAL:ICBtYXN0ZXJUaWNrUmVnKGZ1bmN0aW9uICgpIHsgdHJ5IHsgelN0dWNrU2FtcGxlKCk7IG5wVmVyaWZ5U3RhdGlvbmFyeVRpY2soKTsgfSBjYXRjaCAoZSkge30gfSk7IC8vIOS9jeenu+mHh+agt+WQjuWIpOWumiAzIOenkuWBnOa7nu+8m+S/neWRveeLrOeriw==
+  masterTickReg(function () { try { zStuckSample(); npVerifyStationaryTick(); } catch (e) {} }); // 位移采样后判定 3 秒停滞；保命独立
+  masterTickReg(function(){try{upTick();}catch(e){UP.hooks="observer tick failed";upRender();}});
+  // UNIFIED-PROBE-END tick
   // V2.38.24 C：内挂门控迟滞（有→无 需连续 2 拍 + 距上次切换 ≥1s；无→有 立即生效）状态挂在 zWalkState 上（np* 三字段）
   var zWalkState = { lastMove: 0, lastChase: 0, dir: 0, noTargetSince: 0, lastIdleFly: 0, lastPos: null, stuckCnt: 0, stuckAt: 0, tried: 0, lastSeenDir: null, lastSeenAt: 0, center: null, chaseGid: null, chaseDist: 0, chaseSince: 0, startMap: null, lastMoveDir: 0, backMapAt: 0, backDir: 0, backTeleportAt: 0, hySince: 0, hyGid: 0, hyPos: null, hyTakeoverUntil: 0, hyDist: 0, hyStillSince: 0, chaseFrom: null, chaseReplan: false, lastLockMissLog: 0, lastSelfMoveAt: 0, routeExt: false, routeActive: false, routeTotal: 0, routeIdx: 0, seenDirCand: null, seenDirCandAt: 0, dirAt: 0, chaseHold: null, chaseHoldDist: null, chaseHoldProgressAt: 0, stuckEvent: 0, stuckDirs: null, stuckTurns: 0, stuckEscapeAt: 0, lastMapName: null, backDone: 0, backCooldownAt: 0, lastWalkDir: null, lastWalkDest: null, npOn: false, npMiss: 0, npAt: 0 }; // V2.16.4 stuckAt=卡住时间窗口起点；center=地图边界锚点(启动点)；V2.16.7 chase*=追怪卡住检测；V2.34.3 hy*=混合寻怪「内挂是否真的在接管」判定（内挂死等兜底）；V2.38.4 G1 lastSelfMoveAt/route*=「自己发的位移」时间戳与客户端外部路线状态；G2 seenDirCand/dirAt/chaseHold/stuck*/lastMapName/back* = 方向滞回、追怪保持、卡住转向、换图反向走
   // V2.38.4 G1①：助手每次自己发位移都要打时间戳——用于区分「自己发的移动」与外部（用户点大地图/客户端其它来源）的路线
@@ -14623,11 +15327,11 @@ function createRoItemCapture(env) {
             }
             if (rescueResult === "sent" || rescueResult === "queued") {
               setStatus("锁定怪追击卡墙，已请求内挂接管，等待服务器回执…", "warn");
-              return;
+              if (!(zStuckSince && now - zStuckSince >= 3000)) return; // 长时间未动不能因开关回执未决而阻断助手追怪
             }
             setStatus("锁定怪追击卡墙，内挂状态未确认，继续助手脱困…", "warn");
           }
-          if (isHybrid() && !zEngagedNow(now)) {
+          if (isHybrid() && !zEngagedNow(now) && !(zStuckSince && now - zStuckSince >= 3000)) {
             var hySeek = npEnsureHunt(); // 未开打则保持内挂寻怪；卡墙救援和服务器回执优先
             var hyConfirmed = hySeek === "already" && npBattleState() === true;
             setStatus(hyConfirmed ? "混合寻怪：内挂已确认，接近锁定怪…" : hySeek === "sent" || hySeek === "queued" ? "混合寻怪：已请求内挂接管，等待服务器回执…" : "混合寻怪：内挂状态未确认，未盲切…", hyConfirmed ? "st" : "warn");
@@ -14660,7 +15364,7 @@ function createRoItemCapture(env) {
                 else if (!zWalkState.hyStillSince) zWalkState.hyStillSince = hyNow;
                 zWalkState.hyDist = nearD;
                 var hyStill = zWalkState.hyStillSince ? (hyNow - zWalkState.hyStillSince) : 0;
-                if (realNp === false || hyStill >= 2500) {
+                if (realNp === false || (realNp !== true && zStuckSince && hyNow - zStuckSince >= 3000) || hyStill >= 2500) {
                   zWalkState.hyTakeoverUntil = hyNow + 12000;
                   zWalkState.hySince = 0;
                   zWalkState.hyStillSince = 0;
@@ -14839,6 +15543,13 @@ function createRoItemCapture(env) {
       // 卡壳脱困（追怪卡住 / 转向 4 次无位移 / 四周不可走）仅受卡住开关控制，不能借无目标瞬移开关误放行
       var zAutoFlyOn = !!($id("dsh-z-flystuck") && $id("dsh-z-flystuck").checked) && zFlyKillOnNow && !zSitYieldNow && !zEngagedNow(now) && zEscFlySecNow() > 0 && canTravelFly(); // 脱困只受卡住开关管，无目标开关只管 Y 秒瞬移
       var zIdleFlyOn = !!($id("dsh-z-idlefly") && $id("dsh-z-idlefly").checked) && zFlyKillOnNow && !zSitYieldNow;
+      // 内挂回执未知且已停滞：自研移动作为并联兜底；远处旧锁定怪不能持续清空无目标瞬移计时。
+  // UNIFIED-PROBE-BEGIN flykeep-stationary-ON-reserve-fallback ORIGINAL:ICAgICAgdmFyIG5wRmFsbGJhY2tXYWxrID0gbnBNb2RlICYmIG5wQmF0dGxlU3RhdGUoKSAhPT0gdHJ1ZSAmJiB6U3R1Y2tTaW5jZSAmJiBub3cgLSB6U3R1Y2tTaW5jZSA+PSAzMDAwICYmICFlc2NhcGVQZW5kaW5nKCk7Cg==
+      var stationaryWaitMs = zStationaryWaitMs();
+      var npFallbackWalk = npMode && (npBattleState() !== true || (flyWingReserveNow() > 0 && !canTravelFly())) && stationaryWaitMs > 0 && zStuckSince && now - Math.max(zStuckSince, npVerifyModeStartAt) >= stationaryWaitMs && !zSitYieldNow && !escapePending() && !externalAutomationOwns("battle") && !(typeof apiDialogOpen === "function" && apiDialogOpen());
+  // UNIFIED-PROBE-END flykeep-stationary-ON-reserve-fallback INLINE
+      if (npFallbackWalk && typeof expBattleProbe === "function") expBattleProbe("stationary-fallback");
+      if (npFallbackWalk && !zWalkState.noTargetSince) zWalkState.noTargetSince = zStuckSince; // 远处旧锁定怪刚失效时，从实际停住时算无目标时间，不额外重新等满配置秒数
       function zIdleMoveSecNow() {
         try {
           var el = $id("dsh-z-nomove");
@@ -14869,7 +15580,9 @@ function createRoItemCapture(env) {
           if (zEngagedNow(nowMs)) { zWalkState.noTargetSince = 0; return "ok"; }
           var atkR = calcAtkRange();
           var ht = zLock.gid ? zAtkHpTrack[zLock.gid] : null;
-          if ((ht && nowMs - ht.at < 4000) || scanHasAttackableLockedMob(atkR) || scanHasOutOfRangeLockedMob(atkR)) {
+  // UNIFIED-PROBE-BEGIN selfhunt-fix ORIGINAL:ICAgICAgICAgIGlmICgoaHQgJiYgbm93TXMgLSBodC5hdCA8IDQwMDApIHx8IHNjYW5IYXNBdHRhY2thYmxlTG9ja2VkTW9iKGF0a1IpIHx8ICghbnBGYWxsYmFja1dhbGsgJiYgc2Nhbkhhc091dE9mUmFuZ2VMb2NrZWRNb2IoYXRrUikpKSB7Cg==
+          if ((ht && nowMs - ht.at < 4000) || scanHasAttackableLockedMob(atkR) || (npMode && !npFallbackWalk && scanHasOutOfRangeLockedMob(atkR))) {
+  // UNIFIED-PROBE-END selfhunt-fix INLINE
             zWalkState.noTargetSince = 0; // 有有效目标 → 无目标计时清零
             return "ok";
           }
@@ -14884,6 +15597,8 @@ function createRoItemCapture(env) {
         } catch (e) { return ""; }
       }
       var zIdleR = zIdleFlyDecide(now);
+      if (npFallbackWalk && (zIdleR === "wait" || (zIdleR === "ok" && !zEngagedNow(now))) && defSnap.isCombatMap) zIdleR = "move"; // 真正停住且未交战：旧锁定怪即使在射程内也不能永久拦自研走位
+      if (npFallbackWalk && typeof expBattleProbe === "function") expBattleProbe("stationary-decision", { decision: zIdleR });
       if (zIdleR === "fly") {
         zWalkState.noTargetSince = 0; zWalkState.lastIdleFly = now; // 飞完 → 无目标计时清零 + 刷新「上次自动换点」
         if (doFly()) markFlyOk(); else markFlyFail();
@@ -14894,12 +15609,12 @@ function createRoItemCapture(env) {
       //   - 侦查扫到「可攻击到的锁定怪」（dist ≤ atkRange，非超出）→ 停内挂，助手接管战斗
       //   - 侦查没扫到怪 / 附近只有「超出」的锁定怪 → 持续发包让服务器自动寻怪（内挂移动靠近）
       if (npHuntMode() === "np" || isHybrid()) {
-        if (typeof zFarPatrol !== "undefined" && zFarPatrol && zFarPatrol.active) zFarPatrolClear(true); // 切换寻怪方式后不保留自研路线
+        if (!npFallbackWalk && typeof zFarPatrol !== "undefined" && zFarPatrol && zFarPatrol.active) zFarPatrolClear(true); // 非兜底阶段才撤销自研路线
         var npThD = isHybrid() ? Math.min(takeoverDist(), calcAtkRange()) : calcAtkRange();
         if (isHybrid()) {
           var hyIdle = npEnsureHunt(); // 只有确实进入攻击/交战才关闭内挂；无需等两次侦查和一秒延迟
-          setStatus(hyIdle === "unknown" || hyIdle === "failed" || hyIdle === "suppressed" ? "混合寻怪：内挂状态未确认，未盲切…" : "混合寻怪：未交战，内挂自动寻怪中…", hyIdle === "unknown" || hyIdle === "failed" || hyIdle === "suppressed" ? "warn" : "st");
-          return;
+          setStatus(hyIdle === "unknown" || hyIdle === "failed" || hyIdle === "suppressed" ? "混合寻怪：内挂状态未确认，未盲切…" : hyIdle === "sent" || hyIdle === "queued" ? "混合寻怪：内挂开关已请求，等待服务器确认…" : "混合寻怪：未交战，内挂自动寻怪中…", hyIdle === "already" ? "st" : "warn");
+          if (!npFallbackWalk || zIdleR !== "move") return; // 未确认又停滞时落入下方自研移动，不串行等待开关
         }
         if (btDiagOn) { try { var aR0 = calcAtkRange(); var _lk = Object.keys(lockList).slice(0,20).join(","); var _sm = scanMobs.slice(0,10).map(function (x) { return x.mid + "@" + x.dist; }).join(" "); btLog('zWalk-np', 'mode=' + (isHybrid() ? "hybrid" : "np") + ' scanMobs=' + scanMobs.length + ' hasAttackable=' + scanHasAttackableLockedMob(npThD) + ' hasOutOfRange=' + scanHasOutOfRangeLockedMob(npThD) + ' thD=' + npThD + ' scanSt=' + ($id('dsh-scanst') ? $id('dsh-scanst').textContent : '?') + ' lock=[' + _lk + '] mids=[' + _sm + ']'); } catch (e) {} }
         // V2.38.24 C 判定迟滞：无→有 立即停内挂（助手马上接管，不加延迟）；有→无 需连续 2 拍确认且距上次切换 ≥1s
@@ -14931,7 +15646,7 @@ function createRoItemCapture(env) {
               : npScanStop === "queued" ? "侦查扫到可攻击锁定怪，内挂停止尚未确认（助手接管）…"
                 : "侦查扫到可攻击锁定怪，内挂停止未执行，助手直接接管…", (npScanStop === "failed" || npScanStop === "unknown") ? "warn" : "ok");
         }
-        return;
+        if (!npFallbackWalk || zIdleR !== "move") return; // 内挂未确认且静止：交给下方自研远点移动
       }
       if (zIdleR === "ok") { setStatus("已有锁定目标，等实体定位；不启动无目标移动…", "st"); return; }
       // 无目标支「自行寻怪」门槛（不受开关 B 是否勾选影响）：连续无有效目标未满 dsh-z-nomove 秒 → 本拍不发自行寻怪的长距离移动，
@@ -14943,8 +15658,8 @@ function createRoItemCapture(env) {
       // 无怪 / 不可达 → 定向直走寻怪：持续朝一个方向走（A* 避障），遇障/卡住才转向
       // V2.38.24 E：直走与追怪共用一个「移动间隔」（默认 0.25s，可调 0.15~1s；无目标仍是 12 格长距目标）
       var walkInt = Math.max(0.15, Math.min(1, parseFloat($id("dsh-z-moveint") ? $id("dsh-z-moveint").value : 0.25) || 0.25)) * 1000;
-      if (!npMode && now - zWalkState.lastMove < walkInt) return;
-      if (!npMode) zWalkState.lastMove = now;
+      if ((!npMode || npFallbackWalk) && now - zWalkState.lastMove < walkInt) return;
+      if (!npMode || npFallbackWalk) zWalkState.lastMove = now;
       // 8 方向（0=右,1=右下,2=下,3=左下,4=左,5=左上,6=上,7=右上）
       var dirs = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
       // V2.9.0 方向记忆：10s 内侦查扫到过锁定怪 → 优先朝该方向走（不再纯 8 方向盲转）
@@ -16848,114 +17563,18 @@ function createRoItemCapture(env) {
     bagCleanChatLast = dedupe;
     return true;
   }
-  // ---------------- 道场入场前物品保护（本轮新增：只活在内存，不落盘、不入 KV_KEYS、不进永久规则） ----------------
-  // 口径：进入道场前抓一份**可信完整**背包快照，按 ITID 记住当时已有的种类；命中即不丢，且优先于道场丢弃黑名单与
-  //   类别规则（含入道场后新获得的同 ITID 物品）。这份记录只活在内存：不写 localStorage / sessionStorage / KV_KEYS，
-  //   不改 bagClean.config、不写角色档，原入场前记录刷新即消失；场内刷新只恢复当前可信完整背包保护，自动丢弃仍关闭并需重新预览授权。
-  // 证据来源（只读）：包流整表 bagPkt（complete 只在收到非空整表时为 true；换图/进区/回角色列表一律 reset）。
-  //   现有 bagListOk() 只验首项且拒空，证明不了整表完整，因此这里不拿它当完整证据。
-  // fail-closed：拿不到可信完整证据、或证据自相矛盾 → 拒绝并说明原因；绝不拿当前背包冒充入场前状态。
-  var dojoGuard = { ok: false, itids: null, n: 0, who: "", map: "", src: "", reason: "尚未在进入道场前采集背包快照" };
-  function dojoGuardWho() { try { return String((CLIENT && CLIENT.SS && CLIENT.SS.GID) || ""); } catch (e) { return ""; } }
-  function dojoGuardMap() { try { return String(getMapName() || ""); } catch (e) { return ""; } }
-  function dojoGuardInDojo() { try { return /dojo|challenge|trial|道场|道場/i.test(dojoGuardMap()); } catch (e) { return false; } }
-  function dojoGuardClear(reason) {
-    dojoGuard.ok = false; dojoGuard.itids = null; dojoGuard.n = 0; dojoGuard.who = ""; dojoGuard.map = ""; dojoGuard.src = "";
-    dojoGuard.reason = String(reason || "尚未在进入道场前采集背包快照");
-  }
-  var dojoBagGuardReport = { sig: "", at: 0 };
-  function dojoGuardFail(why) {
-    dojoGuardClear(why);
-    try { bagCleanChat("物品保护：" + dojoGuard.reason, "guard:" + dojoGuard.reason); } catch (e0) {}
-    // 只送本机；不含物品 ID、装备、角色名、账号或完整包内容。按原因去重，避免重复点开始刷日志。
-    try {
-      var sig = dojoGuard.reason, now = Date.now();
-      if (sig !== dojoBagGuardReport.sig || now - dojoBagGuardReport.at >= 60000) {
-        dojoBagGuardReport.sig = sig; dojoBagGuardReport.at = now;
-        var c = typeof bagInvComp === "function" ? bagInvComp() : null;
-        DSHCollect.post("http://127.0.0.1:8899/api/probe-collect", { t: "dojo-bag-guard", at: now, ver: VER, reason: /没收到过非空背包整表/.test(sig) ? "no-complete-inventory" : "other-guard-rejection",
-          bag: { complete: !!(typeof bagPkt !== "undefined" && bagPkt.complete), op: typeof bagPkt !== "undefined" ? bagPkt.listOp : 0,
-            rows: typeof bagPkt !== "undefined" ? bagPkt.n : 0, session: typeof bagPkt !== "undefined" ? bagPkt.sess : 0,
-            why: typeof bagPkt !== "undefined" ? String(bagPkt.why || "") : "bagPkt unavailable" },
-          inventory: { readable: !!(c && Array.isArray(c.list)), rows: c && Array.isArray(c.list) ? c.list.length : null } });
-      }
-    } catch (eProbe) {}
-    return { ok: false, reason: dojoGuard.reason };
-  }
-  // 独立无限挑战经门面 dojoGuard 调用的入场前背包校验。只读，不发包；旧内置道场已退役。
-  function dojoGuardCapture(force, restoreCurrent) {
-    var who = dojoGuardWho();
-    if (dojoGuard.ok && !force) {
-      if (dojoGuard.who === who) return { ok: true, reuse: true, n: dojoGuard.n, reason: "" };
-      return dojoGuardFail("角色已变化，入场前快照不再适用（换角色后必须重新采集）");
-    }
-    if (dojoGuardInDojo() && !restoreCurrent) return dojoGuardFail("已在道场地图内且没有可信保护：等待刷新恢复当前背包保护；不自动入场、不启动丢弃");
-    if (!who || !profileTrusted(activeProfileKey())) return dojoGuardFail("当前角色未识别：等待可信角色与完整背包证据");
-    var pkt = null;
-    try { pkt = (typeof bagPkt === "undefined") ? null : bagPkt; } catch (e1) { pkt = null; }
-    if (!pkt) return dojoGuardFail("拿不到背包包流证据（bagPkt 不可用）：无法证明入场前背包完整，已按最保守处理");
-    if (pkt.complete !== true) return dojoGuardFail("没收到过非空背包整表（空背包与「没收到数据」分不清）：无法证明入场前背包完整，已按最保守处理");
-    var n = Number(pkt.n) || 0, list = pkt.list, sess = Number(pkt.sess) || 0;
-    if (sess !== 0) return dojoGuardFail("背包整表分流会话还没结束（证据自相矛盾）：整表可能只到一半，拒绝当作入场前状态");
-    if (!(n > 0)) return dojoGuardFail("整表标记为完整却报告 0 条（证据自相矛盾）：拒绝当作入场前状态");
-    if (!Array.isArray(list) || list.length !== n) return dojoGuardFail("整表条数与内容对不上（证据自相矛盾）：拒绝当作入场前状态");
-    var itids = {}, seenIndex = {}, bad = "";
-    for (var i = 0; i < n; i++) {
-      var it = list[i] || {};
-      var id = bagCleanInt(it.ITID != null ? it.ITID : it.itemid, 1, 2147483647), idx = bagCleanInt(it.index, 1, 65535);
-      if (id === null || idx === null) { bad = "整表里有无格子号或无物品编号的条目（证据不完整）：拒绝当作入场前状态"; break; }
-      if (seenIndex[idx]) { bad = "整表里有重复格子号 " + idx + "（证据自相矛盾）：拒绝当作入场前状态"; break; }
-      seenIndex[idx] = 1; itids[String(id)] = 1;
-    }
-    if (bad) return dojoGuardFail(bad);
-    // 交叉证据（能拿到才比）：客户端 Inventory 组件表里出现包流整表没有的 ITID → 这张整表不是整份 → 证据矛盾
-    var cmp = "";
-    try {
-      if (typeof bagInvComp === "function") {
-        var c = bagInvComp(true), cl = (c && Array.isArray(c.list)) ? c.list : null;
-        if (c && !cl) return dojoGuardFail("客户端背包组件存在但表结构异常：无法交叉核验完整背包");
-        if (cl) for (var j = 0; j < cl.length; j++) {
-          var cid = bagCleanInt(cl[j] && (cl[j].ITID != null ? cl[j].ITID : cl[j].itemid), 1, 2147483647);
-          if (cid !== null && !Object.prototype.hasOwnProperty.call(itids, String(cid))) { cmp = "客户端背包里有包流整表没有的物品 #" + cid; break; }
-        }
-      }
-    } catch (e2) { return dojoGuardFail("客户端背包交叉读取异常：" + String(e2 && e2.message || e2) + "；拒绝建立保护"); }
-    if (cmp) {
-      identityLogLine("dojo-guard-mismatch " + cmp + " pktRows=" + n + " uiRows=" + (cl ? cl.length : 0) + " pktAgeMs=" + (pkt.at ? Date.now() - pkt.at : "unknown"));
-      return dojoGuardFail(cmp + "（证据矛盾）：拒绝当作入场前状态。请在安全地点打开背包等待服务器重发完整物品表，再点开始；若仍提示此错，保持停止，不要关闭保护或自动丢弃");
-    }
-    var kinds = 0; for (var k in itids) if (Object.prototype.hasOwnProperty.call(itids, k)) kinds++;
-    dojoGuard.ok = true; dojoGuard.itids = itids; dojoGuard.n = kinds; dojoGuard.who = who; dojoGuard.map = dojoGuardMap(); dojoGuard.src = "bagPkt.整表";
-    dojoGuard.reason = ""; dojoGuard.restored = restoreCurrent === true;
-    try { identityLogLine("dojo-bag-guard capture kinds=" + kinds + " rows=" + n + " map=" + dojoGuard.map); } catch (e3) {}
-    try { bagCleanChat(restoreCurrent ? "刷新恢复当前背包保护：当前已有 " + kinds + " 种物品按 ITID 永不丢弃（不是原入场前记录）；自动丢弃仍关闭，请重新预览授权" : "入场前物品保护已建立：入场前已有 " + kinds + " 种物品按 ITID 永不丢弃", "guard-ok:" + who + ":" + kinds); } catch (e4) {}
-    return { ok: true, n: kinds, rows: n, reason: "" };
-  }
-  function dojoGuardActive() { return dojoGuard.ok === true && dojoGuard.itids !== null; }
-  // 保护命中：每次丢弃判定都重新调用（预览、计划、逐包重校验、发包前复核都经过这里），不是只在预览时算一次
-  function dojoProtectHit(itid) {
-    if (!dojoGuardActive()) return false;
-    var id = bagCleanInt(itid, 1, 2147483647);
-    if (id === null) return false;
-    if (dojoGuard.who !== dojoGuardWho()) { dojoGuardClear("角色已变化，入场前快照已作废"); return false; }
-    return Object.prototype.hasOwnProperty.call(dojoGuard.itids, String(id));
-  }
-  function dojoGuardLines() {
-    if (!dojoGuard.ok) return ["入场前物品保护：未生效（" + dojoGuard.reason + "）"];
-    return [(dojoGuard.restored ? "刷新恢复当前背包保护：生效 · 不是原入场前记录；当前已有的 " : "入场前物品保护：生效 · 入场前已有的 ") + dojoGuard.n + " 种物品按 ITID 永不丢弃（优先于丢弃黑名单与类别规则）"];
-  }
+  // UNIFIED-PROBE-BEGIN guard-core ORIGINAL:ICAvLyAtLS0tLS0tLS0tLS0tLS0tIOmBk+WcuuWFpeWcuuWJjeeJqeWTgeS/neaKpO+8iOacrOi9ruaWsOWinu+8muWPqua0u+WcqOWGheWtmO+8jOS4jeiQveebmOOAgeS4jeWFpSBLVl9LRVlT44CB5LiN6L+b5rC45LmF6KeE5YiZ77yJIC0tLS0tLS0tLS0tLS0tLS0KICAvLyDlj6PlvoTvvJrov5vlhaXpgZPlnLrliY3mipPkuIDku70qKuWPr+S/oeWujOaVtCoq6IOM5YyF5b+r54Wn77yM5oyJIElUSUQg6K6w5L2P5b2T5pe25bey5pyJ55qE56eN57G777yb5ZG95Lit5Y2z5LiN5Lii77yM5LiU5LyY5YWI5LqO6YGT5Zy65Lii5byD6buR5ZCN5Y2V5LiOCiAgLy8gICDnsbvliKvop4TliJnvvIjlkKvlhaXpgZPlnLrlkI7mlrDojrflvpfnmoTlkIwgSVRJRCDnianlk4HvvInjgILov5nku73orrDlvZXlj6rmtLvlnKjlhoXlrZjvvJrkuI3lhpkgbG9jYWxTdG9yYWdlIC8gc2Vzc2lvblN0b3JhZ2UgLyBLVl9LRVlT77yMCiAgLy8gICDkuI3mlLkgYmFnQ2xlYW4uY29uZmln44CB5LiN5YaZ6KeS6Imy5qGj77yM5Y6f5YWl5Zy65YmN6K6w5b2V5Yi35paw5Y2z5raI5aSx77yb5Zy65YaF5Yi35paw5Y+q5oGi5aSN5b2T5YmN5Y+v5L+h5a6M5pW06IOM5YyF5L+d5oqk77yM6Ieq5Yqo5Lii5byD5LuN5YWz6Zet5bm26ZyA6YeN5paw6aKE6KeI5o6I5p2D44CCCiAgLy8g6K+B5o2u5p2l5rqQ77yI5Y+q6K+777yJ77ya5YyF5rWB5pW06KGoIGJhZ1BrdO+8iGNvbXBsZXRlIOWPquWcqOaUtuWIsOmdnuepuuaVtOihqOaXtuS4uiB0cnVl77yb5o2i5Zu+L+i/m+WMui/lm57op5LoibLliJfooajkuIDlvosgcmVzZXTvvInjgIIKICAvLyAgIOeOsOaciSBiYWdMaXN0T2soKSDlj6rpqozpppbpobnkuJTmi5LnqbrvvIzor4HmmI7kuI3kuobmlbTooajlrozmlbTvvIzlm6DmraTov5nph4zkuI3mi7/lroPlvZPlrozmlbTor4Hmja7jgIIKICAvLyBmYWlsLWNsb3NlZO+8muaLv+S4jeWIsOWPr+S/oeWujOaVtOivgeaNruOAgeaIluivgeaNruiHquebuOefm+ebviDihpIg5ouS57ud5bm26K+05piO5Y6f5Zug77yb57ud5LiN5ou/5b2T5YmN6IOM5YyF5YaS5YWF5YWl5Zy65YmN54q25oCB44CCCiAgdmFyIGRvam9HdWFyZCA9IHsgb2s6IGZhbHNlLCBpdGlkczogbnVsbCwgbjogMCwgd2hvOiAiIiwgbWFwOiAiIiwgc3JjOiAiIiwgcmVhc29uOiAi5bCa5pyq5Zyo6L+b5YWl6YGT5Zy65YmN6YeH6ZuG6IOM5YyF5b+r54WnIiB9OwogIGZ1bmN0aW9uIGRvam9HdWFyZFdobygpIHsgdHJ5IHsgcmV0dXJuIFN0cmluZygoQ0xJRU5UICYmIENMSUVOVC5TUyAmJiBDTElFTlQuU1MuR0lEKSB8fCAiIik7IH0gY2F0Y2ggKGUpIHsgcmV0dXJuICIiOyB9IH0KICBmdW5jdGlvbiBkb2pvR3VhcmRNYXAoKSB7IHRyeSB7IHJldHVybiBTdHJpbmcoZ2V0TWFwTmFtZSgpIHx8ICIiKTsgfSBjYXRjaCAoZSkgeyByZXR1cm4gIiI7IH0gfQogIGZ1bmN0aW9uIGRvam9HdWFyZEluRG9qbygpIHsgdHJ5IHsgcmV0dXJuIC9kb2pvfGNoYWxsZW5nZXx0cmlhbHzpgZPlnLp86YGT5aC0L2kudGVzdChkb2pvR3VhcmRNYXAoKSk7IH0gY2F0Y2ggKGUpIHsgcmV0dXJuIGZhbHNlOyB9IH0KICBmdW5jdGlvbiBkb2pvR3VhcmRDbGVhcihyZWFzb24pIHsKICAgIGRvam9HdWFyZC5vayA9IGZhbHNlOyBkb2pvR3VhcmQuaXRpZHMgPSBudWxsOyBkb2pvR3VhcmQubiA9IDA7IGRvam9HdWFyZC53aG8gPSAiIjsgZG9qb0d1YXJkLm1hcCA9ICIiOyBkb2pvR3VhcmQuc3JjID0gIiI7CiAgICBkb2pvR3VhcmQucmVhc29uID0gU3RyaW5nKHJlYXNvbiB8fCAi5bCa5pyq5Zyo6L+b5YWl6YGT5Zy65YmN6YeH6ZuG6IOM5YyF5b+r54WnIik7CiAgfQogIHZhciBkb2pvQmFnR3VhcmRSZXBvcnQgPSB7IHNpZzogIiIsIGF0OiAwIH07CiAgZnVuY3Rpb24gZG9qb0d1YXJkRmFpbCh3aHkpIHsKICAgIGRvam9HdWFyZENsZWFyKHdoeSk7CiAgICB0cnkgeyBiYWdDbGVhbkNoYXQoIueJqeWTgeS/neaKpO+8miIgKyBkb2pvR3VhcmQucmVhc29uLCAiZ3VhcmQ6IiArIGRvam9HdWFyZC5yZWFzb24pOyB9IGNhdGNoIChlMCkge30KICAgIC8vIOWPqumAgeacrOacuu+8m+S4jeWQq+eJqeWTgSBJROOAgeijheWkh+OAgeinkuiJsuWQjeOAgei0puWPt+aIluWujOaVtOWMheWGheWuueOAguaMieWOn+WboOWOu+mHje+8jOmBv+WFjemHjeWkjeeCueW8gOWni+WIt+aXpeW/l+OAggogICAgdHJ5IHsKICAgICAgdmFyIHNpZyA9IGRvam9HdWFyZC5yZWFzb24sIG5vdyA9IERhdGUubm93KCk7CiAgICAgIGlmIChzaWcgIT09IGRvam9CYWdHdWFyZFJlcG9ydC5zaWcgfHwgbm93IC0gZG9qb0JhZ0d1YXJkUmVwb3J0LmF0ID49IDYwMDAwKSB7CiAgICAgICAgZG9qb0JhZ0d1YXJkUmVwb3J0LnNpZyA9IHNpZzsgZG9qb0JhZ0d1YXJkUmVwb3J0LmF0ID0gbm93OwogICAgICAgIHZhciBjID0gdHlwZW9mIGJhZ0ludkNvbXAgPT09ICJmdW5jdGlvbiIgPyBiYWdJbnZDb21wKCkgOiBudWxsOw==
 
-  // V2.38.20 补门：开启时的门只挡「人已在道场内点开启」，挡不住「场外开启后手动走进道场」——
-  //   已在道场地图内且没有可信入场前记录（dojoGuard.ok 为假）时，一切丢弃执行（自动轮询 / 立即清理）一律拒绝，绝不按名单零保护地丢。
-  //   一旦发现丢弃处于开启状态就立即 disarm（armed/enabled 归零、generation++、清 pending、落盘），并给状态栏 + 本机聊天框说明原因。
-  //   有可信入场前记录时本函数恒为 false：正常道场丢弃照旧（保护优先）；道场判定复用 dojoGuardInDojo()，不做地图名硬编码。
-  function bagCleanDojoBlocked(){
-    if(!dojoGuardInDojo()||dojoGuard.ok)return false;
-    if(bagClean.enabled===true||bagClean.config.armed===true)bagCleanDisarm();
-    bagCleanSay('进入道场但缺少入场前记录，已停止丢弃（'+dojoGuard.reason+'）');
-    bagCleanChat('进入道场但缺少入场前记录，已停止丢弃');
-    return true;
-  }
+  // UNIFIED-PROBE-END guard-core
+  // UNIFIED-PROBE-BEGIN dojo-diagnostic ORIGINAL:ICAgICAgICBEU0hDb2xsZWN0LnBvc3QoImh0dHA6Ly8xMjcuMC4wLjE6ODg5OS9hcGkvcHJvYmUtY29sbGVjdCIsIHsgdDogImRvam8tYmFnLWd1YXJkIiwgYXQ6IG5vdywgdmVyOiBWRVIsIHJlYXNvbjogL+ayoeaUtuWIsOi/h+mdnuepuuiDjOWMheaVtOihqC8udGVzdChzaWcpID8gIm5vLWNvbXBsZXRlLWludmVudG9yeSIgOiAib3RoZXItZ3VhcmQtcmVqZWN0aW9uIiwKICAgICAgICAgIGJhZzogeyBjb21wbGV0ZTogISEodHlwZW9mIGJhZ1BrdCAhPT0gInVuZGVmaW5lZCIgJiYgYmFnUGt0LmNvbXBsZXRlKSwgb3A6IHR5cGVvZiBiYWdQa3QgIT09ICJ1bmRlZmluZWQiID8gYmFnUGt0Lmxpc3RPcCA6IDAsCiAgICAgICAgICAgIHJvd3M6IHR5cGVvZiBiYWdQa3QgIT09ICJ1bmRlZmluZWQiID8gYmFnUGt0Lm4gOiAwLCBzZXNzaW9uOiB0eXBlb2YgYmFnUGt0ICE9PSAidW5kZWZpbmVkIiA/IGJhZ1BrdC5zZXNzIDogMCwKICAgICAgICAgICAgd2h5OiB0eXBlb2YgYmFnUGt0ICE9PSAidW5kZWZpbmVkIiA/IFN0cmluZyhiYWdQa3Qud2h5IHx8ICIiKSA6ICJiYWdQa3QgdW5hdmFpbGFibGUiIH0sCiAgICAgICAgICBpbnZlbnRvcnk6IHsgcmVhZGFibGU6ICEhKGMgJiYgQXJyYXkuaXNBcnJheShjLmxpc3QpKSwgcm93czogYyAmJiBBcnJheS5pc0FycmF5KGMubGlzdCkgPyBjLmxpc3QubGVuZ3RoIDogbnVsbCB9LAogICAgICAgICAgZnJhbWluZzogeyBwYXJ0aWFsOiBOdW1iZXIoZnJhbWVQYXJ0aWFsKSB8fCAwLCBydW50aW1lTGVuRW50cmllczogTnVtYmVyKF9femNMZW5UYmwgJiYgX196Y0xlblRibC5uKSB8fCAwLAogICAgICAgICAgICBmaXJzdDQ3MTogTnVtYmVyKG9wU3RhdFs0NzFdKSB8fCAwLCBiYWcyODI1OiBOdW1iZXIob3BTdGF0WzI4MjVdKSB8fCAwLCBnZWFyMjg3MzogTnVtYmVyKG9wU3RhdFsyODczXSkgfHwgMCwgb2xkQmFnMjQ0OTogTnVtYmVyKG9wU3RhdFsyNDQ5XSkgfHwgMCB9IH0pOw==
+
+  // UNIFIED-PROBE-END dojo-diagnostic
+  // UNIFIED-PROBE-BEGIN guard-core-tail ORIGINAL:ICAgICAgfQogICAgfSBjYXRjaCAoZVByb2JlKSB7fQogICAgcmV0dXJuIHsgb2s6IGZhbHNlLCByZWFzb246IGRvam9HdWFyZC5yZWFzb24gfTsKICB9CiAgLy8g54us56uL5peg6ZmQ5oyR5oiY57uP6Zeo6Z2iIGRvam9HdWFyZCDosIPnlKjnmoTlhaXlnLrliY3og4zljIXmoKHpqozjgILlj6ror7vvvIzkuI3lj5HljIXvvJvml6flhoXnva7pgZPlnLrlt7LpgIDlvbnjgIIKICBmdW5jdGlvbiBkb2pvR3VhcmRDYXB0dXJlKGZvcmNlLCByZXN0b3JlQ3VycmVudCkgewogICAgdmFyIHdobyA9IGRvam9HdWFyZFdobygpOwogICAgaWYgKGRvam9HdWFyZC5vayAmJiAhZm9yY2UpIHsKICAgICAgaWYgKGRvam9HdWFyZC53aG8gPT09IHdobykgcmV0dXJuIHsgb2s6IHRydWUsIHJldXNlOiB0cnVlLCBuOiBkb2pvR3VhcmQubiwgcmVhc29uOiAiIiB9OwogICAgICByZXR1cm4gZG9qb0d1YXJkRmFpbCgi6KeS6Imy5bey5Y+Y5YyW77yM5YWl5Zy65YmN5b+r54Wn5LiN5YaN6YCC55So77yI5o2i6KeS6Imy5ZCO5b+F6aG76YeN5paw6YeH6ZuG77yJIik7CiAgICB9CiAgICBpZiAoZG9qb0d1YXJkSW5Eb2pvKCkgJiYgIXJlc3RvcmVDdXJyZW50KSByZXR1cm4gZG9qb0d1YXJkRmFpbCgi5bey5Zyo6YGT5Zy65Zyw5Zu+5YaF5LiU5rKh5pyJ5Y+v5L+h5L+d5oqk77ya562J5b6F5Yi35paw5oGi5aSN5b2T5YmN6IOM5YyF5L+d5oqk77yb5LiN6Ieq5Yqo5YWl5Zy644CB5LiN5ZCv5Yqo5Lii5byDIik7CiAgICBpZiAoIXdobyB8fCAhcHJvZmlsZVRydXN0ZWQoYWN0aXZlUHJvZmlsZUtleSgpKSkgcmV0dXJuIGRvam9HdWFyZEZhaWwoIuW9k+WJjeinkuiJsuacquivhuWIq++8muetieW+heWPr+S/oeinkuiJsuS4juWujOaVtOiDjOWMheivgeaNriIpOwogICAgdmFyIHBrdCA9IG51bGw7CiAgICB0cnkgeyBwa3QgPSAodHlwZW9mIGJhZ1BrdCA9PT0gInVuZGVmaW5lZCIpID8gbnVsbCA6IGJhZ1BrdDsgfSBjYXRjaCAoZTEpIHsgcGt0ID0gbnVsbDsgfQogICAgaWYgKCFwa3QpIHJldHVybiBkb2pvR3VhcmRGYWlsKCLmi7/kuI3liLDog4zljIXljIXmtYHor4Hmja7vvIhiYWdQa3Qg5LiN5Y+v55So77yJ77ya5peg5rOV6K+B5piO5YWl5Zy65YmN6IOM5YyF5a6M5pW077yM5bey5oyJ5pyA5L+d5a6I5aSE55CGIik7CiAgICBpZiAocGt0LmNvbXBsZXRlICE9PSB0cnVlKSByZXR1cm4gZG9qb0d1YXJkRmFpbCgi5rKh5pS25Yiw6L+H6Z2e56m66IOM5YyF5pW06KGo77yI56m66IOM5YyF5LiO44CM5rKh5pS25Yiw5pWw5o2u44CN5YiG5LiN5riF77yJ77ya5peg5rOV6K+B5piO5YWl5Zy65YmN6IOM5YyF5a6M5pW077yM5bey5oyJ5pyA5L+d5a6I5aSE55CGIik7CiAgICB2YXIgbiA9IE51bWJlcihwa3QubikgfHwgMCwgbGlzdCA9IHBrdC5saXN0LCBzZXNzID0gTnVtYmVyKHBrdC5zZXNzKSB8fCAwOwogICAgaWYgKHNlc3MgIT09IDApIHJldHVybiBkb2pvR3VhcmRGYWlsKCLog4zljIXmlbTooajliIbmtYHkvJror53ov5jmsqHnu5PmnZ/vvIjor4Hmja7oh6rnm7jnn5vnm77vvInvvJrmlbTooajlj6/og73lj6rliLDkuIDljYrvvIzmi5Lnu53lvZPkvZzlhaXlnLrliY3nirbmgIEiKTsKICAgIGlmICghKG4gPiAwKSkgcmV0dXJuIGRvam9HdWFyZEZhaWwoIuaVtOihqOagh+iusOS4uuWujOaVtOWNtOaKpeWRiiAwIOadoe+8iOivgeaNruiHquebuOefm+ebvu+8ie+8muaLkue7neW9k+S9nOWFpeWcuuWJjeeKtuaAgSIpOwogICAgaWYgKCFBcnJheS5pc0FycmF5KGxpc3QpIHx8IGxpc3QubGVuZ3RoICE9PSBuKSByZXR1cm4gZG9qb0d1YXJkRmFpbCgi5pW06KGo5p2h5pWw5LiO5YaF5a655a+55LiN5LiK77yI6K+B5o2u6Ieq55u455+b55u+77yJ77ya5ouS57ud5b2T5L2c5YWl5Zy65YmN54q25oCBIik7CiAgICB2YXIgaXRpZHMgPSB7fSwgc2VlbkluZGV4ID0ge30sIGJhZCA9ICIiOwogICAgZm9yICh2YXIgaSA9IDA7IGkgPCBuOyBpKyspIHsKICAgICAgdmFyIGl0ID0gbGlzdFtpXSB8fCB7fTsKICAgICAgdmFyIGlkID0gYmFnQ2xlYW5JbnQoaXQuSVRJRCAhPSBudWxsID8gaXQuSVRJRCA6IGl0Lml0ZW1pZCwgMSwgMjE0NzQ4MzY0NyksIGlkeCA9IGJhZ0NsZWFuSW50KGl0LmluZGV4LCAxLCA2NTUzNSk7CiAgICAgIGlmIChpZCA9PT0gbnVsbCB8fCBpZHggPT09IG51bGwpIHsgYmFkID0gIuaVtOihqOmHjOacieaXoOagvOWtkOWPt+aIluaXoOeJqeWTgee8luWPt+eahOadoeebru+8iOivgeaNruS4jeWujOaVtO+8ie+8muaLkue7neW9k+S9nOWFpeWcuuWJjeeKtuaAgSI7IGJyZWFrOyB9CiAgICAgIGlmIChzZWVuSW5kZXhbaWR4XSkgeyBiYWQgPSAi5pW06KGo6YeM5pyJ6YeN5aSN5qC85a2Q5Y+3ICIgKyBpZHggKyAi77yI6K+B5o2u6Ieq55u455+b55u+77yJ77ya5ouS57ud5b2T5L2c5YWl5Zy65YmN54q25oCBIjsgYnJlYWs7IH0KICAgICAgc2VlbkluZGV4W2lkeF0gPSAxOyBpdGlkc1tTdHJpbmcoaWQpXSA9IDE7CiAgICB9CiAgICBpZiAoYmFkKSByZXR1cm4gZG9qb0d1YXJkRmFpbChiYWQpOwogICAgLy8g5Lqk5Y+J6K+B5o2u77yI6IO95ou/5Yiw5omN5q+U77yJ77ya5a6i5oi356uvIEludmVudG9yeSDnu4Tku7booajph4zlh7rnjrDljIXmtYHmlbTooajmsqHmnInnmoQgSVRJRCDihpIg6L+Z5byg5pW06KGo5LiN5piv5pW05Lu9IOKGkiDor4Hmja7nn5vnm74KICAgIHZhciBjbXAgPSAiIjsKICAgIHRyeSB7CiAgICAgIGlmICh0eXBlb2YgYmFnSW52Q29tcCA9PT0gImZ1bmN0aW9uIikgewogICAgICAgIHZhciBjID0gYmFnSW52Q29tcCh0cnVlKSwgY2wgPSAoYyAmJiBBcnJheS5pc0FycmF5KGMubGlzdCkpID8gYy5saXN0IDogbnVsbDsKICAgICAgICBpZiAoYyAmJiAhY2wpIHJldHVybiBkb2pvR3VhcmRGYWlsKCLlrqLmiLfnq6/og4zljIXnu4Tku7blrZjlnKjkvYbooajnu5PmnoTlvILluLjvvJrml6Dms5XkuqTlj4nmoLjpqozlrozmlbTog4zljIUiKTsKICAgICAgICBpZiAoY2wpIGZvciAodmFyIGogPSAwOyBqIDwgY2wubGVuZ3RoOyBqKyspIHsKICAgICAgICAgIHZhciBjaWQgPSBiYWdDbGVhbkludChjbFtqXSAmJiAoY2xbal0uSVRJRCAhPSBudWxsID8gY2xbal0uSVRJRCA6IGNsW2pdLml0ZW1pZCksIDEsIDIxNDc0ODM2NDcpOwogICAgICAgICAgaWYgKGNpZCAhPT0gbnVsbCAmJiAhT2JqZWN0LnByb3RvdHlwZS5oYXNPd25Qcm9wZXJ0eS5jYWxsKGl0aWRzLCBTdHJpbmcoY2lkKSkpIHsgY21wID0gIuWuouaIt+err+iDjOWMhemHjOacieWMhea1geaVtOihqOayoeacieeahOeJqeWTgSAjIiArIGNpZDsgYnJlYWs7IH0KICAgICAgICB9CiAgICAgIH0KICAgIH0gY2F0Y2ggKGUyKSB7IHJldHVybiBkb2pvR3VhcmRGYWlsKCLlrqLmiLfnq6/og4zljIXkuqTlj4nor7vlj5blvILluLjvvJoiICsgU3RyaW5nKGUyICYmIGUyLm1lc3NhZ2UgfHwgZTIpICsgIu+8m+aLkue7neW7uueri+S/neaKpCIpOyB9CiAgICBpZiAoY21wKSB7CiAgICAgIGlkZW50aXR5TG9nTGluZSgiZG9qby1ndWFyZC1taXNtYXRjaCAiICsgY21wICsgIiBwa3RSb3dzPSIgKyBuICsgIiB1aVJvd3M9IiArIChjbCA/IGNsLmxlbmd0aCA6IDApICsgIiBwa3RBZ2VNcz0iICsgKHBrdC5hdCA/IERhdGUubm93KCkgLSBwa3QuYXQgOiAidW5rbm93biIpKTsKICAgICAgcmV0dXJuIGRvam9HdWFyZEZhaWwoY21wICsgIu+8iOivgeaNruefm+ebvu+8ie+8muaLkue7neW9k+S9nOWFpeWcuuWJjeeKtuaAgeOAguivt+WcqOWuieWFqOWcsOeCueaJk+W8gOiDjOWMheetieW+heacjeWKoeWZqOmHjeWPkeWujOaVtOeJqeWTgeihqO+8jOWGjeeCueW8gOWni++8m+iLpeS7jeaPkOekuuatpOmUme+8jOS/neaMgeWBnOatou+8jOS4jeimgeWFs+mXreS/neaKpOaIluiHquWKqOS4ouW8gyIpOwogICAgfQogICAgdmFyIGtpbmRzID0gMDsgZm9yICh2YXIgayBpbiBpdGlkcykgaWYgKE9iamVjdC5wcm90b3R5cGUuaGFzT3duUHJvcGVydHkuY2FsbChpdGlkcywgaykpIGtpbmRzKys7CiAgICBkb2pvR3VhcmQub2sgPSB0cnVlOyBkb2pvR3VhcmQuaXRpZHMgPSBpdGlkczsgZG9qb0d1YXJkLm4gPSBraW5kczsgZG9qb0d1YXJkLndobyA9IHdobzsgZG9qb0d1YXJkLm1hcCA9IGRvam9HdWFyZE1hcCgpOyBkb2pvR3VhcmQuc3JjID0gImJhZ1BrdC7mlbTooagiOwogICAgZG9qb0d1YXJkLnJlYXNvbiA9ICIiOyBkb2pvR3VhcmQucmVzdG9yZWQgPSByZXN0b3JlQ3VycmVudCA9PT0gdHJ1ZTsKICAgIHRyeSB7IGlkZW50aXR5TG9nTGluZSgiZG9qby1iYWctZ3VhcmQgY2FwdHVyZSBraW5kcz0iICsga2luZHMgKyAiIHJvd3M9IiArIG4gKyAiIG1hcD0iICsgZG9qb0d1YXJkLm1hcCk7IH0gY2F0Y2ggKGUzKSB7fQogICAgdHJ5IHsgYmFnQ2xlYW5DaGF0KHJlc3RvcmVDdXJyZW50ID8gIuWIt+aWsOaBouWkjeW9k+WJjeiDjOWMheS/neaKpO+8muW9k+WJjeW3suaciSAiICsga2luZHMgKyAiIOenjeeJqeWTgeaMiSBJVElEIOawuOS4jeS4ouW8g++8iOS4jeaYr+WOn+WFpeWcuuWJjeiusOW9le+8ie+8m+iHquWKqOS4ouW8g+S7jeWFs+mXre+8jOivt+mHjeaWsOmihOiniOaOiOadgyIgOiAi5YWl5Zy65YmN54mp5ZOB5L+d5oqk5bey5bu656uL77ya5YWl5Zy65YmN5bey5pyJICIgKyBraW5kcyArICIg56eN54mp5ZOB5oyJIElUSUQg5rC45LiN5Lii5byDIiwgImd1YXJkLW9rOiIgKyB3aG8gKyAiOiIgKyBraW5kcyk7IH0gY2F0Y2ggKGU0KSB7fQogICAgcmV0dXJuIHsgb2s6IHRydWUsIG46IGtpbmRzLCByb3dzOiBuLCByZWFzb246ICIiIH07CiAgfQogIGZ1bmN0aW9uIGRvam9HdWFyZEFjdGl2ZSgpIHsgcmV0dXJuIGRvam9HdWFyZC5vayA9PT0gdHJ1ZSAmJiBkb2pvR3VhcmQuaXRpZHMgIT09IG51bGw7IH0KICAvLyDkv53miqTlkb3kuK3vvJrmr4/mrKHkuKLlvIPliKTlrprpg73ph43mlrDosIPnlKjvvIjpooTop4jjgIHorqHliJLjgIHpgJDljIXph43moKHpqozjgIHlj5HljIXliY3lpI3moLjpg73nu4/ov4fov5nph4zvvInvvIzkuI3mmK/lj6rlnKjpooTop4jml7bnrpfkuIDmrKEKICBmdW5jdGlvbiBkb2pvUHJvdGVjdEhpdChpdGlkKSB7CiAgICBpZiAoIWRvam9HdWFyZEFjdGl2ZSgpKSByZXR1cm4gZmFsc2U7CiAgICB2YXIgaWQgPSBiYWdDbGVhbkludChpdGlkLCAxLCAyMTQ3NDgzNjQ3KTsKICAgIGlmIChpZCA9PT0gbnVsbCkgcmV0dXJuIGZhbHNlOwogICAgaWYgKGRvam9HdWFyZC53aG8gIT09IGRvam9HdWFyZFdobygpKSB7IGRvam9HdWFyZENsZWFyKCLop5LoibLlt7Llj5jljJbvvIzlhaXlnLrliY3lv6vnhaflt7LkvZzlup8iKTsgcmV0dXJuIGZhbHNlOyB9CiAgICByZXR1cm4gT2JqZWN0LnByb3RvdHlwZS5oYXNPd25Qcm9wZXJ0eS5jYWxsKGRvam9HdWFyZC5pdGlkcywgU3RyaW5nKGlkKSk7CiAgfQogIGZ1bmN0aW9uIGRvam9HdWFyZExpbmVzKCkgewogICAgaWYgKCFkb2pvR3VhcmQub2spIHJldHVybiBbIuWFpeWcuuWJjeeJqeWTgeS/neaKpO+8muacqueUn+aViO+8iCIgKyBkb2pvR3VhcmQucmVhc29uICsgIu+8iSJdOwogICAgcmV0dXJuIFsoZG9qb0d1YXJkLnJlc3RvcmVkID8gIuWIt+aWsOaBouWkjeW9k+WJjeiDjOWMheS/neaKpO+8mueUn+aViCDCtyDkuI3mmK/ljp/lhaXlnLrliY3orrDlvZXvvJvlvZPliY3lt7LmnInnmoQgIiA6ICLlhaXlnLrliY3nianlk4Hkv53miqTvvJrnlJ/mlYggwrcg5YWl5Zy65YmN5bey5pyJ55qEICIpICsgZG9qb0d1YXJkLm4gKyAiIOenjeeJqeWTgeaMiSBJVElEIOawuOS4jeS4ouW8g++8iOS8mOWFiOS6juS4ouW8g+m7keWQjeWNleS4juexu+WIq+inhOWIme+8iSJdOwogIH0K
+
+  // UNIFIED-PROBE-END guard-core-tail
+  // UNIFIED-PROBE-BEGIN guard-blocked ORIGINAL:ICAvLyBWMi4zOC4yMCDooaXpl6jvvJrlvIDlkK/ml7bnmoTpl6jlj6rmjKHjgIzkurrlt7LlnKjpgZPlnLrlhoXngrnlvIDlkK/jgI3vvIzmjKHkuI3kvY/jgIzlnLrlpJblvIDlkK/lkI7miYvliqjotbDov5vpgZPlnLrjgI3igJTigJQKICAvLyAgIOW3suWcqOmBk+WcuuWcsOWbvuWGheS4lOayoeacieWPr+S/oeWFpeWcuuWJjeiusOW9le+8iGRvam9HdWFyZC5vayDkuLrlgYfvvInml7bvvIzkuIDliIfkuKLlvIPmiafooYzvvIjoh6rliqjova7or6IgLyDnq4vljbPmuIXnkIbvvInkuIDlvovmi5Lnu53vvIznu53kuI3mjInlkI3ljZXpm7bkv53miqTlnLDkuKLjgIIKICAvLyAgIOS4gOaXpuWPkeeOsOS4ouW8g+WkhOS6juW8gOWQr+eKtuaAgeWwseeri+WNsyBkaXNhcm3vvIhhcm1lZC9lbmFibGVkIOW9kumbtuOAgWdlbmVyYXRpb24rK+OAgea4hSBwZW5kaW5n44CB6JC955uY77yJ77yM5bm257uZ54q25oCB5qCPICsg5pys5py66IGK5aSp5qGG6K+05piO5Y6f5Zug44CCCiAgLy8gICDmnInlj6/kv6HlhaXlnLrliY3orrDlvZXml7bmnKzlh73mlbDmgZLkuLogZmFsc2XvvJrmraPluLjpgZPlnLrkuKLlvIPnhafml6fvvIjkv53miqTkvJjlhYjvvInvvJvpgZPlnLrliKTlrprlpI3nlKggZG9qb0d1YXJkSW5Eb2pvKCnvvIzkuI3lgZrlnLDlm77lkI3noaznvJbnoIHjgIIKICBmdW5jdGlvbiBiYWdDbGVhbkRvam9CbG9ja2VkKCl7CiAgICBpZighZG9qb0d1YXJkSW5Eb2pvKCl8fGRvam9HdWFyZC5vaylyZXR1cm4gZmFsc2U7CiAgICBpZihiYWdDbGVhbi5lbmFibGVkPT09dHJ1ZXx8YmFnQ2xlYW4uY29uZmlnLmFybWVkPT09dHJ1ZSliYWdDbGVhbkRpc2FybSgpOwogICAgYmFnQ2xlYW5TYXkoJ+i/m+WFpemBk+WcuuS9hue8uuWwkeWFpeWcuuWJjeiusOW9le+8jOW3suWBnOatouS4ouW8g++8iCcrZG9qb0d1YXJkLnJlYXNvbisn77yJJyk7CiAgICBiYWdDbGVhbkNoYXQoJ+i/m+WFpemBk+WcuuS9hue8uuWwkeWFpeWcuuWJjeiusOW9le+8jOW3suWBnOatouS4ouW8gycpOwogICAgcmV0dXJuIHRydWU7CiAgfQ==
+
+  // UNIFIED-PROBE-END guard-blocked
   function bagCleanProtected(it){
     if(!it)return '数据缺失';
     var equipment=[4,5,8,12].indexOf(Number(it.type))>=0;
@@ -16975,7 +17594,9 @@ function createRoItemCapture(env) {
     cfg=cfg||bagClean.config;typeNames=typeNames||bagCleanTypeNames();if(!it)return {ok:false,reason:'数据缺失'};
     var id=bagCleanInt(it.ITID,1,2147483647),index=bagCleanInt(it.index,1,65535),type=bagCleanInt(it.type,0,255),equipment=[4,5,8,12].indexOf(type)>=0;
     var amount=bagCleanInt(it.count!=null?it.count:(it.amount!=null?it.amount:(equipment?1:NaN)),1,1000000000);if(id===null||index===null||amount===null||type===null)return {ok:false,reason:'索引/物品/数量/类型不明'};
-    if(dojoProtectHit(id))return {ok:false,reason:dojoGuard.restored?'刷新恢复当前背包保护（不是原入场前记录，命中即不丢）':'进入道场前已有（入场前保护：命中即不丢）',id:id,index:index,type:type,amount:amount};
+  // UNIFIED-PROBE-BEGIN guard-describe ORIGINAL:ICAgIGlmKGRvam9Qcm90ZWN0SGl0KGlkKSlyZXR1cm4ge29rOmZhbHNlLHJlYXNvbjpkb2pvR3VhcmQucmVzdG9yZWQ/J+WIt+aWsOaBouWkjeW9k+WJjeiDjOWMheS/neaKpO+8iOS4jeaYr+WOn+WFpeWcuuWJjeiusOW9le+8jOWRveS4reWNs+S4jeS4ou+8iSc6J+i/m+WFpemBk+WcuuWJjeW3suacie+8iOWFpeWcuuWJjeS/neaKpO+8muWRveS4reWNs+S4jeS4ou+8iScsaWQ6aWQsaW5kZXg6aW5kZXgsdHlwZTp0eXBlLGFtb3VudDphbW91bnR9Ow==
+  
+  // UNIFIED-PROBE-END guard-describe
     if(!typeNames[type])return {ok:false,reason:'类型未知，全部保护',id:id,index:index,type:type,amount:amount};
     if(cfg.protectedIds.indexOf(id)>=0)return {ok:false,reason:'类别保护例外（永不丢）',id:id,index:index,type:type,amount:amount};
     var protection=bagCleanProtected(it);if(protection)return {ok:false,reason:protection,id:id,index:index,type:type,amount:amount};
@@ -17000,7 +17621,9 @@ function createRoItemCapture(env) {
   function bagCleanRevalidate(stack,remaining){var count=bagCleanInt(Math.min(stack.amount,remaining,32767),1,32767),current=bagCleanFindCurrent(stack.index),d=bagCleanDescribe(current,bagClean.config);if(count===null||!current||!d.ok||d.index!==stack.index||d.id!==stack.id||d.type!==stack.type||d.key!==stack.key||d.source!==stack.source||d.amount!==stack.amount||d.amount<count)return null;return {item:current,desc:d,count:count};}
   async function bagCleanExecute(done,manual){
     if(bagClean.busy)return;bagClean.busy=true;bagClean.error='';var generation=bagClean.generation,player=CLIENT.SS.Entity,map=getMapName();
-    function valid(){return (manual||bagClean.config.armed)&&generation===bagClean.generation&&player===CLIENT.SS.Entity&&map===getMapName()&&!bagCleanDojoBlocked();}
+  // UNIFIED-PROBE-BEGIN guard-valid ORIGINAL:ICAgIGZ1bmN0aW9uIHZhbGlkKCl7cmV0dXJuIChtYW51YWx8fGJhZ0NsZWFuLmNvbmZpZy5hcm1lZCkmJmdlbmVyYXRpb249PT1iYWdDbGVhbi5nZW5lcmF0aW9uJiZwbGF5ZXI9PT1DTElFTlQuU1MuRW50aXR5JiZtYXA9PT1nZXRNYXBOYW1lKCkmJiFiYWdDbGVhbkRvam9CbG9ja2VkKCk7fQ==
+    function valid(){return (manual||bagClean.config.armed)&&generation===bagClean.generation&&player===CLIENT.SS.Entity&&map===getMapName();}
+  // UNIFIED-PROBE-END guard-valid
     // V2.38.2 提速：快确认轮询（80ms 一次，总超时 1000ms），替代原来固定 800ms×8=6.4s 的等待
     function waitAck(ok,timeoutMs){var limit=timeoutMs||1000,t0=Date.now();return new Promise(function(resolve){function poll(){if(ok())return resolve(true);if(Date.now()-t0>=limit)return resolve(false);setTimeout(poll,80);}poll();});}
     function acked(index,id,before,count){var cur=bagCleanFindCurrent(index);return !cur||Number(cur.ITID)!==id||Number(cur.count!=null?cur.count:cur.amount)<=before-count;}
@@ -17013,7 +17636,9 @@ function createRoItemCapture(env) {
           if(!valid())return;var ct=requireDB('Preferences/Controls');if(ct&&ct.talk)throw Error('NPC 对话尚未结束');
           var want=limits?limits[row.key+'|'+row.source]:row.drop,fresh=bagCleanRevalidate(stack,want);
           if(!fresh){bagCleanSay('索引/ITID/数量/type/保护或规则变化，已跳过陈旧候选');if(limits)limits[row.key+'|'+row.source]=0;continue;}
-          if(dojoProtectHit(fresh.desc.id)){bagCleanSay((dojoGuard.restored?'刷新恢复当前背包保护命中，本次跳过：#':'进入道场前已有的物品受保护，本次跳过：#')+fresh.desc.id);bagCleanChat('物品保护命中：#'+fresh.desc.id+' 本次未丢弃');if(limits)limits[row.key+'|'+row.source]=0;continue;}
+  // UNIFIED-PROBE-BEGIN guard-execute ORIGINAL:ICAgICAgICAgIGlmKGRvam9Qcm90ZWN0SGl0KGZyZXNoLmRlc2MuaWQpKXtiYWdDbGVhblNheSgoZG9qb0d1YXJkLnJlc3RvcmVkPyfliLfmlrDmgaLlpI3lvZPliY3og4zljIXkv53miqTlkb3kuK3vvIzmnKzmrKHot7Pov4fvvJojJzon6L+b5YWl6YGT5Zy65YmN5bey5pyJ55qE54mp5ZOB5Y+X5L+d5oqk77yM5pys5qyh6Lez6L+H77yaIycpK2ZyZXNoLmRlc2MuaWQpO2JhZ0NsZWFuQ2hhdCgn54mp5ZOB5L+d5oqk5ZG95Lit77yaIycrZnJlc2guZGVzYy5pZCsnIOacrOasoeacquS4ouW8gycpO2lmKGxpbWl0cylsaW1pdHNbcm93LmtleSsnfCcrcm93LnNvdXJjZV09MDtjb250aW51ZTt9
+  
+  // UNIFIED-PROBE-END guard-execute
           if(!CLIENT.PS.CZ.ITEM_THROW)throw Error('当前游戏画面不支持丢弃操作');
           var before=fresh.desc.amount,packet=new (czp("ITEM_THROW"))();packet.Index=fresh.desc.index;packet.count=fresh.count;bagCleanSay('清理中：#'+fresh.desc.id+' ×'+fresh.count+'（命中'+fresh.desc.source+'）');CLIENT.NM.sendPacket(packet);did++;
           // V2.38.18 提速：本件发完不再立刻等确认 —— 同一批连发的两件之间零等待，确认并到本批次末尾统一做一次
@@ -17136,11 +17761,15 @@ function createRoItemCapture(env) {
     box.querySelector('[data-bagadd]').onclick=function(){var q=(box.querySelector('[data-bagfind]').value||'').trim(),inv=bagCleanInventory()||[],hits=[],eh=box.querySelector('[data-baghits]');inv.forEach(function(it){var id=bagCleanInt(it&&it.ITID,1,2147483647);if(id===null)return;var nm=getItemName(id)||'';if(!q||String(id)===q||nm.indexOf(q)>=0||String(it.index)===q){if(!hits.some(function(h){return h.id===id;}))hits.push({id:id,nm:nm||('物品 #'+id)});}});hits=hits.slice(0,40);eh.textContent='';if(!hits.length){eh.textContent='背包里没有匹配的物品';return;}eh.appendChild(document.createTextNode('点一下加入丢弃名单：'));hits.forEach(function(h){var b=document.createElement('button');b.className='ghost';b.style.cssText='font-size:12px;margin:1px 3px';b.textContent=h.nm+' #'+h.id;b.onclick=function(){var k=String(h.id);if(Object.prototype.hasOwnProperty.call(bagClean.config.discardRules,k)){bagCleanSay('已在丢弃名单：'+h.nm+' #'+h.id+'（只本地提示：不重复添加、不移除、不改保留数量）');bagCleanChat('已在丢弃名单：'+h.nm+' #'+h.id+'（只本地提示：未做任何改动）');return;}bagClean.config.discardRules[k]=0;changed('已加入丢弃名单：'+h.nm+' #'+h.id);};eh.appendChild(b);});};
     box.querySelector('[data-propick]').onclick=function(){var result=bagCleanProtectionChoices(),q=(box.querySelector('[data-profind]').value||'').trim().toLowerCase(),hits=box.querySelector('[data-prohits]');hits.textContent='';var selected=result.items.filter(function(it){return !q||String(it.id).indexOf(q)>=0||it.name.toLowerCase().indexOf(q)>=0;});if(!selected.length){hits.textContent='没有可读取的匹配物品；请先确认角色和物品栏已加载。'+(result.missing?' 装备栏有 '+result.missing+' 件无法核对编号，已跳过。':'');return;}hits.appendChild(document.createTextNode('点选加入保护名单（不会执行丢弃）：'));selected.forEach(function(it){var b=document.createElement('button');b.className='ghost';b.style.cssText='font-size:12px;margin:2px';b.textContent='['+it.source+'] '+it.name+' #'+it.id;b.onclick=function(){if(bagClean.config.protectedIds.indexOf(it.id)>=0){bagCleanSay('已在保护名单：'+it.name+' #'+it.id);return;}if(bagClean.config.protectedIds.length>=2000){bagCleanSay('保护名单已满，未改动');return;}bagClean.config.protectedIds.push(it.id);changed('已加入永不丢保护：'+it.name+' #'+it.id);b.disabled=true;};hits.appendChild(b);});if(result.missing)hits.appendChild(document.createTextNode('；装备栏 '+result.missing+' 件无法核对编号，已跳过。'));};
     box.querySelector('[data-proadd]').onclick=function(){var id=bagCleanInt(box.querySelector('[data-proid]').value,1,2147483647);if(id===null)return bagCleanSay('请输入有效物品 ID');if(bagClean.config.protectedIds.indexOf(id)<0)bagClean.config.protectedIds.push(id);changed('已加入保护例外：'+(getItemName(id)||'物品')+' #'+id);};
-    box.querySelector('[data-preview]').onclick=function(){var p=bagCleanPreview();if(!p)return;bagCleanConfirm('预览候选',p.lines,'确认本规则集可用于自动丢弃',function(){if(!profileTrusted(activeProfileKey())){bagClean.enabled=false;bagClean.config.armed=false;bagClean.config.enabled=false;bagClean.generation++;bagCleanSave();return bagCleanSay('当前角色未识别（缺少可信入场前记录）：本轮不允许开启自动丢弃，请等角色识别后重新预览确认。');}if(dojoGuardInDojo()&&!dojoGuard.ok){bagClean.enabled=false;bagClean.config.armed=false;bagClean.config.enabled=false;bagClean.generation++;bagCleanSave();return bagCleanSay('已在道场地图内，且没有可信背包保护：拒绝开启自动丢弃。'+dojoGuard.reason);}bagClean.config.armed=true;bagClean.enabled=true;bagClean.config.enabled=true;bagClean.generation++;bagCleanSave();bagCleanSay('预览已确认：自动丢弃已开启（改规则/切档/刷新自动关闭）');if(bagClean.render)bagClean.render();},function(){bagCleanSay('已停止预览确认，未授权。');});};
+  // UNIFIED-PROBE-BEGIN guard-preview ORIGINAL:ICAgIGJveC5xdWVyeVNlbGVjdG9yKCdbZGF0YS1wcmV2aWV3XScpLm9uY2xpY2s9ZnVuY3Rpb24oKXt2YXIgcD1iYWdDbGVhblByZXZpZXcoKTtpZighcClyZXR1cm47YmFnQ2xlYW5Db25maXJtKCfpooTop4jlgJnpgIknLHAubGluZXMsJ+ehruiupOacrOinhOWImembhuWPr+eUqOS6juiHquWKqOS4ouW8gycsZnVuY3Rpb24oKXtpZighcHJvZmlsZVRydXN0ZWQoYWN0aXZlUHJvZmlsZUtleSgpKSl7YmFnQ2xlYW4uZW5hYmxlZD1mYWxzZTtiYWdDbGVhbi5jb25maWcuYXJtZWQ9ZmFsc2U7YmFnQ2xlYW4uY29uZmlnLmVuYWJsZWQ9ZmFsc2U7YmFnQ2xlYW4uZ2VuZXJhdGlvbisrO2JhZ0NsZWFuU2F2ZSgpO3JldHVybiBiYWdDbGVhblNheSgn5b2T5YmN6KeS6Imy5pyq6K+G5Yir77yI57y65bCR5Y+v5L+h5YWl5Zy65YmN6K6w5b2V77yJ77ya5pys6L2u5LiN5YWB6K645byA5ZCv6Ieq5Yqo5Lii5byD77yM6K+3562J6KeS6Imy6K+G5Yir5ZCO6YeN5paw6aKE6KeI56Gu6K6k44CCJyk7fWlmKGRvam9HdWFyZEluRG9qbygpJiYhZG9qb0d1YXJkLm9rKXtiYWdDbGVhbi5lbmFibGVkPWZhbHNlO2JhZ0NsZWFuLmNvbmZpZy5hcm1lZD1mYWxzZTtiYWdDbGVhbi5jb25maWcuZW5hYmxlZD1mYWxzZTtiYWdDbGVhbi5nZW5lcmF0aW9uKys7YmFnQ2xlYW5TYXZlKCk7cmV0dXJuIGJhZ0NsZWFuU2F5KCflt7LlnKjpgZPlnLrlnLDlm77lhoXvvIzkuJTmsqHmnInlj6/kv6Hog4zljIXkv53miqTvvJrmi5Lnu53lvIDlkK/oh6rliqjkuKLlvIPjgIInK2Rvam9HdWFyZC5yZWFzb24pO31iYWdDbGVhbi5jb25maWcuYXJtZWQ9dHJ1ZTtiYWdDbGVhbi5lbmFibGVkPXRydWU7YmFnQ2xlYW4uY29uZmlnLmVuYWJsZWQ9dHJ1ZTtiYWdDbGVhbi5nZW5lcmF0aW9uKys7YmFnQ2xlYW5TYXZlKCk7YmFnQ2xlYW5TYXkoJ+mihOiniOW3suehruiupO+8muiHquWKqOS4ouW8g+W3suW8gOWQr++8iOaUueinhOWImS/liIfmoaMv5Yi35paw6Ieq5Yqo5YWz6Zet77yJJyk7aWYoYmFnQ2xlYW4ucmVuZGVyKWJhZ0NsZWFuLnJlbmRlcigpO30sZnVuY3Rpb24oKXtiYWdDbGVhblNheSgn5bey5YGc5q2i6aKE6KeI56Gu6K6k77yM5pyq5o6I5p2D44CCJyk7fSk7fTs=
+    box.querySelector('[data-preview]').onclick=function(){var p=bagCleanPreview();if(!p)return;bagCleanConfirm('预览候选',p.lines,'确认本规则集可用于自动丢弃',function(){if(!profileTrusted(activeProfileKey())){bagClean.enabled=false;bagClean.config.armed=false;bagClean.config.enabled=false;bagClean.generation++;bagCleanSave();return bagCleanSay('当前角色未识别（缺少可信入场前记录）：本轮不允许开启自动丢弃，请等角色识别后重新预览确认。');}bagClean.config.armed=true;bagClean.enabled=true;bagClean.config.enabled=true;bagClean.generation++;bagCleanSave();bagCleanSay('预览已确认：自动丢弃已开启（改规则/切档/刷新自动关闭）');if(bagClean.render)bagClean.render();},function(){bagCleanSay('已停止预览确认，未授权。');});};
+  // UNIFIED-PROBE-END guard-preview
     box.querySelector('[data-enable]').onchange=function(){var self=this;
       if(!this.checked){bagClean.enabled=false;bagClean.config.enabled=false;bagClean.generation++;bagCleanSave();bagCleanSay('自动丢弃已关闭');return;}
       if(!bagClean.config.armed){this.checked=false;bagClean.enabled=false;var pv=box.querySelector('[data-preview]');if(pv){bagCleanSay('请先预览确认（这是唯一一次确认）');pv.click();}else{bagCleanSay('尚未授权：请先「预览候选」并确认。');}return;}
-      if(dojoGuardInDojo()&&!dojoGuard.ok){this.checked=false;bagClean.enabled=false;bagCleanSay('已在道场地图内，且没有可信背包保护（等待刷新恢复当前背包保护）：拒绝开启自动丢弃。'+dojoGuard.reason);bagCleanChat('拒绝开启自动丢弃：场内缺少入场前背包快照');return;}
+  // UNIFIED-PROBE-BEGIN guard-enable ORIGINAL:ICAgICAgaWYoZG9qb0d1YXJkSW5Eb2pvKCkmJiFkb2pvR3VhcmQub2spe3RoaXMuY2hlY2tlZD1mYWxzZTtiYWdDbGVhbi5lbmFibGVkPWZhbHNlO2JhZ0NsZWFuU2F5KCflt7LlnKjpgZPlnLrlnLDlm77lhoXvvIzkuJTmsqHmnInlj6/kv6Hog4zljIXkv53miqTvvIjnrYnlvoXliLfmlrDmgaLlpI3lvZPliY3og4zljIXkv53miqTvvInvvJrmi5Lnu53lvIDlkK/oh6rliqjkuKLlvIPjgIInK2Rvam9HdWFyZC5yZWFzb24pO2JhZ0NsZWFuQ2hhdCgn5ouS57ud5byA5ZCv6Ieq5Yqo5Lii5byD77ya5Zy65YaF57y65bCR5YWl5Zy65YmN6IOM5YyF5b+r54WnJyk7cmV0dXJuO30=
+  
+  // UNIFIED-PROBE-END guard-enable
       if(!profileTrusted(activeProfileKey())){this.checked=false;bagClean.enabled=false;return bagCleanSay('当前角色未识别（缺少可信入场前记录），本轮不允许开启自动丢弃；请等角色识别后重新预览确认。');}
       bagClean.enabled=true;bagClean.config.enabled=true;bagClean.generation++;bagCleanSave();bagCleanSay('自动丢弃已开启（随时丢弃='+(bagClean.config.anytime===true?'开':'关')+'）');
     };
@@ -17159,7 +17788,9 @@ function createRoItemCapture(env) {
     box.querySelector('[data-file]').onchange=function(){var f=this.files&&this.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(){try{parseAndApply(String(rd.result),f.name||'文件导入');}catch(e){bagCleanSay('导入失败：'+(e.message||'JSON/键/数量/类型不合法'));}};try{rd.readAsText(f,'utf-8');}catch(e2){bagCleanSay('导入失败：文件读取异常');}};
     render();
     // V2.38.2 提速：外层轮询 2000ms → 500ms；每轮最多连丢 4 个不同 index 的堆叠（bagCleanExecute 内部）
-    setInterval(function(){if(!bagClean.config.armed||bagClean.busy)return;if(!profileTrusted(activeProfileKey())){bagCleanDisarm('角色未识别：自动丢弃已停止（识别后需重新预览确认）');return;}if(bagCleanDojoBlocked())return;var w=bagCleanWeight(),free=bagCleanFreeSlots();if(bagCleanNeeded(w,free)){bagClean.pending=true;bagCleanExecute(function(){},null);}},500);
+  // UNIFIED-PROBE-BEGIN guard-poll ORIGINAL:ICAgIHNldEludGVydmFsKGZ1bmN0aW9uKCl7aWYoIWJhZ0NsZWFuLmNvbmZpZy5hcm1lZHx8YmFnQ2xlYW4uYnVzeSlyZXR1cm47aWYoIXByb2ZpbGVUcnVzdGVkKGFjdGl2ZVByb2ZpbGVLZXkoKSkpe2JhZ0NsZWFuRGlzYXJtKCfop5LoibLmnKror4bliKvvvJroh6rliqjkuKLlvIPlt7LlgZzmraLvvIjor4bliKvlkI7pnIDph43mlrDpooTop4jnoa7orqTvvIknKTtyZXR1cm47fWlmKGJhZ0NsZWFuRG9qb0Jsb2NrZWQoKSlyZXR1cm47dmFyIHc9YmFnQ2xlYW5XZWlnaHQoKSxmcmVlPWJhZ0NsZWFuRnJlZVNsb3RzKCk7aWYoYmFnQ2xlYW5OZWVkZWQodyxmcmVlKSl7YmFnQ2xlYW4ucGVuZGluZz10cnVlO2JhZ0NsZWFuRXhlY3V0ZShmdW5jdGlvbigpe30sbnVsbCk7fX0sNTAwKTs=
+    setInterval(function(){if(!bagClean.config.armed||bagClean.busy)return;if(!profileTrusted(activeProfileKey())){bagCleanDisarm('角色未识别：自动丢弃已停止（识别后需重新预览确认）');return;}var w=bagCleanWeight(),free=bagCleanFreeSlots();if(bagCleanNeeded(w,free)){bagClean.pending=true;bagCleanExecute(function(){},null);}},500);
+  // UNIFIED-PROBE-END guard-poll
   }
   // 导入落地（调用方已 validate + normalize）：中文提示含条目数与被跳过的无效条目数
   function bagCleanImportApply(cfg,raw,srcName){
@@ -17193,7 +17824,9 @@ function createRoItemCapture(env) {
     return Object.keys(map).map(function(id){return {itemId:Number(id),keep:map[id]};}).sort(function(a,b){return a.itemId-b.itemId;});
   }
   function dojoPresetProtectReason(id,protIds){
-    if(dojoProtectHit(id))return dojoGuard.restored?'刷新恢复当前背包保护（不是原入场前记录，命中即不丢）':'入场前保护（进入道场前已有，命中即不丢）';
+  // UNIFIED-PROBE-BEGIN guard-preset ORIGINAL:ICAgIGlmKGRvam9Qcm90ZWN0SGl0KGlkKSlyZXR1cm4gZG9qb0d1YXJkLnJlc3RvcmVkPyfliLfmlrDmgaLlpI3lvZPliY3og4zljIXkv53miqTvvIjkuI3mmK/ljp/lhaXlnLrliY3orrDlvZXvvIzlkb3kuK3ljbPkuI3kuKLvvIknOiflhaXlnLrliY3kv53miqTvvIjov5vlhaXpgZPlnLrliY3lt7LmnInvvIzlkb3kuK3ljbPkuI3kuKLvvIknOw==
+  
+  // UNIFIED-PROBE-END guard-preset
     if((protIds||[]).indexOf(id)>=0)return '类别保护例外（永不丢）';
     var inv=bagCleanInventory()||[],it=null;
     for(var i=0;i<inv.length;i++){if(bagCleanInt(inv[i]&&inv[i].ITID,1,2147483647)===id){it=inv[i];break;}}
@@ -17330,7 +17963,9 @@ function createRoItemCapture(env) {
     lines.push('丢弃黑名单 '+keys.length+' 条'+(cats.length?('；类别规则：'+cats.join('、')):'；无类别规则'));
     keys.forEach(function(k){var id=bagCleanInt(String(k).split(':')[0],1,2147483647);if(id===null)return;var reason=dojoPresetProtectReason(id,prot);lines.push((reason?'[不丢] ':'[可丢] ')+dojoPresetItemName(id)+' '+k+'：保留 '+cfg.discardRules[k]+(reason?('（'+reason+'）'):''));});
     prot.forEach(function(id){lines.push('[保护例外] '+dojoPresetItemName(id)+' #'+id+'：永不丢弃');});
-    lines.push(dojoGuardLines()[0]);
+  // UNIFIED-PROBE-BEGIN guard-enablelines ORIGINAL:ICAgIGxpbmVzLnB1c2goZG9qb0d1YXJkTGluZXMoKVswXSk7
+  
+  // UNIFIED-PROBE-END guard-enablelines
     lines.push('丢弃到地面不可撤销；只有在本窗口点「开启」后才允许后续丢弃。');
     return lines;
   }
@@ -17418,16 +18053,9 @@ function createRoItemCapture(env) {
     }catch(e){}
   }
   bagQuickBind();
-  var dojoGuardRefresh={started:false,eligible:false,who:''};
-  function dojoGuardRefreshTick(){
-    var who=dojoGuardWho();if(!clientReady()||!who||!profileTrusted(activeProfileKey()))return;
-    if(!dojoGuardRefresh.started){dojoGuardRefresh.started=true;dojoGuardRefresh.eligible=dojoGuardInDojo();dojoGuardRefresh.who=who;}
-    if(dojoGuardRefresh.who!==who){dojoGuardRefresh.eligible=false;dojoGuardRefresh.who=who;dojoGuardClear('角色已变化，刷新恢复当前背包保护已作废');return;}
-    if(!dojoGuardRefresh.eligible||!dojoGuardInDojo())return;
-    if(dojoGuard.ok){dojoGuardRefresh.eligible=false;return;}
-    if(dojoGuardCapture(false,true).ok){dojoGuardRefresh.eligible=false;bagCleanDisarm('刷新恢复当前背包保护已建立（不是原入场前记录）；自动丢弃关闭，请重新预览授权。');}
-  }
-  masterTickReg(function(){try{dojoGuardRefreshTick();}catch(e){dojoGuardFail('刷新恢复当前背包保护读取异常：'+String(e&&e.message||e));}});
+  // UNIFIED-PROBE-BEGIN guard-refresh ORIGINAL:ICB2YXIgZG9qb0d1YXJkUmVmcmVzaD17c3RhcnRlZDpmYWxzZSxlbGlnaWJsZTpmYWxzZSx3aG86Jyd9OwogIGZ1bmN0aW9uIGRvam9HdWFyZFJlZnJlc2hUaWNrKCl7CiAgICB2YXIgd2hvPWRvam9HdWFyZFdobygpO2lmKCFjbGllbnRSZWFkeSgpfHwhd2hvfHwhcHJvZmlsZVRydXN0ZWQoYWN0aXZlUHJvZmlsZUtleSgpKSlyZXR1cm47CiAgICBpZighZG9qb0d1YXJkUmVmcmVzaC5zdGFydGVkKXtkb2pvR3VhcmRSZWZyZXNoLnN0YXJ0ZWQ9dHJ1ZTtkb2pvR3VhcmRSZWZyZXNoLmVsaWdpYmxlPWRvam9HdWFyZEluRG9qbygpO2Rvam9HdWFyZFJlZnJlc2gud2hvPXdobzt9CiAgICBpZihkb2pvR3VhcmRSZWZyZXNoLndobyE9PXdobyl7ZG9qb0d1YXJkUmVmcmVzaC5lbGlnaWJsZT1mYWxzZTtkb2pvR3VhcmRSZWZyZXNoLndobz13aG87ZG9qb0d1YXJkQ2xlYXIoJ+inkuiJsuW3suWPmOWMlu+8jOWIt+aWsOaBouWkjeW9k+WJjeiDjOWMheS/neaKpOW3suS9nOW6nycpO3JldHVybjt9CiAgICBpZighZG9qb0d1YXJkUmVmcmVzaC5lbGlnaWJsZXx8IWRvam9HdWFyZEluRG9qbygpKXJldHVybjsKICAgIGlmKGRvam9HdWFyZC5vayl7ZG9qb0d1YXJkUmVmcmVzaC5lbGlnaWJsZT1mYWxzZTtyZXR1cm47fQogICAgaWYoZG9qb0d1YXJkQ2FwdHVyZShmYWxzZSx0cnVlKS5vayl7ZG9qb0d1YXJkUmVmcmVzaC5lbGlnaWJsZT1mYWxzZTtiYWdDbGVhbkRpc2FybSgn5Yi35paw5oGi5aSN5b2T5YmN6IOM5YyF5L+d5oqk5bey5bu656uL77yI5LiN5piv5Y6f5YWl5Zy65YmN6K6w5b2V77yJ77yb6Ieq5Yqo5Lii5byD5YWz6Zet77yM6K+36YeN5paw6aKE6KeI5o6I5p2D44CCJyk7fQogIH0KICBtYXN0ZXJUaWNrUmVnKGZ1bmN0aW9uKCl7dHJ5e2Rvam9HdWFyZFJlZnJlc2hUaWNrKCk7fWNhdGNoKGUpe2Rvam9HdWFyZEZhaWwoJ+WIt+aWsOaBouWkjeW9k+WJjeiDjOWMheS/neaKpOivu+WPluW8guW4uO+8micrU3RyaW5nKGUmJmUubWVzc2FnZXx8ZSkpO319KTs=
+
+  // UNIFIED-PROBE-END guard-refresh
   // ---------------- 拾取页：内挂百分比联动 ----------------
   onId("dsh-lootread", "click", function () {
     try {
@@ -18097,9 +18725,11 @@ function createRoItemCapture(env) {
       if (box) box.style.display = "block";
       if (ta) { ta.value = txt; try { ta.focus(); ta.select(); } catch (eS) {} }
       var reported = false;
-      try { reported = reportDiag("manual", { source: "button" }); } catch (eR) {}
-      var copied = false;
-      if (!reported) { try { copied = document.execCommand("copy"); } catch (eC) {} }
+      try { reported = reportDiag("manual", { source: "button" }, function (ok) {
+        var st = $id("dsh-tpmsg2");
+        if (st) st.textContent = "诊断完成" + (ok ? "，本机接收端已确认" : "，本机接收失败；诊断文本保留在下方");
+        var hubStatus = $id("dsh-probe-geardiag-status"); if (hubStatus && st) hubStatus.textContent = st.textContent;
+      }); } catch (eR) {}
       var brief = "";
       try {
         var o = window.__dshGearDiag__;
@@ -18111,7 +18741,7 @@ function createRoItemCapture(env) {
             "｜内存箭=" + (o.memAmmo ? (o.memAmmo.has ? "有" : "无") : "?");
         }
       } catch (eB) {}
-      $id("dsh-tpmsg2").textContent = "诊断完成" + brief + (reported ? "，已自动发到本机" : (copied ? "，已复制" : "，本机未接收，请长按复制"));
+      $id("dsh-tpmsg2").textContent = "诊断完成" + brief + (reported ? "，等待本机接收确认" : "，本机接收端不可用；诊断文本保留在下方");
     } catch (e) { $id("dsh-tpmsg2").textContent = "装备诊断异常: " + e.message; }
   });
   function planRoute(target) {
@@ -18661,7 +19291,10 @@ function createRoItemCapture(env) {
   var ingestOk = 0, ingestFail = 0;
   var INGEST_URL = "http://127.0.0.1:8974/"; // V2.15.27：PC 网页版直连本机接收服务（ro-collect.cjs 空闲自退随脚本生命周期；旧手机端曾用 Tailscale 域名）
   var collectOnline = null;
+  // UNIFIED-PROBE-BEGIN legacy-heartbeat ORIGINAL:ICBmdW5jdGlvbiBwcm9iZUNvbGxlY3QoKSB7
   function probeCollect() {
+    return; // No optional second-receiver heartbeat.
+  // UNIFIED-PROBE-END legacy-heartbeat
     try {
       if (typeof fetch !== "function") return;
       fetch(INGEST_URL).then(function (r) { collectOnline = !!(r && r.ok); renderIngest(); }).catch(function () { collectOnline = false; renderIngest(); });
@@ -18673,7 +19306,10 @@ function createRoItemCapture(env) {
     var st = collectOnline === true ? "服务在线" : (collectOnline === false ? "采集服务未运行" : "检测中");
     el.textContent = "采集" + st + " · 上报成功 " + ingestOk + " 条" + (ingestFail ? "，失败 " + ingestFail + " 条" : "");
   }
+  // UNIFIED-PROBE-BEGIN legacy-ingest ORIGINAL:ICBmdW5jdGlvbiBpbmdlc3QocGF5bG9hZCkgew==
   function ingest(payload) {
+    return; // Retired optional 8974 transport; unified queue uses existing 8899.
+  // UNIFIED-PROBE-END legacy-ingest
     try {
       if (typeof fetch !== "function") { ingestFail++; renderIngest(); return; }
       DSHCollect.post(INGEST_URL, payload, function (ok) { if (ok) ingestOk++; else ingestFail++; renderIngest(); });
@@ -18682,7 +19318,10 @@ function createRoItemCapture(env) {
   // V2.15.27：采集服务心跳（20s 探测，维持服务活跃并显示在线状态）
   setInterval(function () { try { probeCollect(); } catch (e) {} }, 20000);
   try { probeCollect(); } catch (e) {}
+  // UNIFIED-PROBE-BEGIN legacy-task ORIGINAL:ICBmdW5jdGlvbiBwdXNoU3RlcChraW5kLCB0ZXh0LCBtZW51LCBtYXAsIG5wY05hbWUsIGdpZCwgcG9zKSB7
   function pushStep(kind, text, menu, map, npcName, gid, pos) {
+    return; // Retired attributed persistence; unified decoded observer owns NPC evidence.
+  // UNIFIED-PROBE-END legacy-task
     var g = (gid != null) ? gid : ((lastTalkNpc && lastTalkNpc.GID != null) ? lastTalkNpc.GID : 0);
     var step = { kind: kind, text: text || "", menu: menu || null, map: map || getMapName(), npcName: npcName || "", gid: g, pos: pos || null, ts: Date.now() };
     reconSteps.push(step);
@@ -19306,7 +19945,8 @@ function createRoItemCapture(env) {
   //   2824/2825/2826/2873 属于**防御性覆盖**（例：主表有 471 而缺 2825 → 断在 2825，后面的整表跟着丢）；
   //   若主表连 471 都缺就会断在 471，登记 2825 救不了（原注释把 2825 写成 burst 关键断点，与事实不符）。
   //   V2.38.8：新登记 2634（ZC.PRIVATE_AIRSHIP_RESPONSE = op u16 + response u32，6B）——直发传送的回包靠它切帧。
-  var ZC_EXTRA_LEN = { 170: 9, 2256: 9, 2457: 11, 172: 7, 2257: 7, 2458: 9, 2824: -1, 2825: -1, 2826: -1, 2827: 4, 2873: -1, 2634: 6 };
+  // 本服 20211103 的首帧 ZC.SPRITE_CHANGE2(471) 为 15B；运行时包长表还没准备好时也要先切过它，后面 2825 才能被安全看到。
+  var ZC_EXTRA_LEN = { 170: 9, 2256: 9, 2457: 11, 172: 7, 2257: 7, 2458: 9, 2824: -1, 2825: -1, 2826: -1, 2827: 4, 2873: -1, 2634: 6, 471: 15 };
   function zcLenTable() {
     try {
       var PS = CLIENT && CLIENT.PS;
@@ -19402,6 +20042,7 @@ function createRoItemCapture(env) {
     try {
       if (typeof op !== "number") { try { op = new DataView(bytes).getUint16(0, true); } catch (e0) { return; } }
       identityPktHook(bytes, op); // V2.38.6：手机端 char_id 包流来源（113/2757 记录身份、107 清身份）
+      if (op === 142) { npChatFrameCount++; npRawBattleNotice(bytes, op); } // 只记总帧数与到达时间，不读取/记录聊天内容
       // V2.38.7：装备整表 / 穿脱确认包流（只读；单帧异常只丢该帧）。
       //   typeof 守卫：局部切片测试环境里这个函数可能不在同一段代码中，缺了就当没有（绝不抛、绝不影响分帧与身份）。
       if (typeof gearPktHook === "function") gearPktHook(bytes, op);
@@ -19611,8 +20252,12 @@ function createRoItemCapture(env) {
       if (isNaN(n) || n < 0) { $id("dsh-cleanlog").textContent = "菜单序号无效"; return; }
       var c = new (czp("CHOOSE_MENU"))();
       c.NAID = menuRecon.NAID; c.num = n + 1; // 协议 1 起(官方 _index+1),界面序号 0 起
+  // UNIFIED-PROBE-BEGIN manual-choose-source ORIGINAL:ICAgICAgQ0xJRU5ULk5NLnNlbmRQYWNrZXQoYyk7CiAgICAgICRpZCgiZHNoLWNsZWFubG9nIikudGV4dENvbnRlbnQ=
+      upTag(c,"assistant:manual-menu-choose");
       CLIENT.NM.sendPacket(c);
-      $id("dsh-cleanlog").textContent = "已发 CHOOSE_MENU：第 " + (n + 1) + " 项" + (menuRecon.items[n] ? "（" + menuRecon.items[n] + "）" : "");
+      $id("dsh-cleanlog").textContent
+  // UNIFIED-PROBE-END manual-choose-source INLINE
+ = "已发 CHOOSE_MENU：第 " + (n + 1) + " 项" + (menuRecon.items[n] ? "（" + menuRecon.items[n] + "）" : "");
     } catch (e) { $id("dsh-cleanlog").textContent = "选菜单异常: " + e.message; }
   });
   onId("dsh-menu-next", "click", function () {
@@ -19620,8 +20265,11 @@ function createRoItemCapture(env) {
       if (!clientReady()) throw new Error("游戏画面还没准备好");
       if (!menuRecon.NAID) { $id("dsh-cleanlog").textContent = "先捕获菜单（点NPC对话）"; return; }
       var p = new (czp("REQ_NEXT_SCRIPT"))();
+  // UNIFIED-PROBE-BEGIN manual-next-source ORIGINAL:ICAgICAgcC5OQUlEID0gbWVudVJlY29uLk5BSUQ7CiAgICAgIENMSUVOVC5OTS5zZW5kUGFja2V0KHApOw==
       p.NAID = menuRecon.NAID;
+      upTag(p,"assistant:manual-menu-next");
       CLIENT.NM.sendPacket(p);
+  // UNIFIED-PROBE-END manual-next-source
       $id("dsh-cleanlog").textContent = "已发 REQ_NEXT_SCRIPT（下一段对话）";
     } catch (e) { $id("dsh-cleanlog").textContent = "下一段异常: " + e.message; }
   });
@@ -19707,7 +20355,10 @@ function createRoItemCapture(env) {
     } catch (e) { return false; }
   }
   function hookSendPacket() {
-    if (txCap.hooked) return true;
+  // UNIFIED-PROBE-BEGIN outgoing-reinstall ORIGINAL:ICAgIGlmICh0eENhcC5ob29rZWQpIHJldHVybiB0cnVlOw==
+    if (txCap.hooked && CLIENT.NM && upSendObserved.has(CLIENT.NM.sendPacket)) return true;
+    txCap.hooked = false;
+  // UNIFIED-PROBE-END outgoing-reinstall
     try {
       if (!CLIENT.NM) { try { clientReady(); } catch (e0) {} }
       if (!CLIENT.NM || typeof CLIENT.NM.sendPacket !== "function") return false;
@@ -19735,9 +20386,13 @@ function createRoItemCapture(env) {
             if (el && Date.now() - txCap.lastLog > 400) { txCap.lastLog = Date.now(); el.textContent = "出站抓包：进行中，已抓 " + txCap.n + " 个包（缓冲 " + txCap.ring.length + "）"; }
           } catch (e) {}
         }
+  // UNIFIED-PROBE-BEGIN send-observer ORIGINAL:ICAgICAgICByZXR1cm4gb3JpZy5hcHBseSh0aGlzLCBhcmd1bWVudHMpOwogICAgICB9OwogICAgICB0eENhcC5ob29rZWQgPSB0cnVlOw==
+        try{upSent(p);}catch(eUP){UP.hooks="outgoing observation failed";}
         return orig.apply(this, arguments);
       };
       txCap.hooked = true;
+      upSendObserved.add(CLIENT.NM.sendPacket);
+  // UNIFIED-PROBE-END send-observer
       return true;
     } catch (e) { return false; }
   }
@@ -19760,7 +20415,9 @@ function createRoItemCapture(env) {
   }
   onId("dsh-txcap", "click", function () {
     if (!hookSendPacket()) { $id("dsh-txlog").textContent = "游戏画面还没准备好：请先进游戏，再点「开始抓包」"; return; }
-    txCap.on = true; txCap.ring = []; txCap.n = 0; txCap.drop = 0; // V2.38.3（D2）：开始抓包清零上一轮的拦截计数
+  // UNIFIED-PROBE-BEGIN gate-tx-start ORIGINAL:ICAgIHR4Q2FwLm9uID0gdHJ1ZTsgdHhDYXAucmluZyA9IFtdOyB0eENhcC5uID0gMDsgdHhDYXAuZHJvcCA9IDA7IC8vIFYyLjM4LjPvvIhEMu+8ie+8muW8gOWni+aKk+WMhea4hembtuS4iuS4gOi9rueahOaLpuaIquiuoeaVsA==
+    txCap.on = false; // Arbitrary raw capture is retired: never collect unrelated chat/secrets.
+  // UNIFIED-PROBE-END gate-tx-start
     $id("dsh-txlog").textContent = "出站抓包：已开始（先进图站稳 20 秒，再点停止）";
   });
   onId("dsh-txstop", "click", function () {
@@ -20078,7 +20735,13 @@ function createRoItemCapture(env) {
     st.textContent =
       "#dsh-tgt-bar,#dsh-party-float{position:fixed;background:transparent;border:none;box-shadow:none;cursor:grab;z-index:2147481500;user-select:none;-webkit-user-select:none;font-family:'Microsoft YaHei','Segoe UI',sans-serif;box-sizing:border-box}" +
       "#dsh-tgt-bar:active,#dsh-party-float:active{cursor:grabbing}" +
+  // UNIFIED-PROBE-BEGIN tgt-close-css ORIGINAL:ICAgICAgIiNkc2gtdGd0LWJhcntkaXNwbGF5OmZsZXg7YWxpZ24taXRlbXM6Y2VudGVyO2dhcDpjbGFtcCg2cHgsMC44dncsMTJweCk7d2lkdGg6Y2xhbXAoMjQwcHgsMjZ2dywzODBweCl9IiAr
       "#dsh-tgt-bar{display:flex;align-items:center;gap:clamp(6px,0.8vw,12px);width:clamp(240px,26vw,380px)}" +
+      "#dsh-tgt-bar .dsh-tgt-close{position:absolute;top:0;right:0;width:24px;height:24px;min-width:0;padding:0;margin:0;border:0;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font:bold 14px/1 'Microsoft YaHei',system-ui,sans-serif;color:#fff;z-index:3;text-shadow:0 1px 2px rgba(0,0,0,.9)}" +
+      "#dsh-tgt-bar .dsh-tgt-close i{position:absolute;inset:5px;border-radius:50%;background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.34)}" +
+      "#dsh-tgt-bar .dsh-tgt-close span{position:relative}" +
+      "#dsh-tgt-bar .dsh-tgt-close:hover i{background:rgba(0,0,0,.55);border-color:rgba(255,255,255,.6)}" +
+  // UNIFIED-PROBE-END tgt-close-css
       ".dsh-mob-portrait{width:clamp(40px,4vw,48px);height:clamp(40px,4vw,48px);flex:0 0 auto;position:relative;background:transparent}" +
       ".dsh-mob-portrait img{width:100%;height:100%;object-fit:contain;display:block;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8))}" +
       ".dsh-mob-portrait .dsh-mob-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(16px,1.8vw,22px);font-weight:bold;color:#fff;text-shadow:0 1px 2px #000,0 0 6px #000}" +
@@ -20284,19 +20947,31 @@ function createRoItemCapture(env) {
     dshFloatCss();
     var el = document.createElement("div");
     el.id = "dsh-tgt-bar";
+  // UNIFIED-PROBE-BEGIN tgt-close-dom ORIGINAL:ICAgIGVsLmlubmVySFRNTCA9CiAgICAgICc8ZGl2IGNsYXNzPSJkc2gtbW9iLXBvcnRyYWl0Ij48aW1nIGlkPSJkc2gtdGd0LWltZyIgYWx0PSIiIHN0eWxlPSJkaXNwbGF5Om5vbmUiPjxkaXYgY2xhc3M9ImRzaC1tb2ItZmFsbGJhY2siIGlkPSJkc2gtdGd0LWZiIj4/PC9kaXY+PC9kaXY+JyArCiAgICAgICc8ZGl2IGNsYXNzPSJkc2gtdGd0LXJpZ2h0Ij4nICsKICAgICAgJzxkaXYgY2xhc3M9ImRzaC1tb2ItbmFtZS1yb3ciPjxzcGFuIGNsYXNzPSJkc2gtbW9iLW5hbWUiIGlkPSJkc2gtdGd0LW5tMiI+5pyq6ZSB5a6aPC9zcGFuPjxzcGFuIGNsYXNzPSJkc2gtbW9iLWhwIiBpZD0iZHNoLXRndC1ocDIiPjwvc3Bhbj48L2Rpdj4nICsKICAgICAgJzxkaXYgY2xhc3M9ImRzaC1ocC1iYXIiPjxkaXYgY2xhc3M9ImRzaC1ocC1maWxsIiBpZD0iZHNoLXRndC1maWxsIj48L2Rpdj48L2Rpdj4nICsKICAgICAgJzxkaXYgY2xhc3M9ImRzaC1tb2ItaW5mbyIgaWQ9ImRzaC10Z3QtaW5mbyI+LS08L2Rpdj48L2Rpdj4nOw==
     el.innerHTML =
+      '<button class="dsh-tgt-close" type="button" title="关闭目标状态" aria-label="关闭目标状态"><i></i><span>&#215;</span></button>' +
       '<div class="dsh-mob-portrait"><img id="dsh-tgt-img" alt="" style="display:none"><div class="dsh-mob-fallback" id="dsh-tgt-fb">?</div></div>' +
       '<div class="dsh-tgt-right">' +
       '<div class="dsh-mob-name-row"><span class="dsh-mob-name" id="dsh-tgt-nm2">未锁定</span><span class="dsh-mob-hp" id="dsh-tgt-hp2"></span></div>' +
       '<div class="dsh-hp-bar"><div class="dsh-hp-fill" id="dsh-tgt-fill"></div></div>' +
       '<div class="dsh-mob-info" id="dsh-tgt-info">--</div></div>';
+  // UNIFIED-PROBE-END tgt-close-dom
     document.documentElement.appendChild(el);
     dshFloatPlace(el, "tgtBarPos", Math.round(window.innerWidth * 0.08), Math.round(window.innerHeight * 0.14));
     dshFloatDrag(el, "tgtBarPos");
     dshFloatRegSaved(el, "tgtBarPos");
+  // UNIFIED-PROBE-BEGIN tgt-close-wire ORIGINAL:ICAgIHZhciBpbWcgPSBlbC5xdWVyeVNlbGVjdG9yKCIjZHNoLXRndC1pbWciKSwgZmIgPSBlbC5xdWVyeVNlbGVjdG9yKCIjZHNoLXRndC1mYiIpOwogICAgaW1nLmFkZEV2ZW50TGlzdGVuZXIoImxvYWQiLCBmdW5jdGlvbiAoKSB7IGltZy5zdHlsZS5kaXNwbGF5ID0gImJsb2NrIjsgZmIuc3R5bGUuZGlzcGxheSA9ICJub25lIjsgfSk7CiAgICBpbWcuYWRkRXZlbnRMaXN0ZW5lcigiZXJyb3IiLCBmdW5jdGlvbiAoKSB7IGltZy5zdHlsZS5kaXNwbGF5ID0gIm5vbmUiOyBmYi5zdHlsZS5kaXNwbGF5ID0gImZsZXgiOyB9KTs=
     var img = el.querySelector("#dsh-tgt-img"), fb = el.querySelector("#dsh-tgt-fb");
     img.addEventListener("load", function () { img.style.display = "block"; fb.style.display = "none"; });
     img.addEventListener("error", function () { img.style.display = "none"; fb.style.display = "flex"; });
+    var tgtCloseBtn = el.querySelector(".dsh-tgt-close");
+    if (tgtCloseBtn) tgtCloseBtn.addEventListener("click", function (ev) {
+      try { if (ev.stopPropagation) ev.stopPropagation(); } catch (eS0) {}
+      try { roModSet("tgt", false); } catch (eS1) {}
+      try { renderTgt(); } catch (eS2) {}
+      try { if (roExpOn()) roExpRebuild(); } catch (eS3) {}
+    });
+  // UNIFIED-PROBE-END tgt-close-wire
     dshTgtBar = el;
     return el;
   }
@@ -21914,13 +22589,19 @@ function createRoItemCapture(env) {
 
   // ---------------- V2.7.0 脚本执行器（导入 JSON 模板 · 白名单 8 类动作） ----------------
   var SCRIPTS_KEY = "dsh_scripts";
-  function scrRetiredDojo(it) { return !!(it && (it.type === "dojo" || it.templateId === "infinite-dojo" || (Array.isArray(it.steps) && it.steps.some(function (s) { return s && /^(dojoStart|dojoWait|dojoStop)$/.test(s.action); })))); }
+  // UNIFIED-PROBE-BEGIN scr-retired-fn ORIGINAL:ICBmdW5jdGlvbiBzY3JSZXRpcmVkRG9qbyhpdCkgeyByZXR1cm4gISEoaXQgJiYgKGl0LnR5cGUgPT09ICJkb2pvIiB8fCBpdC50ZW1wbGF0ZUlkID09PSAiaW5maW5pdGUtZG9qbyIgfHwgKEFycmF5LmlzQXJyYXkoaXQuc3RlcHMpICYmIGl0LnN0ZXBzLnNvbWUoZnVuY3Rpb24gKHMpIHsgcmV0dXJuIHMgJiYgL14oZG9qb1N0YXJ0fGRvam9XYWl0fGRvam9TdG9wKSQvLnRlc3Qocy5hY3Rpb24pOyB9KSkpKTsgfQ==
+  
+  // UNIFIED-PROBE-END scr-retired-fn
   var SCR_ACTIONS = ["teleport", "walk", "battleOn", "battleOff", "useItem", "stopMove", "check", "talk", "loop", "ifWeight", "store"];
-  function scrLoad() { try { var a = JSON.parse(localStorage.getItem(SCRIPTS_KEY) || "[]"); return Array.isArray(a) ? a.filter(function (it) { return !scrRetiredDojo(it); }) : []; } catch (e) { return []; } }
+  // UNIFIED-PROBE-BEGIN scr-retired-load ORIGINAL:ICBmdW5jdGlvbiBzY3JMb2FkKCkgeyB0cnkgeyB2YXIgYSA9IEpTT04ucGFyc2UobG9jYWxTdG9yYWdlLmdldEl0ZW0oU0NSSVBUU19LRVkpIHx8ICJbXSIpOyByZXR1cm4gQXJyYXkuaXNBcnJheShhKSA/IGEuZmlsdGVyKGZ1bmN0aW9uIChpdCkgeyByZXR1cm4gIXNjclJldGlyZWREb2pvKGl0KTsgfSkgOiBbXTsgfSBjYXRjaCAoZSkgeyByZXR1cm4gW107IH0gfQ==
+  function scrLoad() { try { var a = JSON.parse(localStorage.getItem(SCRIPTS_KEY) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  // UNIFIED-PROBE-END scr-retired-load
   function scrSave(a) { try { localStorage.setItem(SCRIPTS_KEY, JSON.stringify(a)); } catch (e) {} }
   function scrValidate(obj) {
     if (!obj || typeof obj !== "object") return { ok: false, err: "顶层须为对象 {templateId, version, steps[]}" };
-    if (scrRetiredDojo(obj)) return { ok: false, err: "旧无限道场已退役，请使用波利旁的独立无限挑战入口" };
+  // UNIFIED-PROBE-BEGIN scr-retired-validate ORIGINAL:ICAgIGlmIChzY3JSZXRpcmVkRG9qbyhvYmopKSByZXR1cm4geyBvazogZmFsc2UsIGVycjogIuaXp+aXoOmZkOmBk+WcuuW3sumAgOW9ue+8jOivt+S9v+eUqOazouWIqeaXgeeahOeLrOeri+aXoOmZkOaMkeaImOWFpeWPoyIgfTs=
+  
+  // UNIFIED-PROBE-END scr-retired-validate
     if (typeof obj.templateId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(obj.templateId)) return { ok: false, err: "templateId 只能是 1-64 位字母/数字/_/-" };
     if (!Array.isArray(obj.steps) || !obj.steps.length || obj.steps.length > 500) return { ok: false, err: "steps 须为 1-500 项数组" };
     for (var i = 0; i < obj.steps.length; i++) {
@@ -21973,7 +22654,9 @@ function createRoItemCapture(env) {
       if (cnt) cnt.textContent = String(list.length);
       if (!box) return;
       box.innerHTML = "";
-      if (!list.length) { box.innerHTML = '<span class="st">空（粘贴 JSON → 点「导入上面的 JSON」；或用「从文件导入…」／「导入道馆脚本」）</span>'; return; }
+  // UNIFIED-PROBE-BEGIN scr-empty-hint ORIGINAL:ICAgICAgaWYgKCFsaXN0Lmxlbmd0aCkgeyBib3guaW5uZXJIVE1MID0gJzxzcGFuIGNsYXNzPSJzdCI+56m677yI57KY6LS0IEpTT04g4oaSIOeCueOAjOWvvOWFpeS4iumdoueahCBKU09O44CN77yb5oiW55So44CM5LuO5paH5Lu25a+85YWl4oCm44CN77yP44CM5a+85YWl6YGT6aaG6ISa5pys44CN77yJPC9zcGFuPic7IHJldHVybjsgfQ==
+      if (!list.length) { box.innerHTML = '<span class="st">空（粘贴 JSON → 点「导入上面的 JSON」；或用「从文件导入…」）</span>'; return; }
+  // UNIFIED-PROBE-END scr-empty-hint
       list.forEach(function (it, i) {
         var row = document.createElement("div");
         row.style.cssText = "display:flex;align-items:center;gap:6px;padding:3px 4px;border-bottom:1px solid #eef2f6";
@@ -22920,7 +23603,10 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   function apiBattleDrive(){if(apiCombat)return; // 契约 v2 外部代打期间由代打自己的定时器驱动，这里不得双份出手
     var now=Date.now();if(now-apiBattleAttackAt<250||zRunning||!apiLease||!apiBattleTarget||apiBattleTarget.owner!==apiLease.owner||apiLease.scopes.indexOf("battle")<0)return;var state=apiLease.battle&&apiLease.battle.state;if(state!=="owned"&&state!=="pending-on")return;if(!apiBattleTargetEntity(apiBattleTarget))return;apiBattleAttackAt=now;zAttack();}
   function apiRelease(owner){if(!apiLease||apiLease.owner!==owner)return {ok:false,error:"not-owner"};if(typeof apiCombat!=="undefined"&&apiCombat)apiCombatStop();if(typeof apiAllMobsRestore==="function")apiAllMobsRestore();if(typeof apiPickupReset==="function")apiPickupReset();if(typeof apiClearBattleTarget==="function")apiClearBattleTarget(owner);apiBattleTick();if(!apiLease)return {ok:true};var l=apiLease;if(l.scopes.indexOf("movement")>=0){moveXY.busy=false;moveXY.onArrive=null;}/* V2.38.37-arrow6 P2：租约声明了 arrow 域就必须清补给等待状态（MERGE-SPEC 5b），与是否还剩目标无关；只有本属主的目标才连目标一起清（属主不符时维持原行为）。 */if(l.scopes.indexOf("arrow")>=0){if(arrowTarget&&arrowTarget.owner===owner)arrowTarget=null;if(!arrowTarget){arrowPending=null;arrowSupply=null;arrowSelfPending=null;arrowReady=false;arrowBlocked=false;}}if(l.scopes.indexOf("battle")>=0&&(l.battle.state==="owned"||l.battle.state==="pending-off")){l.released=true;if(l.battle.state!=="pending-off"){var r=npRequestBattle(false,"external-release:"+owner,true,function(){return !!(apiLease&&apiLease.owner===owner);});/* V2.38.13 FIX-15：守卫放宽为「租约仍在且属主相同」——迟到的关闭包必须兑现，换属主/租约已清空仍被否决 */if(r==="sent"||r==="queued")l.battle.state="pending-off";else l.released=false;}return {ok:l.released,result:l.battle.state};}if(l.battle.state==="pending-on")npClearBattleIntent();if(l.scopes.indexOf("battle")>=0&&npBattleState()===true&&typeof npZeroBattle==="function")npZeroBattle("apiRelease");apiLease=null;apiEmit("state",{});return {ok:true};}
-  function apiContact(owner,gid){var bad=apiGuard(owner,"dialog");gid=arrowPos(gid);if(bad)return bad;if(!gid)return {ok:false,error:"invalid-gid"};var found=apiEntities().filter(function(e){return e.gid===gid&&(e.type===6||e.type===12);})[0];if(!found)return {ok:false,error:"npc-not-found"};try{var p=new (czp("CONTACTNPC"))();p.NAID=gid;p.type=1;CLIENT.NM.sendPacket(p);apiLease.selectedNpc=gid;lastTalkNpc={GID:gid,name:found.name,pos:found.position};return {ok:true};}catch(e){return {ok:false,error:"contact-failed"};}}
+  function apiContact(owner,gid){var bad=apiGuard(owner,"dialog");gid=arrowPos(gid);if(bad)return bad;if(!gid)return {ok:false,error:"invalid-gid"};var found=apiEntities().filter(function(e){return e.gid===gid&&(e.type===6||e.type===12);})[0];if(!found)return {ok:false,error:"npc-not-found"};try{var p=new (czp("CONTACTNPC"))();  // UNIFIED-PROBE-BEGIN api-contact-source ORIGINAL:cC5OQUlEPWdpZDtwLnR5cGU9MTtDTElFTlQuTk0uc2VuZFBhY2tldChwKTs=
+p.NAID=gid;p.type=1;upTag(p,"assistant:apiContact");CLIENT.NM.sendPacket(p);
+  // UNIFIED-PROBE-END api-contact-source INLINE
+apiLease.selectedNpc=gid;lastTalkNpc={GID:gid,name:found.name,pos:found.position};return {ok:true};}catch(e){return {ok:false,error:"contact-failed"};}}
   function apiWalk(owner,payload){var bad=apiGuard(owner,"movement"),x=payload&&Number(payload.x),y=payload&&Number(payload.y);if(bad)return bad;if(!payload||!Number.isInteger(x)||!Number.isInteger(y))return {ok:false,error:"invalid-position"};return {ok:!!walkToXY(x,y,null,"dsh-arrow-rules-status")};}
   // A2 契约 v2：对外传送（只复用 tpSend，不新造发包逻辑；失败一律 {ok:false,error}）
   function apiTeleport(owner,payload){
@@ -22938,7 +23624,10 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   }
   // V2.38.13：把服务器 2634 回执（0 受理 / 2 没卷轴或会员卡 / 3 地图不支持 / 4 未知地图）如实暴露成 error（带 code 与原文），只读，不发包
   function apiTeleportResult(owner){var bad=apiGuard(owner,"movement");if(bad&&bad.error==="lease-required")bad=apiGuard(owner,"fly");if(bad)return {ok:false,error:"lease-required"};try{if(tpLast.code==null)return {ok:null,code:null,error:"no-ack"};var cn=TP_ACK_WHY[tpLast.code]||"未知代码";if(tpLast.code===0)return {ok:true,code:0,error:""};return {ok:false,code:tpLast.code,error:"code="+tpLast.code+"（"+cn+"）"};}catch(e){return {ok:null,code:null,error:"no-ack"};}}
-  function apiChoose(owner,payload){var bad=apiGuard(owner,"dialog"),menu=apiMenu(),naid=payload&&arrowPos(payload.naid),index=payload&&Number(payload.index),fp=payload&&payload.fingerprint;if(bad)return bad;if(!payload||!naid||!Number.isInteger(index)||index<0||index>=menu.items.length||naid!==menu.naid||naid!==apiLease.selectedNpc||typeof fp!=="string"||fp!==menu.fingerprint)return {ok:false,error:"invalid-menu"};if(fp===apiMenuUsed)return {ok:false,error:"menu-already-used"};apiMenuUsed=fp;try{var p=new (czp("CHOOSE_MENU"))();p.NAID=naid;p.num=index+1;CLIENT.NM.sendPacket(p);return {ok:true};}catch(e){return {ok:false,error:"choose-failed"};}}
+  function apiChoose(owner,payload){var bad=apiGuard(owner,"dialog"),menu=apiMenu(),naid=payload&&arrowPos(payload.naid),index=payload&&Number(payload.index),fp=payload&&payload.fingerprint;if(bad)return bad;if(!payload||!naid||!Number.isInteger(index)||index<0||index>=menu.items.length||naid!==menu.naid||naid!==apiLease.selectedNpc||typeof fp!=="string"||fp!==menu.fingerprint)return {ok:false,error:"invalid-menu"};if(fp===apiMenuUsed)return {ok:false,error:"menu-already-used"};apiMenuUsed=fp;try{var p=new (czp("CHOOSE_MENU"))();  // UNIFIED-PROBE-BEGIN api-choose-source ORIGINAL:cC5OQUlEPW5haWQ7cC5udW09aW5kZXgrMTtDTElFTlQuTk0uc2VuZFBhY2tldChwKTs=
+p.NAID=naid;p.num=index+1;upTag(p,"assistant:apiChoose");CLIENT.NM.sendPacket(p);
+  // UNIFIED-PROBE-END api-choose-source INLINE
+return {ok:true};}catch(e){return {ok:false,error:"choose-failed"};}}
   function apiBattle(owner,on){var bad=apiGuard(owner,"battle");if(bad)return bad;if(typeof on!=="boolean")return {ok:false,error:"invalid-payload"};apiBattleTick();var b=apiLease.battle,s=npBattleState(),generation=apiLease.generation,current=function(){return apiCurrent(owner,generation);};if(on){if(typeof apiCombat!=="undefined"&&apiCombat)return {ok:false,error:"combat-owned"};if(s!==false)return {ok:true,result:s===true?"preexisting":"unknown"};if(b.state==="pending-on"||b.state==="owned")return {ok:true,result:b.state};var r=npRequestBattle(true,"external:"+owner,true,current);if(r==="sent"||r==="queued")b.state="pending-on";return {ok:r!=="failed",result:r};}if(b.state!=="owned")return {ok:true,result:"not-owned"};var r2=npRequestBattle(false,"external:"+owner,true,current);if(r2==="sent"||r2==="queued")b.state="pending-off";return {ok:r2!=="failed",result:r2};}
   function apiAssistCombat(owner,on){var bad=apiGuard(owner,"battle");if(bad)return bad;if(typeof on!=="boolean")return {ok:false,error:"invalid-payload"};if(on){var r=apiCombatStart(owner);if(!r||r.ok!==true)return r||{ok:false,error:"combat-start-failed"};return {ok:true,result:r.result};}apiCombatStop();return {ok:true,result:"stopped"};}
   function apiSetArrow(owner,target){var bad=apiGuard(owner,"arrow"),mid=target&&arrowPos(target.mid),gid=target&&arrowPos(target.gid);if(bad)return bad;if(!target||!mid||!gid)return {ok:false,error:"invalid-target"};if(!arrowTarget||arrowTarget.owner!==owner||arrowTarget.mid!==mid||arrowTarget.gid!==gid){arrowPending=null;arrowSupply=null;arrowSelfPending=null;}arrowTarget={owner:owner,mid:mid,gid:gid};arrowTargetTick(Date.now());return {ok:true,enabled:arrowRules.enabled,blocked:arrowBlocked,ready:arrowReady,status:arrowStatus};}
@@ -23196,15 +23885,12 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   }
   // ================= V2.38.13 结束 =================
 
-  // 独立无限挑战的入场前物品保护入口 —— 走唯一 dojoGuardCapture（只读，不发包）
-  function apiDojoGuard(owner){
-    try{
-      if(!clientReady())return {ok:false,reason:"游戏未就绪，读不到背包快照"};
-      var g=dojoGuardCapture();
-      return {ok:!!(g&&g.ok),n:(g&&g.ok)?dojoGuard.n:0,reuse:!!(g&&g.reuse),reason:(g&&g.reason)||""};
-    }catch(e){return {ok:false,reason:"背包快照采集异常，已按最保守处理"};}
-  }
-  var apiFacade={protocol:API_PROTOCOL,assistantVersion:VER,teleport:apiTeleport,teleportResult:apiTeleportResult,prepareCombat:apiPrepareCombat,requestPickup:apiRequestPickup,assistCombat:apiAssistCombat,dojoGuard:apiDojoGuard,handshake:function(request){return request&&request.protocol===API_PROTOCOL&&request.client==="ro-infinite-dojo"?apiFacade:null;},capabilities:function(){return {protocol:API_PROTOCOL,scopes:["dojo","battle","movement","dialog","arrow","fly"],modules:["dojo"],arrowRules:true,battleTarget:true,assistCombat:true,dojoGuard:true};},ready:function(){return !!clientReady();},snapshot:apiSnapshot,acquire:apiAcquire,release:apiRelease,contactNpc:apiContact,walkTo:apiWalk,chooseMenu:apiChoose,requestBattle:apiBattle,setBattleTarget:apiSetBattleTarget,clearBattleTarget:apiClearBattleTarget,setArrowTarget:apiSetArrow,clearArrowTarget:apiClearArrow,requestFly:apiFly,registerWindow:apiRegisterWindow,openWindow:apiOpenWindow,closeWindow:apiCloseWindow,bag:{plan:apiBagPlan,drop:apiBagDrop,busy:function(){return !!(bagClean&&bagClean.busy);}},mail:{send:apiMailSend},notify:{push:notifyPush,token:notifyLoadToken,setToken:notifySaveToken,configured:function(){return !!notifyLoadToken();}},items:{noDrop:itemNoDropState,outlet:itemOutletAllowed,note:ITEM_OUTLET_NOTE}};
+  // UNIFIED-PROBE-BEGIN guard-facade ORIGINAL:ICAvLyDni6znq4vml6DpmZDmjJHmiJjnmoTlhaXlnLrliY3nianlk4Hkv53miqTlhaXlj6Mg4oCU4oCUIOi1sOWUr+S4gCBkb2pvR3VhcmRDYXB0dXJl77yI5Y+q6K+777yM5LiN5Y+R5YyF77yJCiAgZnVuY3Rpb24gYXBpRG9qb0d1YXJkKG93bmVyKXsKICAgIHRyeXsKICAgICAgaWYoIWNsaWVudFJlYWR5KCkpcmV0dXJuIHtvazpmYWxzZSxyZWFzb246Iua4uOaIj+acquWwsee7qu+8jOivu+S4jeWIsOiDjOWMheW/q+eFpyJ9OwogICAgICB2YXIgZz1kb2pvR3VhcmRDYXB0dXJlKCk7CiAgICAgIHJldHVybiB7b2s6ISEoZyYmZy5vayksbjooZyYmZy5vayk/ZG9qb0d1YXJkLm46MCxyZXVzZTohIShnJiZnLnJldXNlKSxyZWFzb246KGcmJmcucmVhc29uKXx8IiJ9OwogICAgfWNhdGNoKGUpe3JldHVybiB7b2s6ZmFsc2UscmVhc29uOiLog4zljIXlv6vnhafph4fpm4blvILluLjvvIzlt7LmjInmnIDkv53lrojlpITnkIYifTt9CiAgfQ==
+
+  // UNIFIED-PROBE-END guard-facade
+  // UNIFIED-PROBE-BEGIN guard-facade-lines ORIGINAL:ICB2YXIgYXBpRmFjYWRlPXtwcm90b2NvbDpBUElfUFJPVE9DT0wsYXNzaXN0YW50VmVyc2lvbjpWRVIsdGVsZXBvcnQ6YXBpVGVsZXBvcnQsdGVsZXBvcnRSZXN1bHQ6YXBpVGVsZXBvcnRSZXN1bHQscHJlcGFyZUNvbWJhdDphcGlQcmVwYXJlQ29tYmF0LHJlcXVlc3RQaWNrdXA6YXBpUmVxdWVzdFBpY2t1cCxhc3Npc3RDb21iYXQ6YXBpQXNzaXN0Q29tYmF0LGRvam9HdWFyZDphcGlEb2pvR3VhcmQsaGFuZHNoYWtlOmZ1bmN0aW9uKHJlcXVlc3Qpe3JldHVybiByZXF1ZXN0JiZyZXF1ZXN0LnByb3RvY29sPT09QVBJX1BST1RPQ09MJiZyZXF1ZXN0LmNsaWVudD09PSJyby1pbmZpbml0ZS1kb2pvIj9hcGlGYWNhZGU6bnVsbDt9LGNhcGFiaWxpdGllczpmdW5jdGlvbigpe3JldHVybiB7cHJvdG9jb2w6QVBJX1BST1RPQ09MLHNjb3BlczpbImRvam8iLCJiYXR0bGUiLCJtb3ZlbWVudCIsImRpYWxvZyIsImFycm93IiwiZmx5Il0sbW9kdWxlczpbImRvam8iXSxhcnJvd1J1bGVzOnRydWUsYmF0dGxlVGFyZ2V0OnRydWUsYXNzaXN0Q29tYmF0OnRydWUsZG9qb0d1YXJkOnRydWV9O30scmVhZHk6ZnVuY3Rpb24oKXtyZXR1cm4gISFjbGllbnRSZWFkeSgpO30sc25hcHNob3Q6YXBpU25hcHNob3QsYWNxdWlyZTphcGlBY3F1aXJlLHJlbGVhc2U6YXBpUmVsZWFzZSxjb250YWN0TnBjOmFwaUNvbnRhY3Qsd2Fsa1RvOmFwaVdhbGssY2hvb3NlTWVudTphcGlDaG9vc2UscmVxdWVzdEJhdHRsZTphcGlCYXR0bGUsc2V0QmF0dGxlVGFyZ2V0OmFwaVNldEJhdHRsZVRhcmdldCxjbGVhckJhdHRsZVRhcmdldDphcGlDbGVhckJhdHRsZVRhcmdldCxzZXRBcnJvd1RhcmdldDphcGlTZXRBcnJvdyxjbGVhckFycm93VGFyZ2V0OmFwaUNsZWFyQXJyb3cscmVxdWVzdEZseTphcGlGbHkscmVnaXN0ZXJXaW5kb3c6YXBpUmVnaXN0ZXJXaW5kb3csb3BlbldpbmRvdzphcGlPcGVuV2luZG93LGNsb3NlV2luZG93OmFwaUNsb3NlV2luZG93LGJhZzp7cGxhbjphcGlCYWdQbGFuLGRyb3A6YXBpQmFnRHJvcCxidXN5OmZ1bmN0aW9uKCl7cmV0dXJuICEhKGJhZ0NsZWFuJiZiYWdDbGVhbi5idXN5KTt9fSxtYWlsOntzZW5kOmFwaU1haWxTZW5kfSxub3RpZnk6e3B1c2g6bm90aWZ5UHVzaCx0b2tlbjpub3RpZnlMb2FkVG9rZW4sc2V0VG9rZW46bm90aWZ5U2F2ZVRva2VuLGNvbmZpZ3VyZWQ6ZnVuY3Rpb24oKXtyZXR1cm4gISFub3RpZnlMb2FkVG9rZW4oKTt9fSxpdGVtczp7bm9Ecm9wOml0ZW1Ob0Ryb3BTdGF0ZSxvdXRsZXQ6aXRlbU91dGxldEFsbG93ZWQsbm90ZTpJVEVNX09VVExFVF9OT1RFfX07
+  var apiFacade={protocol:API_PROTOCOL,assistantVersion:VER,teleport:apiTeleport,teleportResult:apiTeleportResult,prepareCombat:apiPrepareCombat,requestPickup:apiRequestPickup,assistCombat:apiAssistCombat,handshake:function(request){return request&&request.protocol===API_PROTOCOL&&request.client==="ro-infinite-dojo"?apiFacade:null;},capabilities:function(){return {protocol:API_PROTOCOL,scopes:["dojo","battle","movement","dialog","arrow","fly"],modules:["dojo"],arrowRules:true,battleTarget:true,assistCombat:true};},ready:function(){return !!clientReady();},snapshot:apiSnapshot,acquire:apiAcquire,release:apiRelease,contactNpc:apiContact,walkTo:apiWalk,chooseMenu:apiChoose,requestBattle:apiBattle,setBattleTarget:apiSetBattleTarget,clearBattleTarget:apiClearBattleTarget,setArrowTarget:apiSetArrow,clearArrowTarget:apiClearArrow,requestFly:apiFly,registerWindow:apiRegisterWindow,openWindow:apiOpenWindow,closeWindow:apiCloseWindow,bag:{plan:apiBagPlan,drop:apiBagDrop,busy:function(){return !!(bagClean&&bagClean.busy);}},mail:{send:apiMailSend},notify:{push:notifyPush,token:notifyLoadToken,setToken:notifySaveToken,configured:function(){return !!notifyLoadToken();}},items:{noDrop:itemNoDropState,outlet:itemOutletAllowed,note:ITEM_OUTLET_NOTE}};
+  // UNIFIED-PROBE-END guard-facade-lines
   try{window.__DSH_RO_ASSIST_API__=Object.freeze(apiFacade);}catch(e){window.__DSH_RO_ASSIST_API__=apiFacade;}
   apiNoticeWatch();setTimeout(function(){apiEmit("ready",{protocol:API_PROTOCOL,assistantVersion:VER});},0);
   setInterval(function(){apiBattleTick();if(apiLease)apiEmit("state",{owner:apiLease.owner});},250);
@@ -24006,7 +24692,9 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
     ITIP.el = d;
     return d;
   }
-  function itipHide() { try { if (ITIP.el) ITIP.el.style.display = "none"; ITIP.elKey = ""; ITIP.over = false; } catch (e) {} }
+  // UNIFIED-PROBE-BEGIN fix-itip-hide-bagtarget ORIGINAL:ICBmdW5jdGlvbiBpdGlwSGlkZSgpIHsgdHJ5IHsgaWYgKElUSVAuZWwpIElUSVAuZWwuc3R5bGUuZGlzcGxheSA9ICJub25lIjsgSVRJUC5lbEtleSA9ICIiOyBJVElQLm92ZXIgPSBmYWxzZTsgfSBjYXRjaCAoZSkge30gfQ==
+  function itipHide() { try { if (ITIP.el) ITIP.el.style.display = "none"; ITIP.elKey = ""; ITIP.over = false; ITIP.bagTarget = null; } catch (e) {} } // V2.38.77：收起时一并清掉指向背包实例的引用，避免留下过期目标
+  // UNIFIED-PROBE-END fix-itip-hide-bagtarget
   function itipPlace(x, y) {
     try {
       var d = ITIP.el; if (!d) return;
@@ -24167,14 +24855,44 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   function itipPlainHtml(item, itid) {
     try {
       if (itid == null || itid === "") return "";
-      if (itipIsEquip(item)) return ""; // 装备：维持原早退（没有隐藏信息就不显示），绝不套用普通物品格式
+  // UNIFIED-PROBE-BEGIN fix-equip-plain ORIGINAL:ICAgICAgaWYgKGl0aXBJc0VxdWlwKGl0ZW0pKSByZXR1cm4gIiI7IC8vIOijheWkh++8mue7tOaMgeWOn+aXqemAgO+8iOayoeaciemakOiXj+S/oeaBr+WwseS4jeaYvuekuu+8ie+8jOe7neS4jeWll+eUqOaZrumAmueJqeWTgeagvOW8jw==
+      if (itipIsEquip(item)) return itipItemLines(item, itid, true); // V2.38.77：装备也要能看见名字；只出真名+物品ID、不写数量，绝不套用材料格式
+  // UNIFIED-PROBE-END fix-equip-plain
       return itipItemLines(item, itid);
     } catch (e) { return ""; }
   }
   // V2.38.35 鉴定界面（放大镜 → 客户端 ItemSelection 窗口）：格子只有 data-index，没有 data-itid。
   //   只有「本次列表确实来自物品」时才认（ITIP.selItem 由 setList 包装记录），技能列表（自动咏唱）与别的窗口
   //   一律不认；认不出主机就返回 false（fail-closed，宁可不显示）。
+  // UNIFIED-PROBE-BEGIN fix-equip-window ORIGINAL:ICBmdW5jdGlvbiBpdGlwSXNJdGVtU2VsZWN0KGVsKSB7
+  // V2.38.77：装备窗口判定——必须证明这只格子就在「助手自己那扇装备窗」的根里，且取值同源。
+  //   绝不可只按 id==="Equipment" 认：旧客户端「查看他人装备」是同一份 Equipment.html 的克隆，根 id 一样；
+  //   新客户端那份根 id 是 PlayerViewEquip。按 id 认就会把别人的格子当自己的，再套本方装备表 → 显示错物品。
+  //   只采信组件自己声明的根（getRoot / ui）；拿不到根就判 false（宁可不显示，绝不显示错物品）。
+  function itipEquipRoot() {
+    try {
+      var EQ = (typeof gearEquipmentComp === "function") ? gearEquipmentComp() : null;
+      if (!EQ) return null;
+      var r = null;
+      try { if (typeof EQ.getRoot === "function") r = EQ.getRoot(); } catch (e1) { r = null; }
+      if (!r) { try { r = EQ.ui; } catch (e2) { r = null; } }
+      if (typeof gearDomEl === "function") r = gearDomEl(r);
+      if (r && r.jquery) r = r[0];
+      if (r && !r.nodeType && r.length) r = r[0];
+      return (r && r.nodeType === 1) ? r : null;
+    } catch (e) { return null; }
+  }
+  function itipIsEquipWindow(el) {
+    try {
+      var root = itipEquipRoot();
+      if (!root) return false;
+      var chain = itipChain(el);
+      for (var i = 0; i < chain.length; i++) { if (chain[i] === root) return true; }
+      return false;
+    } catch (e) { return false; }
+  }
   function itipIsItemSelect(el) {
+  // UNIFIED-PROBE-END fix-equip-window
     try {
       if (!ITIP.selItem) return false;
       var chain = itipChain(el);
@@ -24276,10 +24994,20 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
       if (itipIsShop(itipChain(el))) {
         var side = itipShopSide(el);
         var isSell = !!side && itipShopSellMode(el);
+  // UNIFIED-PROBE-BEGIN fix-index-shop ORIGINAL:ICAgICAgICB2YXIgc2kgPSBlbC5nZXRBdHRyaWJ1dGUoImRhdGEtaW5kZXgiKTsKICAgICAgICB2YXIgaW52ID0gaXRpcEludk1hcCgpOwogICAgICAgIHZhciBzSXRlbSA9IChzaSAhPSBudWxsKSA/IGludltOdW1iZXIoc2kpXSA6IG51bGw7CiAgICAgICAgaHRtbCA9IChpc1NlbGwgJiYgc0l0ZW0pID8gaXRpcEJvZHkoc0l0ZW0sIElUSVAuc2VsbFtOdW1iZXIoc2kpXSB8fCBudWxsKSA6IGl0aXBTaG9wUm93KGVsKTs=
         var si = el.getAttribute("data-index");
-        var inv = itipInvMap();
-        var sItem = (si != null) ? inv[Number(si)] : null;
-        html = (isSell && sItem) ? itipBody(sItem, ITIP.sell[Number(si)] || null) : itipShopRow(el);
+        // V2.38.77：下标只认十进制非负整数串；空串/空白/非数字一律当非法，且非法时连背包都不读
+        //   （Number("") === 0 曾让空售格命中背包 0 号）。合法时行为与本分支原口径完全一致。
+        var siT = (si == null) ? "" : String(si).trim();
+        var siOk = /^[0-9]{1,10}$/.test(siT);
+        // UNIFIED-PROBE-BEGIN fix-shop-align ORIGINAL:ICAgICAgdmFyIHNJdGVtID0gc2lPayA/IGl0aXBFbnZNYXAoKVtOdW1iZXIoc2lUKV0gOiBudWxsOw==
+      var soMapIt = siOk ? (itipInvMap()[Number(siT)] || null) : null;
+      var soAl = (siOk && soMapIt) ? upInvAlign(Number(siT), soMapIt) : null;
+      var sItem = soMapIt;
+      if (siOk && soAl && soAl.hits > 1 && soAl.misalign) upInvMark("商店格：格号与物品号可能错位（见三路对齐）", "商店格 格号=" + siT + " 包流=" + (soAl.pkt == null ? "无" : soAl.pkt) + " 组件=" + (soAl.comp == null ? "无" : soAl.comp) + " 打包表=" + (soAl.map == null ? "无" : soAl.map));
+      // UNIFIED-PROBE-END fix-shop-align
+        html = (isSell && sItem) ? itipBody(sItem, ITIP.sell[Number(siT)] || null) : itipShopRow(el);
+  // UNIFIED-PROBE-END fix-index-shop
       } else if (itipIsTrade(el)) {
         // V2.38.36 交易框：data-index 是客户端 _send/_recv 的下标，不是背包 index —— 不映射背包、不显示售价。
         //   认不出哪一侧 / data-index 非数 / 镜像里没有（含助手注入晚于入列、抓不到快照）→ 一律不显示，绝不回退 itipInvMap()。
@@ -24298,31 +25026,66 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
         if (tAmt !== null) { tItem = Object.assign({}, tItem); tItem.count = tAmt; }
         html = itipBody(tItem, null, true); // 交易没有售价：price 一律 null；noBag：对方物品与本方快照都不得回连背包实例
       } else if (itipIsStorage(el)) {
+  // UNIFIED-PROBE-BEGIN fix-index-storage ORIGINAL:ICAgICAgICB2YXIgc3RvcmFnZUluZGV4ID0gZWwuZ2V0QXR0cmlidXRlKCJkYXRhLWluZGV4Iik7CiAgICAgICAgdmFyIHN0b3JhZ2VJdGVtID0gKHN0b3JhZ2VJbmRleCAhPSBudWxsKSA/IGl0aXBTdG9yYWdlTWFwKClbTnVtYmVyKHN0b3JhZ2VJbmRleCldIDogbnVsbDs=
         var storageIndex = el.getAttribute("data-index");
-        var storageItem = (storageIndex != null) ? itipStorageMap()[Number(storageIndex)] : null;
+        var stT = (storageIndex == null) ? "" : String(storageIndex).trim(); // V2.38.77：空串/非数字下标一律非法（非法时不读仓库表）
+        var storageItem = /^[0-9]{1,10}$/.test(stT) ? itipStorageMap()[Number(stT)] : null;
+  // UNIFIED-PROBE-END fix-index-storage
         if (!storageItem) { itipHide(); return; }
         html = itipBody(storageItem, null, true); // 仓库 index 是仓库实例空间：绝不拿它去背包里找同号实例。
       } else if (itipIsItemSelect(el)) {
         // V2.38.36：格子按 data-index 精确映射背包实例（该窗口的 data-index 就是背包 index，与背包悬停同源）。
         //   装备先走装备展示（真名/精炼/词条）；没有可展示的隐藏信息时退回「真名 + 物品ID」，绝不退化成材料格式（不写数量）。
+  // UNIFIED-PROBE-BEGIN fix-index-itemsel ORIGINAL:ICAgICAgICB2YXIgc0lkeCA9IGVsLmdldEF0dHJpYnV0ZSgiZGF0YS1pbmRleCIpOwogICAgICAgIHZhciBzSXRlbSA9IChzSWR4ICE9IG51bGwpID8gaXRpcEludk1hcCgpW051bWJlcihzSWR4KV0gOiBudWxsOw==
         var sIdx = el.getAttribute("data-index");
-        var sItem = (sIdx != null) ? itipInvMap()[Number(sIdx)] : null;
-        if (!sItem) { itipHide(); return; }
+        var sIdxT = (sIdx == null) ? "" : String(sIdx).trim(); // V2.38.77：空串/非数字下标一律非法（非法时不读背包）
+  // UNIFIED-PROBE-BEGIN invhovershot-fallback-itemsel ORIGINAL:ICAgICAgICB2YXIgc0l0ZW0gPSAvXlswLTldezEsMTB9JC8udGVzdChzSWR4VCkgPyBpdGlwSW52TWFwKClbTnVtYmVyKHNJZHhUKV0gOiBudWxsOw==
+        var sItem = /^[0-9]{1,10}$/.test(sIdxT) ? itipInvMap()[Number(sIdxT)] : null;
+        // V2.38.77-修法②：打包表没有这一格时，只有「全文档唯一 #Inventory」才按格号回退到该格实例
+        //   （回退结果还要与格子物品号一致）；多个 #Inventory 一律不按 id 认，维持 fail-closed。
+        if (!sItem && /^[0-9]{1,10}$/.test(sIdxT) && typeof upInvFallbackItem === "function") { try { var fbSel = upInvFallbackItem(Number(sIdxT)); if (fbSel) sItem = fbSel; } catch (eFB2) {} }
+  // UNIFIED-PROBE-END invhovershot-fallback-itemsel
+  // UNIFIED-PROBE-END fix-index-itemsel
+  // UNIFIED-PROBE-BEGIN invhovershot-diag-itemsel ORIGINAL:ICAgICAgICBpZiAoIXNJdGVtKSB7IGl0aXBIaWRlKCk7IHJldHVybjsgfQ==
+        if (!sItem) { try { upInvMark("按格号回查背包实例失败（鉴定选择窗格内查不到实例）" + upInvFallbackNote(), ""); } catch (eIM4) {} itipHide(); return; }
+  // UNIFIED-PROBE-END invhovershot-diag-itemsel
         var sItid = (sItem.ITID != null) ? sItem.ITID : sItem.itemid;
         html = itipIsEquip(sItem) ? (itipBody(sItem, null) || itipItemLines(sItem, sItid, true)) : itipItemLines(sItem, sItid);
+  // UNIFIED-PROBE-BEGIN fix-equip-tail ORIGINAL:ICAgICAgfSBlbHNlIHsKICAgICAgICB2YXIgaXRpZCA9IGVsLmdldEF0dHJpYnV0ZSgiZGF0YS1pdGlkIik7CiAgICAgICAgaWYgKCFpdGlkKSB7IGl0aXBIaWRlKCk7IHJldHVybjsgfQogICAgICAgIHZhciBpZHggPSBlbC5nZXRBdHRyaWJ1dGUoImRhdGEtaW5kZXgiKTsKICAgICAgICB2YXIgaW52MiA9IGl0aXBJbnZNYXAoKTsKICAgICAgICB2YXIgaXRlbSA9IChpZHggIT0gbnVsbCkgPyBpbnYyW051bWJlcihpZHgpXSA6IG51bGw7CiAgICAgICAgLy8g6KOF5aSHL+S6pOaYk+WunuS+i+WPquiDveaMiSBkYXRhLWluZGV4IOeyvuehruaYoOWwhO+8m+WQjCBJVElEIOWPr+iDveacieS4jeWQjOeyvueCvOS4juivjeadoe+8jOemgeatouWPjeafpeabv+S7o+OAggogICAgICAgIGlmIChpdGVtICYmIFN0cmluZyhpdGVtLklUSUQgIT0gbnVsbCA/IGl0ZW0uSVRJRCA6IGl0ZW0uaXRlbWlkKSAhPT0gU3RyaW5nKGl0aWQpKSBpdGVtID0gbnVsbDsKICAgICAgICBpZiAoIWl0ZW0pIHsgaXRpcEhpZGUoKTsgcmV0dXJuOyB9CiAgICAgICAgaHRtbCA9IGl0aXBCb2R5KGl0ZW0sIG51bGwpOwogICAgICB9CiAgICAgIGlmICghaHRtbCkgeyBpdGlwSGlkZSgpOyByZXR1cm47IH0KICAgICAgdmFyIGtleSA9IGh0bWwubGVuZ3RoICsgInwiICsgaHRtbC5zbGljZSgwLCA4MCk7
       } else {
+        // V2.38.77：装备栏格子可能只写槽位 data-index、不写 data-itid。只有确证是助手自己那扇装备窗
+        //   （认窗与取组件同源）才按装备组件反查槽位实例；其它缺 data-itid 的格子照旧 fail-closed 不显示。
         var itid = el.getAttribute("data-itid");
-        if (!itid) { itipHide(); return; }
         var idx = el.getAttribute("data-index");
-        var inv2 = itipInvMap();
-        var item = (idx != null) ? inv2[Number(idx)] : null;
+        var eqWin = itipIsEquipWindow(el);
+        var item = null;
+        if (eqWin) {
+          var eIdx = (typeof gearDomIdxVal === "function") ? gearDomIdxVal(idx) : null;
+          if (eIdx != null && typeof gearEqItemByIndex === "function" && typeof gearEquipmentComp === "function") item = gearEqItemByIndex(gearEquipmentComp(), eIdx);
+          if (item && !itid) itid = String(item.ITID != null ? item.ITID : item.itemid); // 只在格子没写 data-itid 时由组件补；写了就必须一致，否则上面那条核对会隐藏
+        } else {
+          // V2.38.77：他人装备窗（旧端克隆 / 新端 PlayerViewEquip）与商店空售格都落在这里：没有 data-itid 就不显示，
+          //   绝不用 data-index 去背包回查（否则会显示本方同名号物品）。
+          if (!itid) { itipHide(); return; }
+          var inv2 = itipInvMap();
+          item = (idx != null) ? inv2[Number(idx)] : null;
+  // UNIFIED-PROBE-BEGIN invhovershot-fallback-equip ORIGINAL:ICAgICAgICAgIGl0ZW0gPSAoaWR4ICE9IG51bGwpID8gaW52MltOdW1iZXIoaWR4KV0gOiBudWxsOw==
+          // V2.38.77-修法②：格号在这张表里查不到时，只有「全文档唯一 #Inventory」才允许按格号回退到该容器
+          //   对应格子的 data-itid/实例（回退结果还要与格子物品号一致）；多个 #Inventory（含他人装备窗克隆）
+          //   一律不按 id 认，维持 fail-closed。
+          if (!item && typeof upInvFallbackItem === "function") { try { var fbEq = upInvFallbackItem((idx != null) ? Number(idx) : null); if (fbEq) item = fbEq; } catch (eFB) {} }
+  // UNIFIED-PROBE-END invhovershot-fallback-equip
+        }
         // 装备/交易实例只能按 data-index 精确映射；同 ITID 可能有不同精炼与词条，禁止反查替代。
         if (item && String(item.ITID != null ? item.ITID : item.itemid) !== String(itid)) item = null;
-        if (!item) { itipHide(); return; }
-        html = itipBody(item, null);
+        if (!item || itid == null || itid === "") { try { upInvMark("装备窗格：认不出格子（data-itid 为空且组件/背包回查都拿不到）" + upInvFallbackNote(), ""); } catch (eIM3) {} itipHide(); return; }
+        // V2.38.77：装备槽位号不是背包索引，绝不按它回连背包实例（否则 ITIP.bagTarget 会指向别的物品）。
+        html = itipBody(item, null, eqWin);
       }
-      if (!html) { itipHide(); return; }
+      if (!html) { try { upInvProbeTail(); } catch (ePT) {} itipHide(); return; }
+      try { upInvShow(); } catch (eSH) {}
       var key = html.length + "|" + html.slice(0, 80);
+  // UNIFIED-PROBE-END fix-equip-tail
       var d = itipNode();
       if (key !== ITIP.elKey) { d.innerHTML = html; ITIP.elKey = key; }
       d.style.display = "block";
@@ -25326,27 +26089,25 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   //   只发到 127.0.0.1（浏览器把 loopback 视为可信来源，https 页面也能直接发）；
   //   内容仍是上面那份结构诊断（无账号/角色名/物品实例/数量）；失败静默、绝不影响游戏。
   var diagReportAt = 0, diagLastKey = "", diagSent = 0;
-  function reportDiag(kind, extra) {
+  // UNIFIED-PROBE-BEGIN gate-gear-report ORIGINAL:ICBmdW5jdGlvbiByZXBvcnREaWFnKGtpbmQsIGV4dHJhLCBkb25lKSB7
+  function reportDiag(kind, extra, done) {
+    if(done)done(false);return false; // Retired optional independent equipment POST.
+  // UNIFIED-PROBE-END gate-gear-report
     try {
       if (diagSent >= 300) return false;
       var o = null;
       try { o = window.__dshGearDiag__; } catch (e0) {}
       if (!o) { try { gearDiagCollect(); o = window.__dshGearDiag__; } catch (e1) {} }
       var body = { kind: kind || "auto", ver: (typeof VER === "string" ? VER : ""), diag: o || null, extra: extra || {} };
-      var url = "http://127.0.0.1:8791/dsh-diag";
+      var url = "http://127.0.0.1:8899/api/probe-collect";
       var txt = JSON.stringify(body);
       diagSent++;
-      try {
-        if (typeof navigator !== "undefined" && navigator.sendBeacon) {
-          if (navigator.sendBeacon(url, new Blob([txt], { type: "application/json" }))) return true;
-        }
-      } catch (eB) {}
-      try {
-        if (typeof fetch === "function") {
-          fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: txt, keepalive: true }).catch(function () {});
-          return true;
-        }
-      } catch (eF) {}
+      if (typeof fetch === "function") {
+        fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: txt, keepalive: true })
+          .then(function (r) { if (done) done(!!(r && r.ok)); })
+          .catch(function () { if (done) done(false); });
+        return true;
+      }
     } catch (e) {}
     return false;
   }
@@ -25370,8 +26131,12 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   //   只有状态真的变化（例如箭槽从可读变不可读、身份补齐、换图）才做一次完整结构采集并上报。
   //   原因：V2.38.60 的写法每 60 秒无条件做一次全文档 [id*=quipment] 扫描，
   //   在游戏页面的大 DOM 上可能造成周期性卡顿 —— 改为「变化才深采集」，把开销降到接近零。
+  var diagAutoProbeOn = false; // Optional equipment scan is off at startup; safety guard reporting stays active.
   function diagAutoTick() {
     try {
+  // UNIFIED-PROBE-BEGIN gate-gear-auto ORIGINAL:ICAgICAgaWYgKCFkaWFnQXV0b1Byb2JlT24pIHJldHVybjs=
+      if (!upAllowed("battle") || !diagAutoProbeOn) return;
+  // UNIFIED-PROBE-END gate-gear-auto
       var now = Date.now();
       if (now - diagReportAt < 300000) return;
       diagReportAt = now;
@@ -26034,7 +26799,10 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
         if (!nm) return;
         var nx = dv.getUint16(18, true), ny = dv.getUint16(20, true);
         worldPkt.map = nm; worldPkt.mapAt = Date.now(); worldPkt.mapOp = op; worldPkt.src = "packet";
+  // UNIFIED-PROBE-BEGIN landing ORIGINAL:ICAgICAgICB3b3JsZFBrdC54ID0gbng7IHdvcmxkUGt0LnkgPSBueTsgd29ybGRQa3QucG9zQXQgPSB3b3JsZFBrdC5tYXBBdDsgd29ybGRQa3QucG9zT3AgPSBvcDs=
         worldPkt.x = nx; worldPkt.y = ny; worldPkt.posAt = worldPkt.mapAt; worldPkt.posOp = op;
+        try{upLanding(nm,nx,ny);}catch(eUP){}
+  // UNIFIED-PROBE-END landing
         identityLogLine("world-pkt-map op=" + op + " map=" + nm + " x=" + nx + " y=" + ny);
         return;
       }
@@ -27414,7 +28182,10 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
       return { account: account, charName: charName, map: getMapName(), tasks: tasks };
     } catch (e) { return null; }
   }
+  // UNIFIED-PROBE-BEGIN retire-quest-emitter ORIGINAL:ICBmdW5jdGlvbiBxdWVzdFN5bmNUaWNrKCkgew==
   function questSyncTick() {
+    return; // Retired optional account-key quest emitter; operational NPC/core controls unchanged.
+  // UNIFIED-PROBE-END retire-quest-emitter
     try {
       if (typeof fetch !== "function") return;
       var snap = readQuestSnapshot();
@@ -27430,10 +28201,9 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
       }).catch(function () {});
     } catch (e) {}
   }
-  setTimeout(function () {
-    try { questSyncTick(); } catch (e) {}
-    setInterval(function () { try { questSyncTick(); } catch (e) {} }, 5000);
-  }, 4000);
+  // UNIFIED-PROBE-BEGIN retire-quest-timer ORIGINAL:ICBzZXRUaW1lb3V0KGZ1bmN0aW9uICgpIHsKICAgIHRyeSB7IHF1ZXN0U3luY1RpY2soKTsgfSBjYXRjaCAoZSkge30KICAgIHNldEludGVydmFsKGZ1bmN0aW9uICgpIHsgdHJ5IHsgcXVlc3RTeW5jVGljaygpOyB9IGNhdGNoIChlKSB7fSB9LCA1MDAwKTsKICB9LCA0MDAwKTs=
+  // Optional questSync timer retired: unified default-OFF snapshots own recording.
+  // UNIFIED-PROBE-END retire-quest-timer
 
   // ================= V2.34.5 黄金副本（本机 8899 显式读写 · 该键严禁加入 KV_KEYS）=================
   // dsh_ro_profiles_v2.golden 不参与 5 秒轮询自动同步（一旦进 KV_KEYS 会导致两个入口自动互相覆盖）。
@@ -27557,6 +28327,438 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
     } catch (e) { try { setStatus("恢复配置失败: " + (e.message || e), "err"); } catch (e2) {} }
   });
   setTimeout(function () { try { goldenAutoRecover(); } catch (e) {} }, 6000);
+  // === RO_NEWUI_BEGIN === 本地新UI实验版；只展示/导航，不接管战斗与保护。
+  var roExpCfg = null, roExpRail = null, roExpRing = null, roExpToolbar = null, roExpSettings = null, roExpRingOpen = true, roExpOldBall = "";
+  var RO_EXP_KEY = "dsh_ro_newui_exp_v1";
+  // UNIFIED-PROBE-BEGIN newui-mon-whitelist ORIGINAL:ICB2YXIgUk9fRVhQX01PTiA9IFsiZHBzIiwgImJvc3MiLCAidGd0IiwgInp0aXAiLCAiemh1IiwgIm5wIl07
+  var RO_EXP_MON = ["dps", "boss", "tgt", "ztip"];
+  // UNIFIED-PROBE-END newui-mon-whitelist
+  // UNIFIED-PROBE-BEGIN newui-actions-set ORIGINAL:ICB2YXIgUk9fRVhQX0FDVElPTlMgPSBbImdlYXIiLCAidHAiLCAiemh1MiIsICJ6c2tpbGwiLCAiYm9zcyIsICJkcHMiLCAiaXRlbSIsICJzY3IiXTs=
+  var RO_EXP_ACTIONS = ["gear", "tp", "zhu2", "zskill", "boss", "dps", "item"];
+  // UNIFIED-PROBE-END newui-actions-set
+  var RO_EXP_SKILLS = { gear: 40, tp: 26, scr: 142, arrowrules: 46, zhu2: 5, zskill: 14, combat: 5, aid: 29, party: 28, dps: 5, boss: 10, item: 50, tgt: 10, znear: 10 };
+  function roExpOn() { return !!(roExpCfg && roExpCfg.enabled); }
+  function roExpModule(id) { return RO_MODULES.filter(function (m) { return m.id === id; })[0]; }
+  function roExpLoad() {
+    var c = {};
+    try { c = JSON.parse(localStorage.getItem(RO_EXP_KEY) || "{}"); } catch (e) { console.warn("[RO新UI] 选择读取失败", e); }
+    if (!c || typeof c !== "object") c = {};
+    function valid(a, fallback, allowed, max) { return (Array.isArray(a) ? a : fallback).filter(function (id, i, all) { return allowed.indexOf(id) >= 0 && all.indexOf(id) === i; }).slice(0, max); }
+  // UNIFIED-PROBE-BEGIN newui-petals-default ORIGINAL:ICAgIHJldHVybiB7IGVuYWJsZWQ6IGMuZW5hYmxlZCAhPT0gZmFsc2UsIG1vbml0b3JzOiB2YWxpZChjLm1vbml0b3JzLCBbImRwcyIsICJ0Z3QiLCAienRpcCJdLCBST19FWFBfTU9OLCBST19FWFBfTU9OLmxlbmd0aCksIHBldGFsczogdmFsaWQoYy5wZXRhbHMsIFsiZ2VhciIsICJ6aHUyIiwgInpza2lsbCIsICJ0cCIsICJpdGVtIiwgInNjciJdLCBST19NT0RVTEVTLmZpbHRlcihmdW5jdGlvbiAobSkgeyByZXR1cm4gbS5raW5kID09PSAiZnciICYmICFtLm5vVG9nZ2xlOyB9KS5tYXAoZnVuY3Rpb24gKG0pIHsgcmV0dXJuIG0uaWQ7IH0pLCA2KSB9Ow==
+  // UNIFIED-PROBE-BEGIN newui-petals-scrub ORIGINAL:ICAgIHJldHVybiB7IGVuYWJsZWQ6IGMuZW5hYmxlZCAhPT0gZmFsc2UsIG1vbml0b3JzOiB2YWxpZChjLm1vbml0b3JzLCBbImRwcyIsICJ0Z3QiLCAienRpcCJdLCBST19FWFBfTU9OLCBST19FWFBfTU9OLmxlbmd0aCksIHBldGFsczogdmFsaWQoYy5wZXRhbHMsIFJPX0VYUF9BQ1RJT05TLCBST19NT0RVTEVTLmZpbHRlcihmdW5jdGlvbiAobSkgeyByZXR1cm4gbS5raW5kID09PSAiZnciICYmICFtLm5vVG9nZ2xlOyB9KS5tYXAoZnVuY3Rpb24gKG0pIHsgcmV0dXJuIG0uaWQ7IH0pLCA2KSB9Ow==
+    return { enabled: c.enabled !== false, monitors: valid(c.monitors, ["dps", "tgt", "ztip"], RO_EXP_MON, RO_EXP_MON.length), petals: valid(c.petals, RO_EXP_ACTIONS, RO_MODULES.filter(function (m) { return m.kind === "fw" && !m.noToggle; }).map(function (m) { return m.id; }), 8).filter(function (id) { return id !== "scr"; }) };
+  // UNIFIED-PROBE-END newui-petals-scrub
+  // UNIFIED-PROBE-END newui-petals-default
+  }
+  function roExpSave() {
+    try { localStorage.setItem(RO_EXP_KEY, JSON.stringify(roExpCfg)); }
+    catch (e) { roFeedback("新UI选择未保存：本地存储不可写", "err"); console.error("[RO新UI] 保存失败", e); }
+  }
+  function roExpButton(parent, text, action) {
+    var b = document.createElement("button"); b.type = "button"; b.textContent = text;
+    b.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
+    b.addEventListener("click", function (e) { e.stopPropagation(); action(); }); parent.appendChild(b); return b;
+  }
+  function roExpRoot(id) {
+    var el = document.createElement("div"); el.id = id; el.className = "ro-exp-ui";
+    isolateEl(el); document.documentElement.appendChild(el); return el;
+  }
+  function roExpClamp(el) {
+    if (!el || el.style.display === "none") return;
+    var sc = roScaleOf(el) || 1, vw = roVw(), vh = roVh();
+    el.style.maxWidth = Math.max(1, (vw - 8) / sc) + "px";
+    el.style.maxHeight = Math.max(1, (vh - 8) / sc) + "px";
+    el.style.minWidth = "0"; el.style.minHeight = "0";
+    var r = el.getBoundingClientRect();
+    el.style.left = Math.max(4, Math.min(r.left, vw - r.width - 4)) + "px";
+    el.style.top = Math.max(4, Math.min(r.top, vh - r.height - 4)) + "px";
+    el.style.right = "auto"; el.style.bottom = "auto";
+  }
+  function roExpCloseOthers(keep) {
+    if (!roExpOn() || !fwSingleOn()) return;
+    for (var id in fwState) if (id !== keep && fwActualOpen(id)) fwClose(id);
+    if (keep !== "menu" && roMenuEl) roMenuEl.style.display = "none";
+    if (keep !== "panel") applyCollapse(true);
+    if (keep !== "newui" && roExpSettings) roExpSettings.style.display = "none";
+    roExpRingOpen = false; if (roExpRing) roExpRing.style.display = "none";
+  }
+  function roExpCloseAll() {
+    fwCloseAll(); if (roMenuEl) roMenuEl.style.display = "none"; applyCollapse(true);
+    if (roExpSettings) roExpSettings.style.display = "none";
+    roExpRingOpen = false; if (roExpRing) roExpRing.style.display = "none";
+  }
+  function roExpStatus(id) {
+    if (!CLIENT.SS || !CLIENT.SS.Entity) return "等待角色状态";
+  // UNIFIED-PROBE-BEGIN exp-status-guard ORIGINAL:ICAgIGlmIChpZCAhPT0gIm5wIiAmJiBpZCAhPT0gInpodSIgJiYgIXJvTW9kT24oaWQpKSByZXR1cm4gIuaooeWdl+W3suWFs+mXrSI7
+    if (RO_EXP_MON.indexOf(id) < 0 && id !== "np" && id !== "zhu") return "";
+  // UNIFIED-PROBE-END exp-status-guard
+    if (id === "dps") return dpsSource === "waiting" || !dps.sessionAt ? "等待伤害数据" : dpsNum(dpsRate(dps.total, dpsActiveMs(Date.now()))) + " DPS";
+    if (id === "boss") return bossList.length + " 只";
+    if (id === "tgt") { var t = document.getElementById("dsh-tgt-nm2"), h = document.getElementById("dsh-tgt-hp2"); return t ? t.textContent + (h && h.textContent ? " · " + h.textContent : "") : "等待目标状态"; }
+    if (id === "np" || id === "zhu") { var q = document.getElementById(id === "np" ? "dsh-qs-nei" : "dsh-qs-zhu"); return q ? q.title : "状态未知"; }
+    var s = document.getElementById("dsh-status"); return (zMon && zMon.action ? zMon.action + " · " : "") + (s && s.textContent ? s.textContent : "等待已有状态");
+  }
+  function roExpDecorate(id, win) {
+    if (!roExpOn() || !win || win.__roExpIsland) return;
+    var bar = win.querySelector(".ro-fw-title"), body = win.querySelector(".ro-fw-body"); if (!bar || !body) return;
+    win.__roExpIsland = { body: body, size: null };
+    var value = document.createElement("span"); value.className = "ro-exp-live"; bar.appendChild(value);
+  // UNIFIED-PROBE-BEGIN newui-no-island-button ORIGINAL:ICAgIHZhciBtaW5pID0gcm9FeHBCdXR0b24oYmFyLCAi5pS25oiQ5bKbIiwgZnVuY3Rpb24gKCkgeyByb0V4cElzbGFuZCh3aW4pOyB9KTsgbWluaS5jbGFzc05hbWUgPSAicm8tZXhwLW1pbmkiOw==
+    var mini = roExpButton(document.createElement("div"), "", function () {}); mini.className = "ro-exp-mini"; // V2.38.77.3：不再提供「收成岛」，展开页只留关闭
+  // UNIFIED-PROBE-END newui-no-island-button
+    win.__roExpIsland.value = value; win.__roExpIsland.button = mini; win.__roExpIsland.id = id;
+    isolateEl(value);
+    if (!roUi().win["fw-" + id]) { var rect = win.getBoundingClientRect(); win.style.left = Math.max(4, (roVw() - rect.width) / 2) + "px"; win.style.top = Math.round(roVh() * 0.35) + "px"; }
+    roExpClamp(win);
+  }
+  function roExpIsland(win, expand) {
+    var st = win.__roExpIsland; if (!st) return;
+    var opening = expand === true || !!st.size;
+    if (opening && st.size) {
+      win.style.width = st.size.width; win.style.height = st.size.height; st.body.style.display = st.size.bodyDisplay;
+      st.size = null; st.button.textContent = "收成岛"; win.removeAttribute("data-ro-island");
+    } else if (!opening) {
+      st.size = { width: win.style.width, height: win.style.height, bodyDisplay: st.body.style.display };
+      st.body.style.display = "none"; win.style.width = "min(360px,calc(100vw - 8px))"; win.style.height = "auto";
+      win.setAttribute("data-ro-island", "1"); st.button.textContent = "展开";
+    }
+    roExpClamp(win); roExpPaint();
+  }
+  // UNIFIED-PROBE-BEGIN newui-own-icons ORIGINAL:ICBmdW5jdGlvbiByb0V4cEljb24oYnV0dG9uLCBpZCwgbmFtZSkgewogICAgLy8g5ZKM5a6i5oi356uvIFNraWxsTGlzdCDnm7jlkIznmoTljp/nlJ/kvY3lm77liqDovb3ot6/lvoTvvJvmloflrZfmmK/nnJ/mraPlj6/op4HnmoTlpLHotKXlhZzlupXvvIzkuI3kvKrpgKDlm77niYfjgIIKICAgIHZhciBzaG9ydE5hbWVzID0geyBnZWFyOiAi5o2i6KOFIiwgdHA6ICLkvKDpgIEiLCB6aHUyOiAi5oiY5paXIiwgenNraWxsOiAi5oqA6IO9IiwgYm9zczogIummlumihiIsIGRwczogIuS8pOWusyIsIGl0ZW06ICLog4zljIUiLCBzY3I6ICLohJrmnKwiIH07CiAgICB2YXIgZmFsbGJhY2sgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KCJzcGFuIik7IGZhbGxiYWNrLnRleHRDb250ZW50ID0gc2hvcnROYW1lc1tpZF0gfHwgbmFtZTsgYnV0dG9uLmFwcGVuZENoaWxkKGZhbGxiYWNrKTsKICAgIHZhciBza2lsbElkID0gUk9fRVhQX1NLSUxMU1tpZF07IGlmICghc2tpbGxJZCkgcmV0dXJuOwogICAgdHJ5IHsKICAgICAgdmFyIGRiID0gQ0xJRU5ULkRCIHx8IHJlcXVpcmVEQigiREIvREJNYW5hZ2VyIiksIGxvYWRlciA9IHJlcXVpcmVEQigiQ29yZS9DbGllbnQiKTsKICAgICAgdmFyIHNrID0gZGIgJiYgZGIuZ2V0U2tpbGxJbmZvICYmIGRiLmdldFNraWxsSW5mbyhza2lsbElkKTsKICAgICAgaWYgKCFzayB8fCAhc2suTmFtZSkgeyB2YXIgdGFibGUgPSByZXF1aXJlREIoIkRCL1NraWxscy9Ta2lsbEluZm8iKTsgaWYgKHRhYmxlICYmIHRhYmxlLmRlZmF1bHQpIHRhYmxlID0gdGFibGUuZGVmYXVsdDsgc2sgPSB0YWJsZSAmJiB0YWJsZVtza2lsbElkXTsgfQogICAgICBpZiAoIXNrIHx8ICFzay5OYW1lIHx8ICFkYi5JTlRFUkZBQ0VfUEFUSCB8fCAhbG9hZGVyIHx8ICFsb2FkZXIubG9hZEZpbGUpIHJldHVybjsKICAgICAgdmFyIGltZyA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoImltZyIpOyBpbWcuYWx0ID0gbmFtZTsgaW1nLnN0eWxlLmRpc3BsYXkgPSAibm9uZSI7IGJ1dHRvbi5hcHBlbmRDaGlsZChpbWcpOwogICAgICBpbWcuYWRkRXZlbnRMaXN0ZW5lcigibG9hZCIsIGZ1bmN0aW9uICgpIHsgaWYgKGltZy5uYXR1cmFsV2lkdGgpIHsgaW1nLnN0eWxlLmRpc3BsYXkgPSAiYmxvY2siOyBmYWxsYmFjay5zdHlsZS5kaXNwbGF5ID0gIm5vbmUiOyB9IH0pOwogICAgICBpbWcuYWRkRXZlbnRMaXN0ZW5lcigiZXJyb3IiLCBmdW5jdGlvbiAoKSB7IGltZy5zdHlsZS5kaXNwbGF5ID0gIm5vbmUiOyBmYWxsYmFjay5zdHlsZS5kaXNwbGF5ID0gIiI7IH0pOwogICAgICBsb2FkZXIubG9hZEZpbGUoZGIuSU5URVJGQUNFX1BBVEggKyAiaXRlbS8iICsgc2suTmFtZSArICIuYm1wIiwgZnVuY3Rpb24gKHVybCkgeyBpZiAodHlwZW9mIHVybCA9PT0gInN0cmluZyIgJiYgdXJsKSBpbWcuc3JjID0gdXJsOyB9LCBmdW5jdGlvbiAoKSB7IGltZy5zdHlsZS5kaXNwbGF5ID0gIm5vbmUiOyBmYWxsYmFjay5zdHlsZS5kaXNwbGF5ID0gIiI7IH0pOwogICAgfSBjYXRjaCAoZSkgeyBjb25zb2xlLndhcm4oIltST+aWsFVJXSDljp/nlJ/lm77moIfkuI3lj6/nlKjvvIzkv53nlZnmloflrZciLCBpZCwgZSk7IH0KICB9
+  // V2.38.77.3：图标页不再使用 RO 现成技能图标，也不用 emoji——全部为脚本自绘的线性图标（内联 SVG，无外链）。
+  var RO_EXP_ICON = {
+    gear: '<path d="M9 3h6l4 3-2 4-2-1v12H9V9L7 10 5 6l4-3z"/>',
+    tp: '<circle cx="12" cy="12" r="8.2"/><path d="M8.6 15.4 15.4 8.6M15.4 8.6h-4.2M15.4 8.6v4.2"/>',
+    zhu2: '<path d="M12 3l7 2.6V12c0 4.1-2.9 6.9-7 9-4.1-2.1-7-4.9-7-9V5.6z"/>',
+    zskill: '<path d="M12 3.4l2 5.6 5.6 2-5.6 2-2 5.6-2-5.6-5.6-2 5.6-2z"/>',
+    boss: '<path d="M4 19l1.6-11 4.6 4.4L12 5.6l1.8 6.8L18.4 8 20 19z"/>',
+    dps: '<path d="M5.5 20.5v-7M12 20.5v-13M18.5 20.5v-9"/>',
+    item: '<path d="M5.5 7.5h13l1 13h-15z"/><path d="M9 7.5V6a3 3 0 0 1 6 0v1.5"/>',
+    arrowrules: '<path d="M12 3.5v17M12 3.5l-4 4M12 3.5l4 4M12 20.5l-4-4M12 20.5l4-4"/>',
+    combat: '<path d="M4.5 19.5 19.5 4.5M15.5 4.5h4v4M4.5 15.5v4h4"/>',
+    aid: '<path d="M12 20.5s-7.5-4.6-7.5-9.6A4.4 4.4 0 0 1 12 8a4.4 4.4 0 0 1 7.5 2.9c0 5-7.5 9.6-7.5 9.6z"/>',
+    party: '<circle cx="9" cy="8.5" r="3"/><circle cx="16.5" cy="10" r="2.4"/><path d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5M15 14.8c2.8 0 5 1.7 5 4.7"/>',
+    arrowrules2: '',
+    znear: '<circle cx="12" cy="12" r="3.2"/><path d="M12 3v3.4M12 17.6V21M3 12h3.4M17.6 12H21M5.6 5.6l2.4 2.4M16 16l2.4 2.4M18.4 5.6 16 8M8 16l-2.4 2.4"/>',
+    tgt: '<circle cx="12" cy="12" r="7.6"/><circle cx="12" cy="12" r="2.2"/><path d="M12 2.4v3M12 18.6v3M2.4 12h3M18.6 12h3"/>',
+    _default: '<circle cx="12" cy="12" r="7.6"/><path d="M12 8.4v4.2M12 15.6v.1"/>'
+  };
+  function roExpIcon(button, id, name) {
+    try {
+      var body = RO_EXP_ICON[id] || RO_EXP_ICON._default;
+      var box = document.createElement("span"); box.className = "ro-exp-ico";
+      box.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + body + "</svg>";
+      button.appendChild(box);
+    } catch (eIcon) {}
+    try { if (name) button.title = name; } catch (e0) {}
+  }
+  // UNIFIED-PROBE-END newui-own-icons
+  function roExpLayout() {
+    if (!roExpOn()) return;
+    if (roExpRing) {
+      var r = ball.getBoundingClientRect(), vw = roVw(), vh = roVh(), buttons = roExpRing.querySelectorAll("[data-ro-petal]");
+  // UNIFIED-PROBE-BEGIN newui-ring-radius ORIGINAL:ICAgICAgdmFyIHJhZGl1cyA9IE1hdGgubWluKDc4LCBNYXRoLm1heCgyNCwgKHZ3IC0gNDgpIC8gMiksIE1hdGgubWF4KDI0LCAodmggLSA0OCkgLyAyKSk7
+      var radius = Math.min(64, Math.max(24, (vw - 48) / 2), Math.max(24, (vh - 48) / 2));
+  // UNIFIED-PROBE-END newui-ring-radius
+      var cx = Math.max(radius + 28, Math.min(vw - radius - 28, r.left + r.width / 2));
+      var cy = Math.max(radius + 28, Math.min(vh - 28, r.top + r.height / 2));
+      roExpRing.style.left = cx + "px"; roExpRing.style.top = cy + "px";
+      for (var i = 0; i < buttons.length; i++) {
+  // UNIFIED-PROBE-BEGIN newui-ring-spread ORIGINAL:ICAgICAgICB2YXIgYSA9ICgtMTc1ICsgKGJ1dHRvbnMubGVuZ3RoID4gMSA/IGkgKiAxNDAgLyAoYnV0dG9ucy5sZW5ndGggLSAxKSA6IDcwKSkgKiBNYXRoLlBJIC8gMTgwOw==
+        var a = (-175 + (buttons.length > 1 ? i * 170 / (buttons.length - 1) : 70)) * Math.PI / 180;
+  // UNIFIED-PROBE-END newui-ring-spread
+        buttons[i].style.left = (Math.cos(a) * radius * (r.left < vw / 2 ? -1 : 1) - 18) + "px";
+        buttons[i].style.top = (Math.sin(a) * radius - 18) + "px";
+      }
+    }
+    // 已有浮层仍挂 documentElement，绝不移进游戏的输入/HUD 宿主。
+    if (roExpToolbar) { roExpToolbar.style.left = "max(4px,calc(50vw - 4px))"; roExpToolbar.style.top = "8px"; roExpClamp(roExpToolbar); }
+  // UNIFIED-PROBE-BEGIN newui-no-force-float-pos ORIGINAL:ICAgIHZhciB0Z3QgPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgiZHNoLXRndC1iYXIiKSwgYWN0ID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoImRzaC16dGlwIik7CiAgICBpZiAodGd0ICYmICF0Z3QuX19yb0V4cFN0eWxlKSB0Z3QuX19yb0V4cFN0eWxlID0geyBjc3M6IHRndC5zdHlsZS5jc3NUZXh0IH07CiAgICBpZiAoYWN0ICYmICFhY3QuX19yb0V4cFN0eWxlKSBhY3QuX19yb0V4cFN0eWxlID0geyBjc3M6IGFjdC5zdHlsZS5jc3NUZXh0IH07CiAgICBpZiAodGd0ICYmICF0Z3QuX19kc0RyYWdnaW5nKSB7IHRndC5zdHlsZS5sZWZ0ID0gIm1heCg0cHgsY2FsYyg1MHZ3IC0gMTgwcHgpKSI7IHRndC5zdHlsZS50b3AgPSAibWluKDY4cHgsMTh2aCkiOyB0Z3Quc3R5bGUubWF4V2lkdGggPSAiY2FsYygxMDB2dyAtIDhweCkiOyByb0V4cENsYW1wKHRndCk7IH0KICAgIGlmIChhY3QgJiYgIWFjdC5fX2RzRHJhZ2dpbmcpIHsgYWN0LnN0eWxlLmxlZnQgPSAibWF4KDRweCxjYWxjKDUwdncgKyA5MHB4KSkiOyBhY3Quc3R5bGUudG9wID0gKHJvRXhwVG9vbGJhciA/IHJvRXhwVG9vbGJhci5nZXRCb3VuZGluZ0NsaWVudFJlY3QoKS5ib3R0b20gKyA0IDogOCkgKyAicHgiOyBhY3Quc3R5bGUuYm90dG9tID0gImF1dG8iOyBhY3Quc3R5bGUubWF4V2lkdGggPSAibWluKDMyMHB4LGNhbGMoMTAwdncgLSA4cHgpKSI7IHJvRXhwQ2xhbXAoYWN0KTsgfQ==
+    // V2.38.77.4：目标状态栏与战斗提示条各自有拖动 + 位置记忆（dshFloatDrag / dsh_ztip_pos），
+    //   新UI 不再每次布局强制写回它们的位置——这正是「拖完自动弹回」的原因。
+  // UNIFIED-PROBE-END newui-no-force-float-pos
+    for (var id in fwState) if (fwActualOpen(id)) { roExpDecorate(id, fwState[id].win); roExpClamp(fwState[id].win); }
+    if (roExpSettings && roExpSettings.style.display !== "none") roExpClamp(roExpSettings);
+  }
+  // UNIFIED-PROBE-BEGIN newui-mon-sync ORIGINAL:ICBmdW5jdGlvbiByb0V4cFBhaW50KCkgewogICAgaWYgKCFyb0V4cE9uKCkgfHwgIXJvRXhwUmFpbCkgcmV0dXJuOwogICAgdmFyIHZhbHVlcyA9IHJvRXhwUmFpbC5xdWVyeVNlbGVjdG9yQWxsKCJbZGF0YS1yby1tb25pdG9yXSIpOwogICAgZm9yICh2YXIgaSA9IDA7IGkgPCB2YWx1ZXMubGVuZ3RoOyBpKyspIHsgdmFyIHRleHQgPSByb0V4cFN0YXR1cyh2YWx1ZXNbaV0uZ2V0QXR0cmlidXRlKCJkYXRhLXJvLW1vbml0b3IiKSk7IHZhbHVlc1tpXS50ZXh0Q29udGVudCA9IHRleHQ7IHZhbHVlc1tpXS50aXRsZSA9IHRleHQ7IH0KICAgIGZvciAodmFyIGlkIGluIGZ3U3RhdGUpIHsgdmFyIHcgPSBmd1N0YXRlW2lkXS53aW4sIHMgPSB3ICYmIHcuX19yb0V4cElzbGFuZDsgaWYgKHMgJiYgZndBY3R1YWxPcGVuKGlkKSkgeyBzLnZhbHVlLnRleHRDb250ZW50ID0gcm9FeHBTdGF0dXMoaWQpOyBzLnZhbHVlLnRpdGxlID0gcy52YWx1ZS50ZXh0Q29udGVudDsgfSB9CiAgICByb0V4cExheW91dCgpOwogIH0=
+  // 互斥四项：行只在「对应详细窗口关着」时显示；浮窗用 fwActualOpen，悬浮层(tgt/ztip)用 roModIsOpen。
+  var RO_EXP_MON_SOLO = ["dps", "boss", "tgt", "ztip"];
+  var roExpMonRows = {};
+  function roExpMonOpen(id) {
+    if (id === "tgt" || id === "ztip") return roModIsOpen(id) === true;
+    return fwActualOpen(id) === true;
+  }
+  function roExpMonSync() {
+    try {
+      if (!roExpRail) return;
+      for (var i = 0; i < RO_EXP_MON_SOLO.length; i++) {
+        var id = RO_EXP_MON_SOLO[i], row = roExpMonRows[id];
+        if (!row) continue;
+        var open = false;
+        try { open = roExpMonOpen(id); } catch (e0) { open = false; }
+        var want = open ? "none" : "";
+        if (row.style.display !== want) row.style.display = want;
+      }
+      try {
+        // 标题行只允许有文字：任何串进来的透明度滑块一律清掉（幂等，不新增元素）。
+        var tl = roExpRail.querySelector(".ro-exp-title");
+        if (tl && tl.querySelectorAll) { var st = tl.querySelectorAll(".dsh-alpha"); for (var k = 0; k < st.length; k++) tl.removeChild(st[k]); }
+      } catch (eT) {}
+    } catch (e) {}
+  }
+  function roExpPaint() {
+    if (!roExpOn() || !roExpRail) return;
+    var values = roExpRail.querySelectorAll("[data-ro-monitor]");
+    for (var i = 0; i < values.length; i++) { var text = roExpStatus(values[i].getAttribute("data-ro-monitor")); values[i].textContent = text; values[i].title = text; }
+    // 只有取到非空状态文字才写标题栏；空值把那颗小字清空并隐藏（不留空胶囊、不加新文字、不加新定时器）。
+    for (var id in fwState) {
+      var w = fwState[id].win, s = w && w.__roExpIsland;
+      if (!s || !fwActualOpen(id)) continue;
+      var st = roExpStatus(id);
+      if (st) { s.value.textContent = st; s.value.title = st; s.value.style.display = ""; }
+      else { s.value.textContent = ""; s.value.title = ""; s.value.style.display = "none"; }
+    }
+    roExpMonSync();
+    roExpLayout();
+  }
+  // UNIFIED-PROBE-END newui-mon-sync
+  // UNIFIED-PROBE-BEGIN newui-rebuild-head ORIGINAL:ICBmdW5jdGlvbiByb0V4cFJlYnVpbGQoKSB7CiAgICBpZiAoIXJvRXhwUmFpbCB8fCAhcm9FeHBSaW5nIHx8ICFyb0V4cFRvb2xiYXIpIHJldHVybjsKICAgIHJvRXhwUmFpbC50ZXh0Q29udGVudCA9ICIiOyByb0V4cFJpbmcudGV4dENvbnRlbnQgPSAiIjsgcm9FeHBUb29sYmFyLnRleHRDb250ZW50ID0gIiI7CiAgICByb0V4cFRvb2xiYXIuc3R5bGUuZGlzcGxheSA9IHJvRXhwT24oKSA/ICJmbGV4IiA6ICJub25lIjsKICAgIFJPX0VYUF9BQ1RJT05TLmZvckVhY2goZnVuY3Rpb24gKGlkKSB7CiAgICAgIHZhciBtID0gcm9FeHBNb2R1bGUoaWQpLCBiID0gcm9FeHBCdXR0b24ocm9FeHBUb29sYmFyLCAiIiwgZnVuY3Rpb24gKCkgeyByb01vZFRvZ2dsZShpZCk7IH0pOwogICAgICBiLnNldEF0dHJpYnV0ZSgiZGF0YS1yby1hY3Rpb24iLCBpZCk7IGIudGl0bGUgPSBtLm5hbWU7IGIuc2V0QXR0cmlidXRlKCJhcmlhLWxhYmVsIiwgbS5uYW1lKTsgcm9FeHBJY29uKGIsIGlkLCBtLm5hbWUpOwogICAgfSk7CiAgICByb0V4cFJhaWwuc3R5bGUuZGlzcGxheSA9IHJvRXhwT24oKSA/ICJmbGV4IiA6ICJub25lIjsgcm9FeHBSaW5nLnN0eWxlLmRpc3BsYXkgPSByb0V4cE9uKCkgJiYgcm9FeHBSaW5nT3BlbiA/ICJibG9jayIgOiAibm9uZSI7
+  function roExpRebuild() {
+    if (!roExpRail || !roExpRing) return;
+    roExpRail.textContent = ""; roExpRing.textContent = "";
+    roExpRail.style.display = roExpOn() ? "flex" : "none"; roExpRing.style.display = roExpOn() && roExpRingOpen ? "block" : "none";
+  // UNIFIED-PROBE-END newui-rebuild-head
+  // UNIFIED-PROBE-BEGIN newui-rail-rows ORIGINAL:ICAgIHZhciB0aXRsZSA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoImRpdiIpOyB0aXRsZS5jbGFzc05hbWUgPSAicm8tZXhwLXRpdGxlIjsgdGl0bGUudGV4dENvbnRlbnQgPSAi5b+r6YCf55uR5o6nIjsgcm9FeHBSYWlsLmFwcGVuZENoaWxkKHRpdGxlKTsKICAgIHZhciByb3dzID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudCgiZGl2Iik7IHJvd3MuY2xhc3NOYW1lID0gInJvLWV4cC1yb3dzIjsgcm9FeHBSYWlsLmFwcGVuZENoaWxkKHJvd3MpOwogICAgcm9FeHBDZmcubW9uaXRvcnMuZm9yRWFjaChmdW5jdGlvbiAoaWQpIHsKICAgICAgdmFyIG0gPSByb0V4cE1vZHVsZShpZCksIGIgPSByb0V4cEJ1dHRvbihyb3dzLCAiIiwgZnVuY3Rpb24gKCkgeyBpZiAoaWQgPT09ICJucCIgfHwgaWQgPT09ICJ6aHUiKSByb01lbnVUb2dnbGUoKTsgZWxzZSByb01vZFRvZ2dsZShpZCk7IH0pOwogICAgICB2YXIgbGFiZWwgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KCJzcGFuIik7IGxhYmVsLnRleHRDb250ZW50ID0gbS5uYW1lOyBiLmFwcGVuZENoaWxkKGxhYmVsKTsKICAgICAgdmFyIHZhbHVlID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudCgic3BhbiIpOyB2YWx1ZS5zZXRBdHRyaWJ1dGUoImRhdGEtcm8tbW9uaXRvciIsIGlkKTsgYi5hcHBlbmRDaGlsZCh2YWx1ZSk7CiAgICB9KTs=
+    // 标题行只留文字「快速监控」：不挂滑块；文字占满整条横栏、超出省略号、字号不变。
+    var title = document.createElement("div"); title.className = "ro-exp-title";
+    var titleText = document.createElement("span"); titleText.className = "ro-exp-title-text"; titleText.textContent = "快速监控";
+    titleText.style.cssText = "flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px";
+    title.appendChild(titleText); roExpRail.appendChild(title);
+    roExpMonRows = {};
+    var rows = document.createElement("div"); rows.className = "ro-exp-rows"; roExpRail.appendChild(rows);
+    roExpCfg.monitors.forEach(function (id) {
+      var m = roExpModule(id), b = roExpButton(rows, "", function () { if (id === "np" || id === "zhu") roMenuToggle(); else roModToggle(id); });
+      var label = document.createElement("span"); label.textContent = m.name; b.appendChild(label);
+      var value = document.createElement("span"); value.setAttribute("data-ro-monitor", id); b.appendChild(value);
+      b.setAttribute("data-ro-monitor-row", id);
+      if (RO_EXP_MON_SOLO.indexOf(id) >= 0) roExpMonRows[id] = b;
+    });
+  // UNIFIED-PROBE-END newui-rail-rows
+    var ctl = document.createElement("div"); ctl.className = "ro-exp-controls"; roExpRail.appendChild(ctl);
+    roExpButton(ctl, "全部功能", roMenuToggle); roExpButton(ctl, "全部收回", roExpCloseAll);
+    roExpButton(roExpRail, "＋ 添加监控项", roExpOpenSettings);
+    roExpCfg.petals.forEach(function (id) {
+      var m = roExpModule(id), b = roExpButton(roExpRing, "", function () { roModToggle(id); });
+      b.setAttribute("data-ro-petal", id); b.title = m.name; b.setAttribute("aria-label", m.name); roExpIcon(b, id, m.name);
+    });
+    if (!roExpOn()) {
+  // UNIFIED-PROBE-BEGIN newui-mark-off ORIGINAL:ICAgICAgYmFsbC5zdHlsZS5jc3NUZXh0ID0gcm9FeHBPbGRCYWxsOyBiYWxsLnRpdGxlID0gIueCueWHu+WxleW8gOWKn+iDveiPnOWNlSI7
+      ball.style.cssText = roExpOldBall; ball.title = "点击展开功能菜单";
+      try { document.documentElement.removeAttribute("data-ro-newui"); } catch (eNU) {}
+  // UNIFIED-PROBE-END newui-mark-off
+      ["dsh-tgt-bar", "dsh-ztip"].forEach(function (fid) { var float = document.getElementById(fid); if (float && float.__roExpStyle) { var display = float.style.display; float.style.cssText = float.__roExpStyle.css; float.style.display = display; delete float.__roExpStyle; } });
+      for (var id in fwState) { var w = fwState[id].win, st = w && w.__roExpIsland; if (st) { if (st.size) roExpIsland(w, true); st.value.style.display = "none"; st.button.style.display = "none"; } }
+    } else {
+  // UNIFIED-PROBE-BEGIN newui-mark-on ORIGINAL:ICAgICAgYmFsbC5zdHlsZS5sZWZ0ID0gImF1dG8iOyBiYWxsLnN0eWxlLnRvcCA9ICJhdXRvIjsgYmFsbC5zdHlsZS5yaWdodCA9ICJtaW4oMTIwcHgsMjB2dykiOyBiYWxsLnN0eWxlLmJvdHRvbSA9ICJtaW4oOTZweCwxOHZoKSI7IGJhbGwudGl0bGUgPSAi54K55Ye75pS25pS+6Iqx55Oj77yb5L6n5qCP5YWo6YOo5Yqf6IO95omT5byA5Y6f5a6M5pW06I+c5Y2VIjs=
+  // UNIFIED-PROBE-BEGIN newui-zhud-off ORIGINAL:ICAgICAgYmFsbC5zdHlsZS5sZWZ0ID0gImF1dG8iOyBiYWxsLnN0eWxlLnRvcCA9ICJhdXRvIjsgYmFsbC5zdHlsZS5yaWdodCA9ICJtaW4oMTIwcHgsMjB2dykiOyBiYWxsLnN0eWxlLmJvdHRvbSA9ICJtaW4oOTZweCwxOHZoKSI7IGJhbGwudGl0bGUgPSAi54K55Ye75pS25pS+6Iqx55Oj77yb5L6n5qCP5YWo6YOo5Yqf6IO95omT5byA5Y6f5a6M5pW06I+c5Y2VIjs=
+      ball.style.left = "auto"; ball.style.top = "auto"; ball.style.right = "min(120px,20vw)"; ball.style.bottom = "min(96px,18vh)"; ball.title = "点击收放花瓣；侧栏全部功能打开原完整菜单";
+      // V2.38.77.4：实验版新UI 下不要「战斗监控横条」（左侧监控板已替代它）：强制关掉并隐藏。
+      try {
+        if (roMods()["zhud"] !== false) { roMods()["zhud"] = false; localStorage.setItem(RO_MOD_KEY, JSON.stringify(roMods())); }
+        var zhudEl = document.getElementById("dsh-ro-z-hud"); if (zhudEl) zhudEl.style.display = "none";
+      } catch (eZH) {}
+  // UNIFIED-PROBE-END newui-zhud-off
+      try { document.documentElement.setAttribute("data-ro-newui", "1"); } catch (eNU) {}
+  // UNIFIED-PROBE-END newui-mark-on
+      for (var fid in fwState) { var fw = fwState[fid].win, fs = fw && fw.__roExpIsland; if (fs) { fs.value.style.display = ""; fs.button.style.display = ""; } }
+    }
+    roExpPaint();
+  }
+  function roExpSettingsBody() {
+    roExpSettings.textContent = "";
+    var bar = document.createElement("div"); bar.className = "ro-exp-title"; bar.textContent = "本地新UI实验版 · 选择自动保存"; roExpSettings.appendChild(bar);
+    roExpButton(bar, "关闭", function () { roExpSettings.style.display = "none"; });
+    var body = document.createElement("div"); body.className = "ro-exp-choices"; roExpSettings.appendChild(body);
+    function choice(parent, label, checked, change) {
+      var line = document.createElement("label"), cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = checked;
+      cb.addEventListener("change", function () { change(cb); roExpSave(); roExpRebuild(); });
+      line.appendChild(cb); var text = document.createElement("span"); text.textContent = label; line.appendChild(text); parent.appendChild(line); return cb;
+    }
+    choice(body, "启用新UI（取消即可恢复旧波利球入口）", roExpOn(), function (cb) { roExpCfg.enabled = cb.checked; });
+    var mt = document.createElement("div"); mt.textContent = "侧栏：只显示所选监控"; body.appendChild(mt);
+    RO_EXP_MON.forEach(function (id) { choice(body, roExpModule(id).name, roExpCfg.monitors.indexOf(id) >= 0, function (cb) { roExpCfg.monitors = roExpCfg.monitors.filter(function (k) { return k !== id; }); if (cb.checked) roExpCfg.monitors.push(id); }); });
+  // UNIFIED-PROBE-BEGIN newui-petal-limit-text ORIGINAL:ICAgIHZhciBwdCA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoImRpdiIpOyBwdC50ZXh0Q29udGVudCA9ICLoirHnk6PvvJrmnIDlpJrlha3pobnvvIzmnKrpgInlip/og73ku43lnKjlhajpg6jlip/og73oj5zljZUiOyBib2R5LmFwcGVuZENoaWxkKHB0KTs=
+    var pt = document.createElement("div"); pt.textContent = "花瓣：最多八项，未选功能仍在全部功能菜单"; body.appendChild(pt);
+  // UNIFIED-PROBE-END newui-petal-limit-text
+    RO_MODULES.filter(function (m) { return m.kind === "fw" && !m.noToggle; }).forEach(function (m) {
+      choice(body, m.name, roExpCfg.petals.indexOf(m.id) >= 0, function (cb) {
+  // UNIFIED-PROBE-BEGIN newui-petal-limit-code ORIGINAL:ICAgICAgICBpZiAoY2IuY2hlY2tlZCAmJiByb0V4cENmZy5wZXRhbHMuaW5kZXhPZihtLmlkKSA8IDAgJiYgcm9FeHBDZmcucGV0YWxzLmxlbmd0aCA+PSA2KSB7IGNiLmNoZWNrZWQgPSBmYWxzZTsgcm9GZWVkYmFjaygi6Iqx55Oj5pyA5aSa5YWt6aG577yM6K+35YWI5Y+W5raI5LiA6aG5IiwgIndhcm4iKTsgcmV0dXJuOyB9
+        if (cb.checked && roExpCfg.petals.indexOf(m.id) < 0 && roExpCfg.petals.length >= 8) { cb.checked = false; roFeedback("花瓣最多六项，请先取消一项", "warn"); return; }
+  // UNIFIED-PROBE-END newui-petal-limit-code
+        roExpCfg.petals = roExpCfg.petals.filter(function (k) { return k !== m.id; }); if (cb.checked) roExpCfg.petals.push(m.id);
+      });
+    });
+    roExpButton(body, "全部收回", roExpCloseAll);
+  }
+  function roExpOpenSettings() {
+    if (!roExpSettings) { roExpSettings = roExpRoot("dsh-newui-settings"); roExpSettings.setAttribute("data-dsh-win", "1"); }
+    roExpCloseOthers("newui"); roExpSettingsBody(); roExpSettings.style.display = "flex"; roExpClamp(roExpSettings);
+  }
+  function roExpInit() {
+    if (roExpCfg) return;
+    if (!ball || !panel || !fwState || !RO_MODULES) throw new Error("新UI初始化次序错误：现有UI实例未就绪");
+    roExpCfg = roExpLoad(); roExpOldBall = ball.style.cssText;
+    var style = document.createElement("style"); style.id = "dsh-newui-style";
+    style.textContent = RO_SKIN_CSS + String.raw`
+.ro-exp-ui{position:fixed;z-index:2147483000;box-sizing:border-box;border:1px solid #8e8e8e;border-radius:3px;background:#fff;color:#111;font:11px/1.5 'Microsoft YaHei',Arial,sans-serif;box-shadow:1px 2px 3px #555;display:flex;flex-direction:column;overflow:hidden}
+.ro-exp-ui button,.ro-exp-mini{min-height:22px;border:1px solid #a9a9a9;border-radius:4px;background:linear-gradient(#fff,#f2f2f2 35%,#dcdcdc 55%,#f9f9f9);color:#3f3f3f;font:11px/1.4 'Microsoft YaHei',Arial,sans-serif;padding:2px 4px;cursor:pointer}
+.ro-exp-ui button:hover,.ro-exp-mini:hover{background:linear-gradient(#f7fbff,#dfe8f6 35%,#c0d0ee 55%,#f0f6ff)}
+.ro-exp-ui button:active{background:#cdd8eb}.ro-exp-ui button:disabled{color:#999;cursor:default}
+.ro-exp-title{background:#fff var(--dsh-tb) repeat-x;background-size:auto 17px;min-height:20px;padding:2px 4px;font-weight:bold;display:flex;align-items:center;justify-content:space-between}
+#dsh-newui-rail{left:4px;top:22vh;width:min(148px,calc(100vw - 8px));max-height:50vh}
+.ro-exp-rows{overflow:auto;min-height:0}.ro-exp-rows>button{display:flex;flex-direction:column;text-align:left;width:100%;border-radius:0}.ro-exp-rows>button>span:last-child{font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.ro-exp-controls{display:flex}.ro-exp-controls>button{flex:1;min-width:0}
+#dsh-newui-petals{border:0;box-shadow:none;background:none;overflow:visible;width:0;height:0;pointer-events:none;display:block}
+  // UNIFIED-PROBE-BEGIN newui-petal-hover ORIGINAL:I2RzaC1uZXd1aS1wZXRhbHMgYnV0dG9ue3Bvc2l0aW9uOmFic29sdXRlO2JveC1zaXppbmc6Ym9yZGVyLWJveDt3aWR0aDozNnB4O2hlaWdodDozNnB4O21pbi13aWR0aDowO3BvaW50ZXItZXZlbnRzOmF1dG87Ym9yZGVyLXJhZGl1czo1MCU7cGFkZGluZzoycHg7Zm9udC1zaXplOjlweDtvdmVyZmxvdzpoaWRkZW59
+#dsh-newui-petals button{position:absolute;box-sizing:border-box;width:36px;height:36px;min-width:0;pointer-events:auto;border-radius:50%;padding:2px;font-size:9px;overflow:hidden;transition:transform .12s ease-out,box-shadow .12s ease-out}
+#dsh-newui-petals button:hover{transform:scale(1.34);z-index:9;box-shadow:0 3px 10px rgba(0,0,0,.6)}
+  // UNIFIED-PROBE-END newui-petal-hover
+#dsh-newui-actions{left:calc(50vw - 4px);top:8px;max-width:calc(50vw - 8px);flex-direction:row;flex-wrap:wrap;gap:4px;padding:4px}
+#dsh-newui-actions button{box-sizing:border-box;width:36px;height:36px;min-width:0;padding:2px;font-size:10px;overflow:hidden}
+#dsh-newui-actions img,#dsh-newui-petals img{width:28px;height:28px;object-fit:contain;image-rendering:pixelated;margin:auto}
+#dsh-newui-settings{left:calc(50vw - 170px);top:26vh;width:min(340px,calc(100vw - 8px));max-height:70vh}.ro-exp-choices{overflow:auto;padding:8px}.ro-exp-choices label{display:flex;align-items:center;gap:4px;padding:3px 0}
+.ro-exp-live{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;flex:1}.ro-fw-title:has(.ro-exp-mini){height:auto!important;min-height:24px!important;flex-wrap:wrap}.ro-exp-mini{flex:none;min-width:40px}
+[data-ro-island] .dsh-grip,[data-ro-island] .dsh-alpha{display:none}
+`;
+  // UNIFIED-PROBE-BEGIN newui-ball-qs-below ORIGINAL:ICAgIGRvY3VtZW50LmRvY3VtZW50RWxlbWVudC5hcHBlbmRDaGlsZChzdHlsZSk7
+    document.documentElement.appendChild(style);
+    // V2.38.77.2：内/助 两个字挪到波利下面（只在实验版新UI生效；旧UI的 CSS 一律不动）
+    try {
+  // UNIFIED-PROBE-BEGIN newui-close-css ORIGINAL:ICAgICAgc3R5bGUudGV4dENvbnRlbnQgKz0gIlxuaHRtbFtkYXRhLXJvLW5ld3VpPVwiMVwiXSAjZHNoLWJhbGwgLnFze2xlZnQ6YXV0bzt0b3A6YXV0bztyaWdodDphdXRvO2JvdHRvbTotMzBweH1cbmh0bWxbZGF0YS1yby1uZXd1aT1cIjFcIl0gI2RzaC1iYWxsICNkc2gtcXMtbmVpe2xlZnQ6LThweDtib3R0b206LTMwcHh9XG5odG1sW2RhdGEtcm8tbmV3dWk9XCIxXCJdICNkc2gtYmFsbCAjZHNoLXFzLXpodXtsZWZ0OjIycHg7cmlnaHQ6YXV0bztib3R0b206LTMwcHh9Ijs=
+      style.textContent += "\nhtml[data-ro-newui=\"1\"] .ro-fw-title{height:23px!important;min-height:23px!important;padding:0 4px!important}\nhtml[data-ro-newui=\"1\"] .ro-fw-close{width:19px!important;height:19px!important;min-width:19px!important;background-size:19px 19px!important;border-radius:50%!important;margin-left:3px}\nhtml[data-ro-newui=\"1\"] .ro-fw-close:hover{filter:brightness(1.25)}\n.ro-exp-ico{display:flex;align-items:center;justify-content:center;width:100%;height:100%;pointer-events:none}\nhtml[data-ro-newui=\"1\"] #dsh-ball .qs{left:auto;top:auto;right:auto;bottom:-36px;width:30px;height:30px}\nhtml[data-ro-newui=\"1\"] #dsh-ball #dsh-qs-nei{left:-5px;right:auto;top:auto;bottom:-36px}\nhtml[data-ro-newui=\"1\"] #dsh-ball #dsh-qs-zhu{left:31px;right:auto;top:auto;bottom:-36px}";
+  // UNIFIED-PROBE-END newui-close-css
+    } catch (eStyle) {}
+  // UNIFIED-PROBE-END newui-ball-qs-below
+  // UNIFIED-PROBE-BEGIN newui-init-no-toolbar ORIGINAL:ICAgIHJvRXhwUmFpbCA9IHJvRXhwUm9vdCgiZHNoLW5ld3VpLXJhaWwiKTsgcm9FeHBSaW5nID0gcm9FeHBSb290KCJkc2gtbmV3dWktcGV0YWxzIik7IHJvRXhwVG9vbGJhciA9IHJvRXhwUm9vdCgiZHNoLW5ld3VpLWFjdGlvbnMiKTsgcm9FeHBUb29sYmFyLnNldEF0dHJpYnV0ZSgiYXJpYS1sYWJlbCIsICLluLjnlKjlip/og73lv6vmjbfmnaEiKTs=
+    roExpRail = roExpRoot("dsh-newui-rail"); roExpRing = roExpRoot("dsh-newui-petals"); roExpRing.setAttribute("aria-label", "波利展开：常用功能图标");
+  // UNIFIED-PROBE-END newui-init-no-toolbar
+    window.addEventListener("resize", roExpLayout); window.addEventListener("dsh-ro-assist-anchor", roExpLayout);
+    roExpRebuild(); roMenuRender();
+  }
+  // === RO_NEWUI_END ===
+  // UNIFIED-PROBE-BEGIN newui-rail-drag ORIGINAL:ICByb0V4cEluaXQoKTsgLy8g5a6e5L6L5LiO54q25oCB5YWo6YOo55m76K6w5a6M5oiQ5ZCO5ZCv5Yqo77yM5Yid5aeL5YyW6ZSZ6K+v5Lqk57uZ5Y6f5ZCv5Yqo6ZSZ6K+v6L6555WM5oql5ZGK44CC
+  // V2.38.77.4：快速监控板可拖动 + 松手吸附屏幕边 + 可收成侧边竖标签（位置与收放状态都记在本机）。
+  var RO_EXP_RAIL_KEY = "dsh_newui_rail_pos_v1", RO_EXP_RAIL_COL_KEY = "dsh_newui_rail_collapsed_v1";
+  var roExpRailTab = null;
+  function roExpRailSave() {
+    try { var x = Math.round(parseFloat(roExpRail.style.left)), y = Math.round(parseFloat(roExpRail.style.top)); if (!isFinite(x) || !isFinite(y)) return; localStorage.setItem(RO_EXP_RAIL_KEY, JSON.stringify({ x: x, y: y, vw: roVw(), vh: roVh() })); } catch (e) {}
+  }
+  function roExpRailPlace(x, y) {
+    var r = roExpRail.getBoundingClientRect();
+    var w = r.width || 148, h = r.height || 120;
+    var nx = Math.max(2, Math.min(Math.max(2, roVw() - w - 2), x)), ny = Math.max(2, Math.min(Math.max(2, roVh() - h - 2), y));
+    roExpRail.style.left = Math.round(nx) + "px"; roExpRail.style.top = Math.round(ny) + "px";
+    roExpRail.style.right = "auto"; roExpRail.style.bottom = "auto";
+    return { x: Math.round(nx), y: Math.round(ny), w: w, h: h };
+  }
+  function roExpRailSnap(save) {
+    try {
+      if (!roExpRail || !roExpOn()) return;
+      var p = roExpRailPlace(parseFloat(roExpRail.style.left) || 0, parseFloat(roExpRail.style.top) || 0);
+      var dL = p.x, dR = roVw() - (p.x + p.w), dT = p.y, dB = roVh() - (p.y + p.h);
+      // V2.38.77.4：贴边阈值 96 → 24 像素。96 像素时几乎任何落点都被吸到边上，看起来「拖了像没动」。
+      var best = Math.min(dL, dR, dT, dB), TH = 24;
+      if (best <= TH) {
+        if (best === dL) roExpRailPlace(4, p.y);
+        else if (best === dR) roExpRailPlace(roVw() - p.w - 4, p.y);
+        else if (best === dT) roExpRailPlace(p.x, 4);
+        else roExpRailPlace(p.x, roVh() - p.h - 4);
+      }
+      if (save) {
+        roExpRailSave(); roExpRailTabSync();
+        // 松手保存后回读一次：确认这次落点真的被记下了；没记下就再写一次（幂等，不新增可见元素）。
+        var back = roExpRailSaved();
+        var cx = Math.round(parseFloat(roExpRail.style.left)), cy = Math.round(parseFloat(roExpRail.style.top));
+        if (!back || !isFinite(back.x) || !isFinite(back.y) || (isFinite(cx) && isFinite(cy) && (back.x !== cx || back.y !== cy))) roExpRailSave();
+      }
+    } catch (e) {}
+  }
+  function roExpRailSaved() {
+    try { var s = JSON.parse(localStorage.getItem(RO_EXP_RAIL_KEY) || "null"); return (s && isFinite(s.x) && isFinite(s.y)) ? s : null; } catch (e) { return null; }
+  }
+  function roExpRailRestore() {
+    try {
+      var s = roExpRailSaved();
+      if (!s) return;
+      var rx = (isFinite(s.vw) && s.vw > 0) ? roVw() / s.vw : 1, ry = (isFinite(s.vh) && s.vh > 0) ? roVh() / s.vh : 1;
+      roExpRailPlace(s.x * rx, s.y * ry);
+    } catch (e) {}
+  }
+  function roExpRailIsCollapsed() { try { return localStorage.getItem(RO_EXP_RAIL_COL_KEY) === "1"; } catch (e) { return false; } }
+  function roExpRailTabSync() {
+    try {
+      if (!roExpRailTab) return;
+      var s = roExpRailSaved();
+      var cx = s ? s.x : parseFloat(roExpRail.style.left) || 4;
+      var cy = s ? s.y : parseFloat(roExpRail.style.top) || Math.round(roVh() * 0.22);
+      var onLeft = (cx + 40) < roVw() / 2;
+      roExpRailTab.style.left = onLeft ? "0px" : "auto";
+      roExpRailTab.style.right = onLeft ? "auto" : "0px";
+      roExpRailTab.style.borderRadius = onLeft ? "0 6px 6px 0" : "6px 0 0 6px";
+      roExpRailTab.style.top = Math.max(8, Math.min(roVh() - 76, cy)) + "px";
+    } catch (e) {}
+  }
+  function roExpRailSync() {
+    try {
+      if (!roExpRail) return;
+      if (!roExpRailTab) {
+        roExpRailTab = document.createElement("div"); roExpRailTab.id = "dsh-newui-rail-tab";
+        roExpRailTab.style.cssText = "position:fixed;z-index:2147482500;width:17px;min-height:54px;padding:6px 0;display:none;align-items:center;justify-content:center;writing-mode:vertical-rl;letter-spacing:2px;font:11px/1 'Microsoft YaHei',Arial,sans-serif;color:#3f3f3f;background:linear-gradient(#fff,#f2f2f2 35%,#dcdcdc 55%,#f9f9f9);border:1px solid #8e8e8e;cursor:pointer;user-select:none;-webkit-user-select:none;box-shadow:1px 2px 3px rgba(0,0,0,.25)";
+        roExpRailTab.title = "点击收起/展开快速监控板";
+        roExpRailTab.addEventListener("click", function () {
+          try { var col = roExpRailIsCollapsed(); localStorage.setItem(RO_EXP_RAIL_COL_KEY, col ? "0" : "1"); roExpRailSync(); } catch (e) {}
+        });
+        document.documentElement.appendChild(roExpRailTab);
+      }
+      if (!roExpOn()) { roExpRailTab.style.display = "none"; roExpRail.style.display = "none"; return; }
+      var col = roExpRailIsCollapsed();
+      roExpRail.style.display = col ? "none" : "flex";
+      roExpRailTab.style.display = "flex";
+      roExpRailTab.textContent = col ? "监控" : "收起";
+      roExpRailTabSync();
+    } catch (e) {}
+  }
+  function roExpRailDragBind() {
+    try {
+      if (!roExpRail) return;
+      var title = roExpRail.querySelector(".ro-exp-title");
+      if (!title || title.__roExpRailGrip) return;
+      title.__roExpRailGrip = true;
+      title.style.cursor = "move";
+      // 只保留「顶部横栏可拖」：整板可拖会误操作（用户明确否掉）。
+      // 横栏整体是拖区；行按钮/滑块仍由 dragEl 自身跳过（button/input/... 不触发拖动）。
+      dragEl(title, function (x, y) {
+        var tr = title.getBoundingClientRect(), rr = roExpRail.getBoundingClientRect();
+        roExpRailPlace(x - ((tr.left || 0) - (rr.left || 0)), y - ((tr.top || 0) - (rr.top || 0)));
+      }, function () { return 1; }, function () { roExpRailSnap(true); });
+    } catch (eDB) {}
+  }
+  function roExpRailBind() {
+    try {
+      if (!roExpRail || roExpRail.__roExpRailBound) return;
+      roExpRail.__roExpRailBound = true;
+      roExpRailDragBind();
+      roExpRail.style.cursor = "default";
+      window.addEventListener("resize", function () { roExpRailSnap(true); });
+      roExpRailRestore(); roExpRailSync();
+    } catch (e) {}
+  }
+  // 收放/位置变化后同步标签：包一层 roExpRebuild，避免每次重建都把标签丢掉。
+  var roExpRebuild0 = roExpRebuild;
+  roExpRebuild = function () { roExpRebuild0.apply(null, arguments); try { roExpRailSync(); } catch (e) {} try { roExpRailDragBind(); } catch (eRD) {} };
+  roExpInit(); // 实例与状态全部登记完成后启动，初始化错误交给原启动错误边界报告。
+  try { roExpRailBind(); } catch (eRail) {}
+  // UNIFIED-PROBE-END newui-rail-drag
   init();
   } // roAssistMain 结束：启动引导整体在 try/catch 内，助手异常绝不冒泡到宿主页面
 })();
