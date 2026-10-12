@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         仙境传说 · 原站插件模式（游戏助手 · 实验版）
 // @namespace    dsh.ro-plugin
-// @version      2.38.75
+// @version      2.38.76
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
 // @description  在 post.lastro.cn / game.lastro.cn 原站以插件模式启动《仙境的传说》ROBrowser 客户端并连接原服务器；数据自动走本地镜像（127.0.0.1:8973）避免加载卡死，支持自动登录。PC 版直接打开 https://post.lastro.cn/ro/api.html 或备用线路 https://game.lastro.cn/ro/api.html?69.8；手机版打开 https://post.lastro.cn/?r=mn/index（登录页可选择平台与线路）。 新增私有本机客户端入口匹配（环回主机 127.0.0.1 / localhost，端口以页面自身 origin 为准、不写死）。
@@ -705,7 +705,7 @@
   }
   var LS_KEY = "dsh_ro_plugin_v1";
   var VERSION_RE = /\?([0-9.]+)/;
-  var VER = "2.38.75"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
+  var VER = "2.38.76"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
   try { window.__dshCombinedActive = true; } catch (e) {} // V2.30.0 防双浮层让位旗标：独立版词条色脚本见旗标即让位
   // ==================== 统一采集器注册表（dsh-collect v1 · 内部命名空间，不新增 window 全局）====================
   // 五方法：register 注册 / sample 采集 / query 查询 / refresh 刷新 / release 释放
@@ -2702,8 +2702,13 @@ function createRoItemCapture(env) {
       '<div class="row" style="margin-top:2px"><button class="ghost" id="dsh-skillclear" style="flex:0 0 auto">清空</button>' +
       '<button class="ghost" id="dsh-skillimp" style="flex:0 0 auto">导入已学技能</button></div></div>' +
       '<details style="margin:6px 0"><summary>手动编辑技能顺序/条件（高级用法）</summary>' +
-      '<textarea id="dsh-skillorder" rows="3" placeholder="技能顺序：每行 技能ID:等级:条件:释放%:次数:锁定次数:冷却秒&#10;例：271  :5   :球5,爆气:80 :20 :3:2&#10;   技能ID :等级:条件    :概率:次数:锁定次数:冷却秒&#10;条件=释放前置，须全满足，可空；球源401=该技能补球只用狂蓄气 / 球源261=只用蓄气 / 球源自动=按缺口现算（缺1-2颗用蓄气、缺3颗以上用狂蓄气）；该词不是门槛&#10;例：267:1:球1,球源261:100；271:5:球5,球源401,爆气:80:20:3:2&#10;释放%=0-100（省略=100）&#10;次数=整轮最多放N次（0=不限，重开重置）；锁定次数=每只怪最多放N次（0=不限，换怪重置）&#10;冷却秒=该技能间隔兜底秒数（0/省略=自动跟随服务器2842真实后摇，无数据默认150ms）&#10;等级超已学自动降级、未学自动跳过；只填ID也能用"></textarea>' +
-      '<div class="log" style="margin-top:2px">写法说明：技能ID:等级:条件:释放%:次数:锁定次数:冷却秒。条件=释放前置（如阿修罗需球5,爆气，自动补状态）；释放%=0-100（省略=100）；次数=整轮上限（重开自动战斗即重置）；锁定次数=每只怪上限（换目标/解锁清零重计）；冷却秒=该技能释放间隔兜底（0/省略=自动跟随服务器2842真实后摇[动态]，无数据默认150ms）。技能按各自冷却独立释放，不再按攻击轮次重复出手。点选/拖拽会自动带入释放前置；气弹消耗技能默认补齐球N，手写球数与补球来源保留。例：271:5:球5,爆气:80:20:3:2 = 阿修罗5级，需5球+爆气，80%概率，整轮最多20次，每只怪最多3次，间隔兜底2秒。 条件里还能写补球来源词 球源401（该技能补球只用狂蓄气）/ 球源261（只用蓄气）/ 球源自动（缺 1-2 颗用蓄气、缺 3 颗以上用狂蓄气），优先级高于上面的「补球来源」下拉；不写则跟随全局默认。例：267:1:球1,球源261:100 = 该技能需 1 颗球，且补球只用蓄气。</div>' +
+      '<textarea id="dsh-skillorder" rows="4" placeholder="每行一个技能；只填技能ID也能用&#10;示例：267:1:球1,球源261:100&#10;示例：271:5:球5,爆气:80:20:3:2"></textarea>' +
+      '<div class="log" style="margin-top:6px;line-height:1.6">' +
+      '<div>最省事：在上方点选已学技能，拖动调整顺序；不用手写。</div>' +
+      '<div style="margin-top:5px">想手写：每行一个，依次填「技能ID:等级:条件:概率:本轮次数:每只怪次数:间隔秒」。后面不需要的可以省略。</div>' +
+      '<div style="margin-top:5px">示例：267:1:球1,球源261:100 —— 用1级弹指，至少要1颗气弹；需要补球时只用蓄气。</div>' +
+      '<div style="margin-top:5px">条件用逗号隔开，须同时满足；球源261=用蓄气，球源401=用狂蓄气，球源自动=按缺球数量选择。示例：271:5:球5,球源401,爆气:80:20:3:2。</div>' +
+      '<div style="margin-top:5px">概率填0到100；次数填0表示不限，本轮次数重新开战后重置、每只怪次数换目标后重置。间隔秒仅在无法读到游戏技能间隔时备用；不填或填0交给助手自动判断。未学的技能会跳过，等级超过已学等级会自动调低。</div></div>' +
       '</details>' +
       '<div class="sec">辅助技能（选技能自动加判定条件 · 按间隔施放）</div>' +
       '<div class="row"><span class="lb">技能</span><select id="dsh-askskill" style="flex:0 0 auto;max-width:130px"><option value="">选择技能…</option></select>' +
