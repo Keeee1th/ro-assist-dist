@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         仙境传说 · 原站插件模式（游戏助手）
 // @namespace    dsh.ro-plugin
-// @version      2.38.73
+// @version      2.38.76
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js
 // @description  在 post.lastro.cn / game.lastro.cn 原站以插件模式启动《仙境的传说》ROBrowser 客户端并连接原服务器；数据自动走本地镜像（127.0.0.1:8973）避免加载卡死，支持自动登录。PC 版直接打开 https://post.lastro.cn/ro/api.html 或备用线路 https://game.lastro.cn/ro/api.html?69.8；手机版打开 https://post.lastro.cn/?r=mn/index（登录页可选择平台与线路）。 新增私有本机客户端入口匹配（环回主机 127.0.0.1 / localhost，端口以页面自身 origin 为准、不写死）。
@@ -705,7 +705,7 @@
   }
   var LS_KEY = "dsh_ro_plugin_v1";
   var VERSION_RE = /\?([0-9.]+)/;
-  var VER = "2.38.73"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
+  var VER = "2.38.76"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
   try { window.__dshCombinedActive = true; } catch (e) {} // V2.30.0 防双浮层让位旗标：独立版词条色脚本见旗标即让位
   // ==================== 统一采集器注册表（dsh-collect v1 · 内部命名空间，不新增 window 全局）====================
   // 五方法：register 注册 / sample 采集 / query 查询 / refresh 刷新 / release 释放
@@ -2701,8 +2701,13 @@ function createRoItemCapture(env) {
       '<div class="row" style="margin-top:2px"><button class="ghost" id="dsh-skillclear" style="flex:0 0 auto">清空</button>' +
       '<button class="ghost" id="dsh-skillimp" style="flex:0 0 auto">导入已学技能</button></div></div>' +
       '<details style="margin:6px 0"><summary>手动编辑技能顺序/条件（高级用法）</summary>' +
-      '<textarea id="dsh-skillorder" rows="3" placeholder="技能顺序：每行 技能ID:等级:条件:释放%:次数:锁定次数:冷却秒&#10;例：271  :5   :球5,爆气:80 :20 :3:2&#10;   技能ID :等级:条件    :概率:次数:锁定次数:冷却秒&#10;条件=释放前置，须全满足，可空；球源401=该技能补球只用狂蓄气 / 球源261=只用蓄气 / 球源自动=按缺口现算（缺1-2颗用蓄气、缺3颗以上用狂蓄气）；该词不是门槛&#10;例：267:1:球1,球源261:100；271:5:球5,球源401,爆气:80:20:3:2&#10;释放%=0-100（省略=100）&#10;次数=整轮最多放N次（0=不限，重开重置）；锁定次数=每只怪最多放N次（0=不限，换怪重置）&#10;冷却秒=该技能间隔兜底秒数（0/省略=自动跟随服务器2842真实后摇，无数据默认150ms）&#10;等级超已学自动降级、未学自动跳过；只填ID也能用"></textarea>' +
-      '<div class="log" style="margin-top:2px">写法说明：技能ID:等级:条件:释放%:次数:锁定次数:冷却秒。条件=释放前置（如阿修罗需球5,爆气，自动补状态）；释放%=0-100（省略=100）；次数=整轮上限（重开自动战斗即重置）；锁定次数=每只怪上限（换目标/解锁清零重计）；冷却秒=该技能释放间隔兜底（0/省略=自动跟随服务器2842真实后摇[动态]，无数据默认150ms）。技能按各自冷却独立释放，不再按攻击轮次重复出手。点选/拖拽会自动带入释放前置；气弹消耗技能默认补齐球N，手写球数与补球来源保留。例：271:5:球5,爆气:80:20:3:2 = 阿修罗5级，需5球+爆气，80%概率，整轮最多20次，每只怪最多3次，间隔兜底2秒。 条件里还能写补球来源词 球源401（该技能补球只用狂蓄气）/ 球源261（只用蓄气）/ 球源自动（缺 1-2 颗用蓄气、缺 3 颗以上用狂蓄气），优先级高于上面的「补球来源」下拉；不写则跟随全局默认。例：267:1:球1,球源261:100 = 该技能需 1 颗球，且补球只用蓄气。</div>' +
+      '<textarea id="dsh-skillorder" rows="4" placeholder="每行一个技能；只填技能ID也能用&#10;示例：267:1:球1,球源261:100&#10;示例：271:5:球5,爆气:80:20:3:2"></textarea>' +
+      '<div class="log" style="margin-top:6px;line-height:1.6">' +
+      '<div>最省事：在上方点选已学技能，拖动调整顺序；不用手写。</div>' +
+      '<div style="margin-top:5px">想手写：每行一个，依次填「技能ID:等级:条件:概率:本轮次数:每只怪次数:间隔秒」。后面不需要的可以省略。</div>' +
+      '<div style="margin-top:5px">示例：267:1:球1,球源261:100 —— 用1级弹指，至少要1颗气弹；需要补球时只用蓄气。</div>' +
+      '<div style="margin-top:5px">条件用逗号隔开，须同时满足；球源261=用蓄气，球源401=用狂蓄气，球源自动=按缺球数量选择。示例：271:5:球5,球源401,爆气:80:20:3:2。</div>' +
+      '<div style="margin-top:5px">概率填0到100；次数填0表示不限，本轮次数重新开战后重置、每只怪次数换目标后重置。间隔秒仅在无法读到游戏技能间隔时备用；不填或填0交给助手自动判断。未学的技能会跳过，等级超过已学等级会自动调低。</div></div>' +
       '</details>' +
       '<div class="sec">辅助技能（选技能自动加判定条件 · 按间隔施放）</div>' +
       '<div class="row"><span class="lb">技能</span><select id="dsh-askskill" style="flex:0 0 auto;max-width:130px"><option value="">选择技能…</option></select>' +
@@ -10802,7 +10807,7 @@ function createRoItemCapture(env) {
   //   「开启自动战斗 / 关闭自动战斗」（点下去 33~154ms 到）。现在这两句也算权威状态，且按角色落档兜底。
   //   玩家在内挂面板上勾选只表示「状态要变了」：先打回未知，等服务器推下一次报告，绝不拿面板勾选当依据。
   var npHuntOn = false, npBattleKnown = false, npBattleLastSentAt = -Infinity, npBattleConfirmedAt = 0;
-  var npLastIntent = null; // V2.38.41: 最近一次已发 toggle 的目标方向（报告未到时的乐观依据；报告到达即被权威值覆盖，无需再读）
+  var npLastIntent = null; // 最近一次已发 toggle 的目标方向；只用于防止回执缺失时误发反向 toggle，绝不当作已确认状态
   var NP_TOGGLE_DEBOUNCE = 700; // V2.38.41: 连点防抖——同一意图未确认前 700ms 内不发第二次 toggle
   var NP_TOGGLE_GRACE = 8000;   // V2.38.41: 乐观恢复窗口——发包后 8s 内报告未到仍按已发意图继续切换；窗口外回到 fail-closed 未知
   // 被动采集缓存：value=开关值（null=本连接内还没收到过报告）；at=到手时刻；src=来源；epoch=身份世代（换角/回列表/新连接 +1）
@@ -10955,13 +10960,91 @@ function createRoItemCapture(env) {
   //   「能开不能关」的根因，不是解析问题。op 0x008e 走 ZC.NOTIFY_PLAYERCHAT（op142）→ 本函数；
   //   玩家发言在同一通道里带「ID/姓名：」前缀，因此「全等匹配」天然排除玩家伪造（不是看聊天框猜，是读服务器原文）。
   var NP_ATK_CHAT_ON = "开启自动战斗", NP_ATK_CHAT_OFF = "关闭自动战斗", NP_ATK_CHAT_OFF2 = "已关闭自动战斗";
-  function npOffAck(text) {
-    var t = String(text == null ? "" : text).split(String.fromCharCode(0)).join("").trim();
-    if (t === NP_ATK_CHAT_ON) { try { npApplyBattleState(true, "chat-notice"); } catch (eN1) {} return; }
-    if (t === NP_ATK_CHAT_OFF || t === NP_ATK_CHAT_OFF2) { try { npApplyBattleState(false, "chat-notice"); } catch (eN2) {} return; }
-    var w = npOffWait;
-    if (!w || w.ack || !npAckOffText(t) || Date.now() - w.at >= 5000) return;
-    try { setStatus("收到关闭文字，等待2805/2806关闭报告（未确认）", "warn"); } catch (e) {}
+  var npRawAckRepeat = null, npAckAnomalyAt = 0, npChatFrameCount = 0;
+  // 助手发出的「开」与其后要求「停」的因果关系独立于 npAckWait；超时仅清等待，不抹掉停机义务。
+  var npAssistantOnSend = null, npShutdownDebt = null, npBattleOpSeq = 0;
+  function npStopDebtClear() { npShutdownDebt = null; }
+  function npOwnerIdentityValid(key) {
+    try { return !!key && identityReady() && profileKeyMatches(key, selfCharId()); } catch (e) { return false; }
+  } // 必须是真实当前角色，但新角色尚未建立设置档也不能丢失已发开包的停机义务
+  function npRememberAssistantOn(source, at) {
+    var key = activeProfileKey();
+    npAssistantOnSend = npOwnerIdentityValid(key) ? { key: key, epoch: npServerAutoAtk.epoch, session: npRuntimeKey, at: at, seq: ++npBattleOpSeq, source: String(source || ""), awaitingOnReport: true } : null;
+    npStopDebtClear(); // 新一次助手开启取代上一次停机债务
+  }
+  function npStopDebtArm(reason) {
+    var p = npAssistantOnSend, key = activeProfileKey();
+    if (!p || !npOwnerIdentityValid(key) || p.key !== key || p.epoch !== npServerAutoAtk.epoch || p.session !== npRuntimeKey) return false;
+    if (reason === "stopZhu" && !npZeroEnabled()) { npStopDebtClear(); return false; }
+    npShutdownDebt = { key: key, epoch: p.epoch, session: p.session, seq: p.seq, reason: reason, at: Date.now(), attempted: false };
+    return true;
+  }
+  function npStopDebtResult(result) {
+    if (npShutdownDebt && (result === "sent" || (result === "already" && !(npAssistantOnSend && npAssistantOnSend.offCouldBeStale)))) npShutdownDebt.attempted = true; // 真已发关闭不得补第二包；疑似旧 OFF 仅 already 不能证明最终关闭
+  }
+  function npStopDebtOnReport(on) {
+    var d = npShutdownDebt; if (!d) return;
+    if (!on) { npStopDebtClear(); npAssistantOnSend = null; return; }
+    if (d.attempted) {
+      npAckAnomaly("stop-close-unconfirmed", true, Date.now());
+      if (!zRunning) try { setStatus("已请求关闭内挂，但游戏仍报告开启；未再次翻转，请手动核实", "warn"); } catch (eStatus) {}
+      return; // 关闭包已发：重复翻转可能反而打开，只有新的可信「关」报告才能证明已停
+    }
+    var key = activeProfileKey();
+    if (d.epoch !== npServerAutoAtk.epoch || d.session !== npRuntimeKey || key !== d.key || !npOwnerIdentityValid(key) ||
+        !npAssistantOnSend || npAssistantOnSend.seq !== d.seq) { npStopDebtClear(); return; }
+    if (d.reason === "stopZhu" ? (zRunning || !npZeroEnabled()) : (npHuntMode() === "np" || isHybrid())) { npStopDebtClear(); return; }
+    if (externalAutomationOwns("battle") || (typeof apiCombatActive === "function" && apiCombatActive())) { npStopDebtClear(); return; }
+    if (npAckWait || npOffWait) return; // 关闭包仍在途时等服务器确认，不补第三次翻转
+    d.attempted = true; // 重入、原始包/解析包的重复观察都只能补一次
+    var result = npHuntStop("late-stop:" + d.reason, true);
+    if (result !== "sent" && result !== "already") npAckAnomaly("late-stop-unresolved", true, Date.now());
+  }
+  function npAckAnomaly(reason, on, at) {
+    try {
+      var a = npAckWait, note = { reason: reason, on: !!on, want: a ? a.want : npLastIntent, ageMs: a ? at - a.at : npBattleLastSentAt > 0 ? at - npBattleLastSentAt : null, chatFramesSince: a && typeof a.chatFrames === "number" ? npChatFrameCount - a.chatFrames : null, epoch: npServerAutoAtk.epoch };
+      dshDiag("np-ack-mismatch", note);
+      if (at - npAckAnomalyAt < (reason === "unknown-state" ? 30000 : 2000)) return;
+      npAckAnomalyAt = at;
+      DSHCollect.post("http://127.0.0.1:8899/api/probe-collect", { t: "np-ack-mismatch", ver: VER, at: at, detail: note });
+    } catch (e) {}
+  }
+  function npOffAck(text, fromRaw, receivedAt) {
+    var t = String(text == null ? "" : text);
+    if (t.charCodeAt(t.length - 1) === 0) t = t.slice(0, -1); // 仅容忍游戏包末尾的单个 NUL，绝不修剪空格或消除包内字节
+    if (t.indexOf(String.fromCharCode(0)) !== -1) return;
+    var on = t === NP_ATK_CHAT_ON;
+    if (!on && t !== NP_ATK_CHAT_OFF && t !== NP_ATK_CHAT_OFF2) return; // 掉落/经验/玩家发言都不属于开关回执
+    var at = typeof receivedAt === "number" ? receivedAt : Date.now();
+    if (!fromRaw && npRawAckRepeat && npRawAckRepeat.text === t && at - npRawAckRepeat.at >= 0 && at - npRawAckRepeat.at < 200) { npRawAckRepeat = null; return; }
+    var a = npAckWait;
+    if (a) {
+      var age = at - a.at;
+      if (a.epoch !== npServerAutoAtk.epoch || age < 0 || age >= NP_ACK_WINDOW || (!a.verify && on !== a.want)) {
+        npAckAnomaly("pending-direction-or-time", on, at);
+        if (!zRunning && !a.verify && a.want === false && on && a.epoch === npServerAutoAtk.epoch && age >= 0)
+          try { setStatus("关闭内挂期间收到相反的开启提示；关闭未确认，请手动核实", "warn"); } catch (eWarn) {}
+        return;
+      }
+    } else if (npLastIntent !== null && npBattleLastSentAt > 0 && at >= npBattleLastSentAt && at - npBattleLastSentAt < NP_TOGGLE_GRACE && on !== npLastIntent) {
+      npAckAnomaly("late-opposite", on, at);
+      if (!zRunning && on && npShutdownDebt) try { setStatus("停止后收到相反的开启提示；关闭未确认，请手动核实", "warn"); } catch (eWarn) {}
+      return;
+    }
+    if (fromRaw) npRawAckRepeat = { text: t, at: at };
+    try { npApplyBattleState(on, "chat-notice" + (fromRaw ? "-packet" : "-parsed")); } catch (eN) {}
+  }
+  // 网络帧到达的本机时间早于 ChatBox requestAnimationFrame 批量绘制时间；包中没有服务器逐句时间。
+  function npRawBattleNotice(bytes, op) {
+    if (op !== 142 || !bytes || bytes.byteLength < 5 || bytes.byteLength > 80 || typeof TextDecoder !== "function") return;
+    try {
+      var view = ArrayBuffer.isView(bytes) ? new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength) : new DataView(bytes);
+      if (view.getUint16(2, true) !== bytes.byteLength) return; // 多帧拼包或截断时只用引擎解析旁听，不猜边界
+      var u8 = new Uint8Array(view.buffer, view.byteOffset + 4, view.byteLength - 4);
+      if (u8[u8.length - 1] === 0) u8 = u8.subarray(0, u8.length - 1);
+      if (u8.indexOf(0) >= 0) return;
+      npOffAck(new TextDecoder("utf-8", { fatal: true }).decode(u8), true, Date.now());
+    } catch (e) {}
   }
   function npAckStruct() {
     try {
@@ -10997,10 +11080,21 @@ function createRoItemCapture(env) {
     if (preSend && preSend() === false) return "failed";
     try { npHookBattleAck(); } catch (eHK) {} // V2.38.47 r2（审计 P1-2）：发包前无条件重挂一次回执通道（幂等），否则开局第一件事就是「开」时整场收不到 op142 回执
     var w = want === false && npOffChatWanted(source) ? npOffPrepare(source) : null;
-    if (!npToggleHunt()) { npOffCancel(); return "failed"; }
-    npAckArm(want, source); // V2.38.47：发出后等服务器回执（开启/关闭自动战斗），事件驱动、上限 1.5 秒
-    npBattleKnown = false; npBattleLastSentAt = Date.now(); // 发包后状态重新变未知，等服务器推下一份报告；期间禁止再 toggle
-    npLastIntent = want; // V2.38.41: 记录本次已发方向（乐观依据；报告到达即覆盖）
+    // 先挂回执/归属再发送：发送函数若同步触发服务器回调，真报告不能被发送后的「未知态」覆盖。
+    var before = { known: npBattleKnown, on: npHuntOn, intent: npLastIntent, at: npBattleLastSentAt, owner: npAssistantOnSend, debt: npShutdownDebt };
+    var sentAt = Date.now();
+    npAckArm(want, source);
+    if (want) npRememberAssistantOn(source, sentAt);
+    npBattleKnown = false; npBattleLastSentAt = sentAt; npLastIntent = want; // 在途即未知，不能凭方向再发 toggle
+    var armed = npAckWait;
+    if (!npToggleHunt()) {
+      if (npAckWait === armed) { // 未见同步真实回执：发送失败必须回滚刚设的状态与归属
+        npAckClear(); npBattleKnown = before.known; npHuntOn = before.on; npLastIntent = before.intent; npBattleLastSentAt = before.at;
+        npAssistantOnSend = before.owner; npShutdownDebt = before.debt;
+      }
+      npOffCancel(); return "failed";
+    }
+    if (!want) npStopDebtResult("sent");
     npSyncBattleCheckbox(want); // 仅客户端显示，不授权下一次动作
     if (w && npOffWait === w) { w.sent = true; if (w.ack) npOffDisplay(w); }
     try { tlog("np-toggle sent want=" + want + " source=" + source); } catch (e) {}
@@ -11016,7 +11110,7 @@ function createRoItemCapture(env) {
   // 身份真换代（换角色 / 回角色列表 / 新连接）：采集状态与在途关闭确认一起作废。
   function npResetBattleState() {
     npOffCancel(); npClearBattleIntent(); npDropServerAutoAtk(); npBattleLastSentAt = -Infinity; npLastIntent = null;
-    try { npAtkSeedKey = null; npAtkSeedAt = 0; npAckClear(); } catch (eSeed) {} // V2.38.47：换角色必须重新播种 + 丢掉旧角色的回执等待
+    try { npAtkSeedKey = null; npAtkSeedAt = 0; npVerifyUnresolved = false; npAckClear(); npStopDebtClear(); npAssistantOnSend = null; } catch (eSeed) {} // V2.38.47：换角色必须重新播种 + 丢掉旧角色的回执等待
     npOffArmAt = 0; npOffArmSrc = ""; npOffChatWin = -1; npOffChatMissWin = -1; npAckWarnWin = -1; // V2.38.33：换角色/复位必须解除武装并清时间片，否则旧角色那一次关闭动作的武装会活到新角色（第六轮 SC-6）
   }
   function npDropServerAutoAtk() {
@@ -11027,6 +11121,7 @@ function createRoItemCapture(env) {
   // V2.38.47：内挂开关状态「按角色落档」兜底——覆盖写的单字段（p.npAtk），不追历史、不按次建键、不建新存储键，
   //   所以一个角色永远只有这一条，不会随使用次数堆积；超过 7 天视为未知（逻辑过期，只影响采信、不做删除）。
   var NP_ATK_REC_MAX_AGE = 7 * 24 * 3600 * 1000, npAtkSeedKey = null, npAtkSeedAt = 0, npStateNote = "";
+  var npRuntimeAt = Date.now(), npRuntimeKey = npRuntimeAt.toString(36) + Math.random().toString(36).slice(2); // 只采本次页面与连接的真回执；DOM 无逐条时间。
   // create=false 只读、不物化（未识别/陈旧档键上绝不建空档）；create=true 也要先过 profileTrusted（与既有站点同口径）。
   function npAtkRecProfile(create) {
     try {
@@ -11042,7 +11137,7 @@ function createRoItemCapture(env) {
   function npAtkRecSave(on) {
     try {
       var p = npAtkRecProfile(true); if (!p) return false;
-      p.npAtk = { on: on ? 1 : 0, at: Date.now() };
+      p.npAtk = { on: on ? 1 : 0, at: Date.now(), epoch: npServerAutoAtk.epoch, session: npRuntimeKey };
       saveProfiles(); // 未识别身份时由 profWriteGuard 挡住（只读不写），这里不再重复判定
       return true;
     } catch (e) { return false; }
@@ -11052,37 +11147,19 @@ function createRoItemCapture(env) {
       var p = npAtkRecProfile(false), r = p && p.npAtk;
       if (!r || typeof r !== "object") return null;
       var at = Number(r.at) || 0;
-      if (!at || (Date.now() - at) > NP_ATK_REC_MAX_AGE) return null; // 陈旧记录不采信（不删除）
+      if (!at || at < npRuntimeAt || r.session !== npRuntimeKey || r.epoch !== npServerAutoAtk.epoch || (Date.now() - at) > NP_ATK_REC_MAX_AGE) return null; // 不采信上次页面/上个连接的旧回执
       if (r.on !== 0 && r.on !== 1 && r.on !== false && r.on !== true) return null;
       return { on: !!(r.on === 1 || r.on === true), at: at };
     } catch (e) { return null; }
   }
-  // 播种（兜底）顺序：先按角色档里的记录（角色归属明确、由服务器回执写入），
-  //   记录缺失/过期才回落「本次会话聊天框原文」。每代每 5 秒最多试一次，成功后不再试。
+  // 兜底仅允许本次页面、本连接服务器回执写下的角色记录；聊天 DOM 无逐条时间，不能认证旧消息。
   function npSourceLabel(src) {
     var s = String(src || "");
     if (s.indexOf("chat-notice") === 0) return "服务器回执";
     if (s.indexOf("profile-record") === 0) return "角色档记录";
-    if (s.indexOf("chat-history") === 0) return "聊天框历史";
     if (s.indexOf("loadinfo-2805") === 0) return "服务器配置";
     if (s.indexOf("reloadinfo-2806") === 0) return "服务器推送";
     return s || "未知来源";
-  }
-  function npSeedFromChatHistory() {
-    try {
-      for (var i = 0; i < CHAT_BATTLE_SELS.length; i++) {
-        var box = document.querySelector(CHAT_BATTLE_SELS[i]);
-        if (!box || typeof box.querySelectorAll !== "function") continue;
-        var rows = box.querySelectorAll("p, div"), last = null;
-        for (var j = 0; j < rows.length; j++) {
-          var t = String(rows[j].textContent == null ? "" : rows[j].textContent).split(String.fromCharCode(0)).join("").trim();
-          if (t === NP_ATK_CHAT_ON) last = true;
-          else if (t === NP_ATK_CHAT_OFF || t === NP_ATK_CHAT_OFF2) last = false;
-        }
-        if (last !== null) { npApplyBattleState(last, "chat-history"); return true; }
-      }
-    } catch (e) {}
-    return false;
   }
   // V2.38.47 r2（审计 P1-1）：播种的统一闸门。发包后的「未知窗口」与「回执在途」绝不允许播种——
   //   否则会拿发包前的档记录把状态改成「已知旧值」，绕过下面 npRequestBattle 的乐观方向保护，
@@ -11099,11 +11176,11 @@ function createRoItemCapture(env) {
     npAtkSeedKey = k; npAtkSeedAt = Date.now();
     var r = npAtkRecLoad();
     if (r) { npApplyBattleState(r.on, "profile-record"); return true; }
-    return npSeedFromChatHistory();
+    return false; // 聊天 DOM 不带每条消息的可信时间，也可能跨地图/角色遗留；绝不用于开关决策。
   }
   // V2.38.47：发 toggle 后的回执窗口——事件驱动（收到服务器提示立刻结束），上限 1.5 秒；
   //   超时只如实报「未确认」，绝不重发（连点会把 toggle 型开关翻回去）。
-  var NP_ACK_WINDOW = 1500, npAckWait = null;
+  var NP_ACK_WINDOW = IS_MN ? 3500 : 1500, npAckWait = null; // 手机端聊天解析/后台调度可能慢，超时前不补发 toggle
   function npAckClear() { try { if (npAckWait && npAckWait.timer) clearTimeout(npAckWait.timer); } catch (e) {} npAckWait = null; }
   // V2.38.47 r2：回执没到 = 这次 toggle 的真实结果未知，档里那条「发包前」的记录就不再可信 ——
   //   清掉它，避免 8 秒乐观窗口过后又被播种复活成「已知旧值」（与审计 P1-1 同源的二阶问题）。
@@ -11115,23 +11192,31 @@ function createRoItemCapture(env) {
       return true;
     } catch (e) { return false; }
   }
-  function npAckArm(want, source) {
+  function npAckArm(want, source, verify) {
     npAckClear();
-    var a = { want: !!want, source: String(source || ""), at: Date.now(), epoch: npServerAutoAtk.epoch, timer: null };
+    var a = { want: verify ? null : !!want, verify: !!verify, source: String(source || ""), at: Date.now(), epoch: npServerAutoAtk.epoch, chatFrames: npChatFrameCount, timer: null };
     npAckWait = a;
     a.timer = setTimeout(function () {
       if (npAckWait !== a) return;
+      npAckAnomaly("timeout", a.want, Date.now());
+      npVerifyUnresolved = true; // 任意 toggle 回执缺失都不能让停滞复核再发一包（尤其正常 npEnsureHunt 开包）
       npAckWait = null;
-      try { setStatus("已请求" + (a.want ? "开启" : "关闭") + "内挂自动战斗，但 " + (NP_ACK_WINDOW / 1000) + " 秒内没收到服务器回执（未确认，不重发" + (npAckHooked ? "" : "；本机回执通道未挂上") + "）", "warn"); } catch (e) {}
+      try { setStatus("已请求" + (a.verify ? "复核" : (a.want ? "开启" : "关闭")) + "内挂自动战斗，但 " + (NP_ACK_WINDOW / 1000) + " 秒内没收到服务器回执（未确认，不重发" + (npAckHooked ? "" : "；本机回执通道未挂上") + "）", "warn"); } catch (e) {}
       try { tlog("np-ack timeout want=" + a.want + " source=" + a.source + " recCleared=" + npAtkRecClear()); } catch (e2) {}
     }, NP_ACK_WINDOW);
   }
   function npAckResolve(on) {
     var a = npAckWait; if (!a) return false;
     if (a.epoch !== npServerAutoAtk.epoch) { npAckClear(); return false; } // 换角色/换连接的旧回执不兑现
-    if (!!on !== a.want) return false; // 回执方向与请求不一致：不兑现，继续等（窗口到点自然报未确认）
+    if (!a.verify && !!on !== a.want) return false; // 非复核的方向不符：继续等待
     npAckClear();
+    if (a.verify) npVerifyUnresolved = false;
     try { setStatus("内挂自动战斗已" + (on ? "开启" : "关闭") + "（服务器回执，用时 " + (Date.now() - a.at) + "ms）", "ok"); } catch (e) {}
+    if (a.verify) setTimeout(function () {
+      if (a.epoch !== npServerAutoAtk.epoch) return;
+      if (!zRunning || (npHuntMode() !== "np" && !isHybrid()) || zEngagedNow(Date.now()) || externalAutomationOwns("battle")) return;
+      if (!on) npEnsureHunt();
+    }, 0); // 「关」回执在仍由助手运行时才补开；停机后「开」由统一真实状态落点按债务、配置和租约处理
     return true;
   }
   // 服务器自动战斗状态的唯一落点：2805 整份配置、2806 单项推送、引擎自己的 vbk.setloadInfo，
@@ -11147,13 +11232,24 @@ function createRoItemCapture(env) {
     //   绝不写 #dsh-np-log —— 那一行是指令结果区（「未发送」/「已发送…」/失败原文），不能被状态播报顶掉。
     var isRealSrc = /^(loadinfo-2805|reloadinfo-2806|chat-notice)/.test(String(source || ""));
     if (isRealSrc) {
+      npVerifyUnresolved = false;
+      // 旧的关配置可能先于助手刚发出的开包到达；尚未收到「开」报告，不能据此抹掉开包归属和停机债务。
+      if (on && npAssistantOnSend) { npAssistantOnSend.awaitingOnReport = false; npAssistantOnSend.offCouldBeStale = false; }
+      var closingSnapshot = !on && npAssistantOnSend && (source === "loadinfo-2805" || source === "reloadinfo-2806") &&
+        ((npAckWait && npAckWait.want === false) || npOffWait);
+      var offCouldBeOld = !on && npAssistantOnSend && (closingSnapshot ||
+        ((!npAckWait || npAckWait.want !== false) && !npOffWait &&
+         (npAssistantOnSend.awaitingOnReport || Date.now() - npAssistantOnSend.at < NP_TOGGLE_GRACE)));
+      if (offCouldBeOld) npAssistantOnSend.offCouldBeStale = true;
+      else if (!on) { npStopDebtClear(); npAssistantOnSend = null; }
       try { npAtkRecSave(!!on); } catch (eS) {}
       // 玩家手动关闭内挂后，放弃寻怪循环缓存的「已在工作」状态；只信真实服务器来源，不用旧面板勾选值盲切。
       if (!on && typeof zWalkState !== "undefined" && zWalkState) { zWalkState.npOn = false; zWalkState.npMiss = 0; }
     }
     npStateNote = (on ? "开" : "关") + " · " + new Date().toTimeString().slice(0, 8) + " · " + npSourceLabel(source);
-    try { npAckResolve(!!on); } catch (eA) {} // V2.38.47：回执到达即结束等待（事件驱动）
-    if (!on) { try { npOffServerAck(); } catch (e3) {} } // 服务器报告已关 = 关闭结果确认（不必等 op142）
+    if (!closingSnapshot) try { npAckResolve(!!on); } catch (eA) {} // 旧配置快照不能冒充在途关闭的实际回执
+    if (!on && !closingSnapshot) { try { npOffServerAck(); } catch (e3) {} } // 确认关闭必须排除旧配置快照
+    if (isRealSrc && on) { try { npStopDebtOnReport(true); } catch (eDebt) { npAckAnomaly("late-stop-check-error", true, Date.now()); } }
   }
   // V2.38.47：状态未知时每 5 秒尝试播种一次（复用 1 秒 master 拍，不新增定时器）。
   try { masterTickReg(function () { try { if (npSeedAllowed()) npSeedStateOnce(); } catch (e) {} }); } catch (eTick) {}
@@ -11234,21 +11330,23 @@ function createRoItemCapture(env) {
     if (npSeedAllowed()) { try { npSeedStateOnce(); } catch (eS0) {} }
     if (want && typeof apiCombatActive === "function" && apiCombatActive()) return "suppressed";
     if (beforeToggle && beforeToggle() === false) return "failed";
-    if (npOffWait) return want ? "failed" : "queued"; // 已发送关闭：同向等待，相反方向明确拒绝（在途确认不因换图丢失）
+    if (npOffWait) return want ? "failed" : "queued"; // 已发送关闭：同向等待，相反方向明确拒绝
+    if (npAckWait) return "queued"; // 一个切换包的回执未决，不能在旁边再发第二次
     if (!npBattleKnown) {
       // V2.38.41：发包后报告若迟迟未到，用最近一次已发意图恢复切换方向，修「内挂快捷键能开不能关」。
       // 仅在乐观窗口内（且过了防抖）放行；窗口外/从未发过 toggle 仍 fail-closed，绝不盲切。
       var _recent = npLastIntent !== null && npBattleLastSentAt > 0 && (Date.now() - npBattleLastSentAt) < NP_TOGGLE_GRACE;
-      if (!_recent) return "unknown";
-      if (Date.now() - npBattleLastSentAt < NP_TOGGLE_DEBOUNCE) return "queued";
-      if (npLastIntent === want) return "already";
-      return npSendBattle(want, source, beforeToggle, preSend);
+      if (!_recent) { if (source === "npEnsureHunt") npAckAnomaly("unknown-state", want, Date.now()); return "unknown"; }
+      // 开关包是 toggle：缺回执时意图不能当作真实状态，同向只等待、反向绝不再发。
+      if (npLastIntent === want) return "queued";
+      return "unknown";
     }
     if (npHuntOn === want) return "already";
     return npSendBattle(want, source, beforeToggle, preSend);
   }
   function npResultKind(result, other) { return result === "suppressed" ? "warn" : other; } // V2.38.13 FIX-16：内挂开关结果 → 状态栏颜色，setBattle 与快捷键共用同一映射（同一句话不许两种颜色）
   function setBattle(on) {
+    if (on) { npStopDebtClear(); npAssistantOnSend = null; } // 玩家明确按助手「开」，旧停机意图不得关闭他的新选择
     var result = npRequestBattle(on, "setBattle", true);
     dshDiag("set-battle", { on: !!on, result: result });
     setStatus(result === "failed" ? "内挂自动战斗未执行：开关发送失败" : (result === "unknown" ? "内挂自动战斗未执行：还没收到游戏发来的内挂状态，不盲切开关" : (result === "suppressed" ? "外部代打进行中：不开内挂自动战斗（已抑制）" : (result === "already" ? "内挂自动战斗已处于目标状态" : (result === "queued" ? "内挂自动战斗：已发送关闭，等待游戏确认" : "内挂自动战斗：已发送")))), npResultKind(result, result === "failed" ? "err" : "ok"));
@@ -11414,6 +11512,7 @@ function createRoItemCapture(env) {
       var t = e.target;
       if (!t || !t.matches || !t.matches("#vbk input.openattack")) return;
       npBattleKnown = false; // 玩家点击只表示意图，未获服务器配置报告
+      npLastIntent = null; npBattleLastSentAt = -Infinity; npVerifyUnresolved = false; npAckClear(); npStopDebtClear(); npAssistantOnSend = null; // 玩家人工切换覆盖助手先前的停机意图
     });
   } catch (e) {}
   // toggle 一次自动战斗（发同一包：二转 id=34 value=1 / 三转 WHISPER msg="0"）
@@ -11472,12 +11571,15 @@ function createRoItemCapture(env) {
   try {
     onId("dsh-z-huntmode", "change", function () {
       if (this.value === "np" || this.value === "hybrid") {
+        npStopDebtClear(); // 重新选择内挂寻怪是新意图，废弃切走时的旧停机债务
         npCalibrate();               // 仅首次未知态校准，不周期覆盖
         npSyncTargets();             // 锁定目录同步给内挂（只追锁定怪）
+        if (zRunning) { npVerifyModeStartAt = Date.now(); npVerifyStallSeen = false; npVerifyHuntOn("mode-change"); }
         setStatus(this.value === "hybrid" ? "已切到混合寻怪（内挂长距离寻怪，锁定怪≤接管距离才由助手接管）" : "已切到内挂机制寻怪（点开自动战斗后由助手自动接管寻怪）", "ok");
         tlog("huntmode->" + this.value + " (no toggle until start)");
       } else {
-        npHuntStop("mode-change", true); // 既有入口：本档不新增/不修改任何内挂下发（手动走位同样不该让内挂继续驱动移动）
+        npStopDebtArm("mode-change");
+        npStopDebtResult(npHuntStop("mode-change", true)); // 显式切走内挂模式，即使置零设置关闭也要收回助手自己发出的迟到开回执
         // V2.38.40：手动走位是第四档，必须给对应的可见提示（其余档位文案一字不改）
         if (this.value === "manual") { setStatus("已切到手动走位（只打射程内的怪，助手不做寻怪移动）", "st"); tlog("huntmode->manual"); }
         else { setStatus("已切到自研直走寻怪", "st"); tlog("huntmode->self"); }
@@ -13537,6 +13639,34 @@ function createRoItemCapture(env) {
     if (npSeedAllowed()) npSeedStateOnce();
     return npBattleState();
   }
+  var npVerifyLastAt = 0, npVerifyStallSeen = false, npVerifyStallMap = "", npVerifyModeStartAt = 0, npVerifyUnresolved = false;
+  function npVerifyHuntOn(reason) {
+    try {
+      if (!zRunning || (npHuntMode() !== "np" && !isHybrid()) || !clientReady()) return "inactive";
+      if (externalAutomationOwns("battle") || (typeof apiCombatActive === "function" && apiCombatActive())) return "suppressed";
+      var now = Date.now();
+      if (npAckWait || npOffWait) return "queued";
+      if (npVerifyUnresolved && !npBattleKnown) return "unconfirmed"; // 首次校对没回执，不得 3 秒后再盲切一次
+      if (npVerifyLastAt && now - npVerifyLastAt < 3000) return "cooldown";
+      if (zEngagedNow(now) || isSitting() || needSitNow() || moveXY.busy || pendingPick || escapePending() || zEscape.until > now || (zDefenseFlyAt && now - zDefenseFlyAt < 1500)) return "unsafe";
+      if (!activeProfileKey() || !getMapName()) return "unknown-identity";
+      npVerifyLastAt = now;
+      if (npBattleKnown && !npHuntOn) return npEnsureHunt(); // 已有「关」的真回执：只发一次开，不先切成关
+      if (npBattleKnown && npHuntOn) return "already"; // 旧 ON 回执仍代表本会话已知开：试切会把正在工作的内挂关掉
+      return "unconfirmed"; // 未知状态绝不发翻转包；持续停滞由自研走位独立处理
+    } catch (e) { npAckClear(); return "failed"; }
+  }
+  function npVerifyStationaryTick() {
+    try {
+      if (!zRunning || (npHuntMode() !== "np" && !isHybrid())) { npVerifyStallSeen = false; return; }
+      var map = String(getMapName() || "");
+      if (!map || map !== npVerifyStallMap) { npVerifyStallMap = map; npVerifyStallSeen = false; return; }
+      if (!zStuckSince) { npVerifyStallSeen = false; return; }
+      if (npVerifyStallSeen || Date.now() - Math.max(zStuckSince, npVerifyModeStartAt) < 3000) return;
+      var result = npVerifyHuntOn("stationary");
+      if (result !== "unsafe" && result !== "queued" && result !== "cooldown") npVerifyStallSeen = true;
+    } catch (e) {}
+  }
   function startZhu() {
     if (zRunning) return;
     if (externalAutomationOwns("battle")) { setStatus("外部自动化持有战斗租约，助手战斗不启动", "warn"); return; }
@@ -13551,6 +13681,7 @@ function createRoItemCapture(env) {
       tlog("zhu-refuse cz-selfcheck " + _czchk.brief);
       return;
     }
+    npStopDebtClear(); npAssistantOnSend = null; // 新一轮模式接管之前的停机意图，避免旧回执误关玩家的新选择
     zRunning = true;
     $id("dsh-z-state").textContent = "助手运行中…";
     startScan();
@@ -13572,6 +13703,8 @@ function createRoItemCapture(env) {
     if (npHuntMode() === "np" || isHybrid()) {
       npCalibrate();
       npSyncTargets();
+      npVerifyModeStartAt = Date.now(); npVerifyStallSeen = false; npVerifyStallMap = "";
+      npVerifyHuntOn("start");
       tlog("zhu-start np-hunt");
     }
     var sec = Math.max(0.05, safeTimingValue($id("dsh-z-attint").value, 0.25, 1000));
@@ -13584,15 +13717,25 @@ function createRoItemCapture(env) {
     zRunning = false;
     stopScan();
     if (zAttTimer) { clearInterval(zAttTimer); zAttTimer = null; }
-    // 内挂机制寻怪：停止时关闭内挂自动战斗
-    npZeroBattle("stopZhu");
+    // 内挂机制寻怪：置零开关允许时，记录助手已发「开」的停机债务；超时后真实「开」仍须补关。
+    var npStopResult = "external";
+    if (externalAutomationOwns("battle") || (typeof apiCombatActive === "function" && apiCombatActive())) {
+      npStopDebtClear(); // 外部代打持有战斗控制权时，停止助手不能翻转外部的内挂开关
+    } else {
+      if (npZeroEnabled()) npStopDebtArm("stopZhu"); else npStopDebtClear();
+      npStopResult = npZeroBattle("stopZhu");
+      npStopDebtResult(npStopResult);
+    }
     zLock.gid = null; zLock.done = false; // 解除锁定/停手状态
     zUseCounts = {}; // V1.7.0 重置本轮技能释放次数（maxUses）
     zLockCounts = {}; // V1.7.5 重置锁定次数（开/停自动战斗清空）
     dshDiag("zhu-stop");
     zMon.action = "已停止";
     $id("dsh-z-state").textContent = "助手未启动";
-    setStatus("助手模式已停止", "st");
+    var npStillPending = npStopResult === "sent" || npStopResult === "queued" || npStopResult === "unknown" || npStopResult === "failed" ||
+      (npStopResult === "already" && npAssistantOnSend && npAssistantOnSend.offCouldBeStale);
+    setStatus(npStillPending ? "助手已停止；内挂关闭未确认，请等游戏回执或手动核实" : npStopResult === "external" ?
+      "助手已停止；外部代打接管内挂开关" : "助手模式已停止", npStillPending ? "warn" : "st");
   }
   // 无目标自动走路寻怪（2s 判定一次）
   // 直走策略：持续朝一个方向走 + A*避障，遇障碍/卡住才转向（不再 8 方向轮转兜圈）
@@ -14128,7 +14271,7 @@ function createRoItemCapture(env) {
     } catch (e) {}
   }
   masterTickReg(function () { try { tickRein(); } catch (e) {} });
-  masterTickReg(function () { try { zStuckSample(); } catch (e) {} }); // V2.38.24 B：卡死计时采样（关掉侦查扫描也生效）
+  masterTickReg(function () { try { zStuckSample(); npVerifyStationaryTick(); } catch (e) {} }); // 位移采样后判定 3 秒停滞；保命独立
   // V2.38.24 C：内挂门控迟滞（有→无 需连续 2 拍 + 距上次切换 ≥1s；无→有 立即生效）状态挂在 zWalkState 上（np* 三字段）
   var zWalkState = { lastMove: 0, lastChase: 0, dir: 0, noTargetSince: 0, lastIdleFly: 0, lastPos: null, stuckCnt: 0, stuckAt: 0, tried: 0, lastSeenDir: null, lastSeenAt: 0, center: null, chaseGid: null, chaseDist: 0, chaseSince: 0, startMap: null, lastMoveDir: 0, backMapAt: 0, backDir: 0, backTeleportAt: 0, hySince: 0, hyGid: 0, hyPos: null, hyTakeoverUntil: 0, hyDist: 0, hyStillSince: 0, chaseFrom: null, chaseReplan: false, lastLockMissLog: 0, lastSelfMoveAt: 0, routeExt: false, routeActive: false, routeTotal: 0, routeIdx: 0, seenDirCand: null, seenDirCandAt: 0, dirAt: 0, chaseHold: null, chaseHoldDist: null, chaseHoldProgressAt: 0, stuckEvent: 0, stuckDirs: null, stuckTurns: 0, stuckEscapeAt: 0, lastMapName: null, backDone: 0, backCooldownAt: 0, lastWalkDir: null, lastWalkDest: null, npOn: false, npMiss: 0, npAt: 0 }; // V2.16.4 stuckAt=卡住时间窗口起点；center=地图边界锚点(启动点)；V2.16.7 chase*=追怪卡住检测；V2.34.3 hy*=混合寻怪「内挂是否真的在接管」判定（内挂死等兜底）；V2.38.4 G1 lastSelfMoveAt/route*=「自己发的位移」时间戳与客户端外部路线状态；G2 seenDirCand/dirAt/chaseHold/stuck*/lastMapName/back* = 方向滞回、追怪保持、卡住转向、换图反向走
   // V2.38.4 G1①：助手每次自己发位移都要打时间戳——用于区分「自己发的移动」与外部（用户点大地图/客户端其它来源）的路线
@@ -14623,11 +14766,11 @@ function createRoItemCapture(env) {
             }
             if (rescueResult === "sent" || rescueResult === "queued") {
               setStatus("锁定怪追击卡墙，已请求内挂接管，等待服务器回执…", "warn");
-              return;
+              if (!(zStuckSince && now - zStuckSince >= 3000)) return; // 长时间未动不能因开关回执未决而阻断助手追怪
             }
             setStatus("锁定怪追击卡墙，内挂状态未确认，继续助手脱困…", "warn");
           }
-          if (isHybrid() && !zEngagedNow(now)) {
+          if (isHybrid() && !zEngagedNow(now) && !(zStuckSince && now - zStuckSince >= 3000)) {
             var hySeek = npEnsureHunt(); // 未开打则保持内挂寻怪；卡墙救援和服务器回执优先
             var hyConfirmed = hySeek === "already" && npBattleState() === true;
             setStatus(hyConfirmed ? "混合寻怪：内挂已确认，接近锁定怪…" : hySeek === "sent" || hySeek === "queued" ? "混合寻怪：已请求内挂接管，等待服务器回执…" : "混合寻怪：内挂状态未确认，未盲切…", hyConfirmed ? "st" : "warn");
@@ -14660,7 +14803,7 @@ function createRoItemCapture(env) {
                 else if (!zWalkState.hyStillSince) zWalkState.hyStillSince = hyNow;
                 zWalkState.hyDist = nearD;
                 var hyStill = zWalkState.hyStillSince ? (hyNow - zWalkState.hyStillSince) : 0;
-                if (realNp === false || hyStill >= 2500) {
+                if (realNp === false || (realNp !== true && zStuckSince && hyNow - zStuckSince >= 3000) || hyStill >= 2500) {
                   zWalkState.hyTakeoverUntil = hyNow + 12000;
                   zWalkState.hySince = 0;
                   zWalkState.hyStillSince = 0;
@@ -14839,6 +14982,9 @@ function createRoItemCapture(env) {
       // 卡壳脱困（追怪卡住 / 转向 4 次无位移 / 四周不可走）仅受卡住开关控制，不能借无目标瞬移开关误放行
       var zAutoFlyOn = !!($id("dsh-z-flystuck") && $id("dsh-z-flystuck").checked) && zFlyKillOnNow && !zSitYieldNow && !zEngagedNow(now) && zEscFlySecNow() > 0 && canTravelFly(); // 脱困只受卡住开关管，无目标开关只管 Y 秒瞬移
       var zIdleFlyOn = !!($id("dsh-z-idlefly") && $id("dsh-z-idlefly").checked) && zFlyKillOnNow && !zSitYieldNow;
+      // 内挂回执未知且已停滞：自研移动作为并联兜底；远处旧锁定怪不能持续清空无目标瞬移计时。
+      var npFallbackWalk = npMode && npBattleState() !== true && zStuckSince && now - zStuckSince >= 3000 && !escapePending();
+      if (npFallbackWalk && !zWalkState.noTargetSince) zWalkState.noTargetSince = zStuckSince; // 远处旧锁定怪刚失效时，从实际停住时算无目标时间，不额外重新等满配置秒数
       function zIdleMoveSecNow() {
         try {
           var el = $id("dsh-z-nomove");
@@ -14869,7 +15015,7 @@ function createRoItemCapture(env) {
           if (zEngagedNow(nowMs)) { zWalkState.noTargetSince = 0; return "ok"; }
           var atkR = calcAtkRange();
           var ht = zLock.gid ? zAtkHpTrack[zLock.gid] : null;
-          if ((ht && nowMs - ht.at < 4000) || scanHasAttackableLockedMob(atkR) || scanHasOutOfRangeLockedMob(atkR)) {
+          if ((ht && nowMs - ht.at < 4000) || scanHasAttackableLockedMob(atkR) || (!npFallbackWalk && scanHasOutOfRangeLockedMob(atkR))) {
             zWalkState.noTargetSince = 0; // 有有效目标 → 无目标计时清零
             return "ok";
           }
@@ -14884,6 +15030,7 @@ function createRoItemCapture(env) {
         } catch (e) { return ""; }
       }
       var zIdleR = zIdleFlyDecide(now);
+      if (npFallbackWalk && (zIdleR === "wait" || (zIdleR === "ok" && !zEngagedNow(now))) && defSnap.isCombatMap) zIdleR = "move"; // 真正停住且未交战：旧锁定怪即使在射程内也不能永久拦自研走位
       if (zIdleR === "fly") {
         zWalkState.noTargetSince = 0; zWalkState.lastIdleFly = now; // 飞完 → 无目标计时清零 + 刷新「上次自动换点」
         if (doFly()) markFlyOk(); else markFlyFail();
@@ -14894,12 +15041,12 @@ function createRoItemCapture(env) {
       //   - 侦查扫到「可攻击到的锁定怪」（dist ≤ atkRange，非超出）→ 停内挂，助手接管战斗
       //   - 侦查没扫到怪 / 附近只有「超出」的锁定怪 → 持续发包让服务器自动寻怪（内挂移动靠近）
       if (npHuntMode() === "np" || isHybrid()) {
-        if (typeof zFarPatrol !== "undefined" && zFarPatrol && zFarPatrol.active) zFarPatrolClear(true); // 切换寻怪方式后不保留自研路线
+        if (!npFallbackWalk && typeof zFarPatrol !== "undefined" && zFarPatrol && zFarPatrol.active) zFarPatrolClear(true); // 非兜底阶段才撤销自研路线
         var npThD = isHybrid() ? Math.min(takeoverDist(), calcAtkRange()) : calcAtkRange();
         if (isHybrid()) {
           var hyIdle = npEnsureHunt(); // 只有确实进入攻击/交战才关闭内挂；无需等两次侦查和一秒延迟
-          setStatus(hyIdle === "unknown" || hyIdle === "failed" || hyIdle === "suppressed" ? "混合寻怪：内挂状态未确认，未盲切…" : "混合寻怪：未交战，内挂自动寻怪中…", hyIdle === "unknown" || hyIdle === "failed" || hyIdle === "suppressed" ? "warn" : "st");
-          return;
+          setStatus(hyIdle === "unknown" || hyIdle === "failed" || hyIdle === "suppressed" ? "混合寻怪：内挂状态未确认，未盲切…" : hyIdle === "sent" || hyIdle === "queued" ? "混合寻怪：内挂开关已请求，等待服务器确认…" : "混合寻怪：未交战，内挂自动寻怪中…", hyIdle === "already" ? "st" : "warn");
+          if (!npFallbackWalk || zIdleR !== "move") return; // 未确认又停滞时落入下方自研移动，不串行等待开关
         }
         if (btDiagOn) { try { var aR0 = calcAtkRange(); var _lk = Object.keys(lockList).slice(0,20).join(","); var _sm = scanMobs.slice(0,10).map(function (x) { return x.mid + "@" + x.dist; }).join(" "); btLog('zWalk-np', 'mode=' + (isHybrid() ? "hybrid" : "np") + ' scanMobs=' + scanMobs.length + ' hasAttackable=' + scanHasAttackableLockedMob(npThD) + ' hasOutOfRange=' + scanHasOutOfRangeLockedMob(npThD) + ' thD=' + npThD + ' scanSt=' + ($id('dsh-scanst') ? $id('dsh-scanst').textContent : '?') + ' lock=[' + _lk + '] mids=[' + _sm + ']'); } catch (e) {} }
         // V2.38.24 C 判定迟滞：无→有 立即停内挂（助手马上接管，不加延迟）；有→无 需连续 2 拍确认且距上次切换 ≥1s
@@ -14931,7 +15078,7 @@ function createRoItemCapture(env) {
               : npScanStop === "queued" ? "侦查扫到可攻击锁定怪，内挂停止尚未确认（助手接管）…"
                 : "侦查扫到可攻击锁定怪，内挂停止未执行，助手直接接管…", (npScanStop === "failed" || npScanStop === "unknown") ? "warn" : "ok");
         }
-        return;
+        if (!npFallbackWalk || zIdleR !== "move") return; // 内挂未确认且静止：交给下方自研远点移动
       }
       if (zIdleR === "ok") { setStatus("已有锁定目标，等实体定位；不启动无目标移动…", "st"); return; }
       // 无目标支「自行寻怪」门槛（不受开关 B 是否勾选影响）：连续无有效目标未满 dsh-z-nomove 秒 → 本拍不发自行寻怪的长距离移动，
@@ -14943,8 +15090,8 @@ function createRoItemCapture(env) {
       // 无怪 / 不可达 → 定向直走寻怪：持续朝一个方向走（A* 避障），遇障/卡住才转向
       // V2.38.24 E：直走与追怪共用一个「移动间隔」（默认 0.25s，可调 0.15~1s；无目标仍是 12 格长距目标）
       var walkInt = Math.max(0.15, Math.min(1, parseFloat($id("dsh-z-moveint") ? $id("dsh-z-moveint").value : 0.25) || 0.25)) * 1000;
-      if (!npMode && now - zWalkState.lastMove < walkInt) return;
-      if (!npMode) zWalkState.lastMove = now;
+      if ((!npMode || npFallbackWalk) && now - zWalkState.lastMove < walkInt) return;
+      if (!npMode || npFallbackWalk) zWalkState.lastMove = now;
       // 8 方向（0=右,1=右下,2=下,3=左下,4=左,5=左上,6=上,7=右上）
       var dirs = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
       // V2.9.0 方向记忆：10s 内侦查扫到过锁定怪 → 优先朝该方向走（不再纯 8 方向盲转）
@@ -16877,7 +17024,9 @@ function createRoItemCapture(env) {
           bag: { complete: !!(typeof bagPkt !== "undefined" && bagPkt.complete), op: typeof bagPkt !== "undefined" ? bagPkt.listOp : 0,
             rows: typeof bagPkt !== "undefined" ? bagPkt.n : 0, session: typeof bagPkt !== "undefined" ? bagPkt.sess : 0,
             why: typeof bagPkt !== "undefined" ? String(bagPkt.why || "") : "bagPkt unavailable" },
-          inventory: { readable: !!(c && Array.isArray(c.list)), rows: c && Array.isArray(c.list) ? c.list.length : null } });
+          inventory: { readable: !!(c && Array.isArray(c.list)), rows: c && Array.isArray(c.list) ? c.list.length : null },
+          framing: { partial: Number(framePartial) || 0, runtimeLenEntries: Number(__zcLenTbl && __zcLenTbl.n) || 0,
+            first471: Number(opStat[471]) || 0, bag2825: Number(opStat[2825]) || 0, gear2873: Number(opStat[2873]) || 0, oldBag2449: Number(opStat[2449]) || 0 } });
       }
     } catch (eProbe) {}
     return { ok: false, reason: dojoGuard.reason };
@@ -18097,9 +18246,11 @@ function createRoItemCapture(env) {
       if (box) box.style.display = "block";
       if (ta) { ta.value = txt; try { ta.focus(); ta.select(); } catch (eS) {} }
       var reported = false;
-      try { reported = reportDiag("manual", { source: "button" }); } catch (eR) {}
-      var copied = false;
-      if (!reported) { try { copied = document.execCommand("copy"); } catch (eC) {} }
+      try { reported = reportDiag("manual", { source: "button" }, function (ok) {
+        var st = $id("dsh-tpmsg2");
+        if (st) st.textContent = "诊断完成" + (ok ? "，本机接收端已确认" : "，本机接收失败；诊断文本保留在下方");
+        var hubStatus = $id("dsh-probe-geardiag-status"); if (hubStatus && st) hubStatus.textContent = st.textContent;
+      }); } catch (eR) {}
       var brief = "";
       try {
         var o = window.__dshGearDiag__;
@@ -18111,7 +18262,7 @@ function createRoItemCapture(env) {
             "｜内存箭=" + (o.memAmmo ? (o.memAmmo.has ? "有" : "无") : "?");
         }
       } catch (eB) {}
-      $id("dsh-tpmsg2").textContent = "诊断完成" + brief + (reported ? "，已自动发到本机" : (copied ? "，已复制" : "，本机未接收，请长按复制"));
+      $id("dsh-tpmsg2").textContent = "诊断完成" + brief + (reported ? "，等待本机接收确认" : "，本机接收端不可用；诊断文本保留在下方");
     } catch (e) { $id("dsh-tpmsg2").textContent = "装备诊断异常: " + e.message; }
   });
   function planRoute(target) {
@@ -19306,7 +19457,8 @@ function createRoItemCapture(env) {
   //   2824/2825/2826/2873 属于**防御性覆盖**（例：主表有 471 而缺 2825 → 断在 2825，后面的整表跟着丢）；
   //   若主表连 471 都缺就会断在 471，登记 2825 救不了（原注释把 2825 写成 burst 关键断点，与事实不符）。
   //   V2.38.8：新登记 2634（ZC.PRIVATE_AIRSHIP_RESPONSE = op u16 + response u32，6B）——直发传送的回包靠它切帧。
-  var ZC_EXTRA_LEN = { 170: 9, 2256: 9, 2457: 11, 172: 7, 2257: 7, 2458: 9, 2824: -1, 2825: -1, 2826: -1, 2827: 4, 2873: -1, 2634: 6 };
+  // 本服 20211103 的首帧 ZC.SPRITE_CHANGE2(471) 为 15B；运行时包长表还没准备好时也要先切过它，后面 2825 才能被安全看到。
+  var ZC_EXTRA_LEN = { 170: 9, 2256: 9, 2457: 11, 172: 7, 2257: 7, 2458: 9, 2824: -1, 2825: -1, 2826: -1, 2827: 4, 2873: -1, 2634: 6, 471: 15 };
   function zcLenTable() {
     try {
       var PS = CLIENT && CLIENT.PS;
@@ -19402,6 +19554,7 @@ function createRoItemCapture(env) {
     try {
       if (typeof op !== "number") { try { op = new DataView(bytes).getUint16(0, true); } catch (e0) { return; } }
       identityPktHook(bytes, op); // V2.38.6：手机端 char_id 包流来源（113/2757 记录身份、107 清身份）
+      if (op === 142) { npChatFrameCount++; npRawBattleNotice(bytes, op); } // 只记总帧数与到达时间，不读取/记录聊天内容
       // V2.38.7：装备整表 / 穿脱确认包流（只读；单帧异常只丢该帧）。
       //   typeof 守卫：局部切片测试环境里这个函数可能不在同一段代码中，缺了就当没有（绝不抛、绝不影响分帧与身份）。
       if (typeof gearPktHook === "function") gearPktHook(bytes, op);
@@ -25326,27 +25479,22 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   //   只发到 127.0.0.1（浏览器把 loopback 视为可信来源，https 页面也能直接发）；
   //   内容仍是上面那份结构诊断（无账号/角色名/物品实例/数量）；失败静默、绝不影响游戏。
   var diagReportAt = 0, diagLastKey = "", diagSent = 0;
-  function reportDiag(kind, extra) {
+  function reportDiag(kind, extra, done) {
     try {
       if (diagSent >= 300) return false;
       var o = null;
       try { o = window.__dshGearDiag__; } catch (e0) {}
       if (!o) { try { gearDiagCollect(); o = window.__dshGearDiag__; } catch (e1) {} }
       var body = { kind: kind || "auto", ver: (typeof VER === "string" ? VER : ""), diag: o || null, extra: extra || {} };
-      var url = "http://127.0.0.1:8791/dsh-diag";
+      var url = "http://127.0.0.1:8899/api/probe-collect";
       var txt = JSON.stringify(body);
       diagSent++;
-      try {
-        if (typeof navigator !== "undefined" && navigator.sendBeacon) {
-          if (navigator.sendBeacon(url, new Blob([txt], { type: "application/json" }))) return true;
-        }
-      } catch (eB) {}
-      try {
-        if (typeof fetch === "function") {
-          fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: txt, keepalive: true }).catch(function () {});
-          return true;
-        }
-      } catch (eF) {}
+      if (typeof fetch === "function") {
+        fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: txt, keepalive: true })
+          .then(function (r) { if (done) done(!!(r && r.ok)); })
+          .catch(function () { if (done) done(false); });
+        return true;
+      }
     } catch (e) {}
     return false;
   }
@@ -25370,8 +25518,10 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   //   只有状态真的变化（例如箭槽从可读变不可读、身份补齐、换图）才做一次完整结构采集并上报。
   //   原因：V2.38.60 的写法每 60 秒无条件做一次全文档 [id*=quipment] 扫描，
   //   在游戏页面的大 DOM 上可能造成周期性卡顿 —— 改为「变化才深采集」，把开销降到接近零。
+  var diagAutoProbeOn = false; // Optional equipment scan is off at startup; safety guard reporting stays active.
   function diagAutoTick() {
     try {
+      if (!diagAutoProbeOn) return;
       var now = Date.now();
       if (now - diagReportAt < 300000) return;
       diagReportAt = now;
