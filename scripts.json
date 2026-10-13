@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "kind": "lastro-script-manifest",
-  "updatedAt": "2026-10-13T00:50:19.587Z",
+  "updatedAt": "2026-10-13T03:30:41.574Z",
   "note": "固定寻址清单。feed 和 scripts 声明当前版本及地址；迁移地址须满足客户端与助手消费者的主机、路径白名单，新主机或文件名须先更新消费者。未发布条目不得作为下载源。",
   "feed": {
     "assist": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js",
@@ -12,17 +12,17 @@
       "id": "assist",
       "name": "RO 助手",
       "channel": "stable",
-      "version": "2.38.76",
+      "version": "2.38.78",
       "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js",
-      "sha256": "a3efcc996de0b990bfe7fc051f857767852d48ff39523eb0114f1cf591b96f02"
+      "sha256": "523e40563b4e47175e2a6b1577fd96c279b0c10f2c5692438d3a0f21e8790b01"
     },
     {
       "id": "assist-exp",
       "name": "RO 助手（实验版）",
       "channel": "exp",
-      "version": "2.38.77.5",
+      "version": "2.38.77.6",
       "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js",
-      "sha256": "e6f8ff449873e61a3a07cb81bcdd93efd2e5927822dee672ee6bd8f159e5a29a"
+      "sha256": "2c54f52b0024f414a0729e296041adae1031dde9f64ffa0c3705ab53fc8befdf"
     },
     {
       "id": "dojo",

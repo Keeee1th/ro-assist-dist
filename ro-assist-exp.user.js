@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         仙境传说 · 原站插件模式（游戏助手 · 实验版）
 // @namespace    dsh.ro-plugin
-// @version      2.38.77.5
+// @version      2.38.77.6
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
 // @description  本地新UI实验版（不发布）。在 post.lastro.cn / game.lastro.cn 原站以插件模式启动《仙境的传说》ROBrowser 客户端并连接原服务器；数据自动走本地镜像（127.0.0.1:8973）避免加载卡死，支持自动登录。PC 版直接打开 https://post.lastro.cn/ro/api.html 或备用线路 https://game.lastro.cn/ro/api.html?69.8；手机版打开 https://post.lastro.cn/?r=mn/index（登录页可选择平台与线路）。 新增私有本机客户端入口匹配（环回主机 127.0.0.1 / localhost，端口以页面自身 origin 为准、不写死）。
@@ -16,8 +16,14 @@
 // @match        https://game.lastro.cn/*
 // @match        http://game.lastro.cn/ro/api.html*
 // @match        https://game.lastro.cn/ro/api.html*
+  // UNIFIED-PROBE-BEGIN local-gate-match ORIGINAL:Ly8gQG1hdGNoICAgICAgICBodHRwOi8vMTI3LjAuMC4xL2NsaWVudC9hcGkuaHRtbCoKLy8gQG1hdGNoICAgICAgICBodHRwOi8vbG9jYWxob3N0L2NsaWVudC9hcGkuaHRtbCo=
 // @match        http://127.0.0.1/client/api.html*
 // @match        http://localhost/client/api.html*
+// @match        http://127.0.0.1/*
+// @match        http://localhost/*
+// @match        https://127.0.0.1/*
+// @match        https://localhost/*
+  // UNIFIED-PROBE-END local-gate-match
 // @run-at       document-idle
 // @grant        none
 // ==/UserScript==
@@ -654,17 +660,54 @@
   //             且路径为 /client/api.html 或 /client/api-old.html
   //             （V2.38.47 补路径判定：只判 host+port 时 127.0.0.1:8971/ 的登录页也会起助手，用户实报「注入到登录页而不是游戏页」）；
   //             ② lastro.cn 域名下 URL 含 /ro/api（api.html / api-old.html）；③ 手机版客户端 URL 含 r=mn（用户未否决，保留放行并修好不抛）。
+  // UNIFIED-PROBE-BEGIN local-gate-helper ORIGINAL:ICBmdW5jdGlvbiByb0Fzc2lzdFBhZ2VBbGxvd2VkKCkgew==
+  // V2.38.78：本机客户端判定 —— 页面闸门与 IS_LOCAL_HOST 共用同一套判据，避免两处口径漂移。
+  function roAssistIsLocalClientPage(loc) {
+    try {
+      loc = loc || window.location || {};
+      var host = String(loc.hostname || "").toLowerCase();
+      if (!/^(127(\.\d{1,3}){3}|localhost|\[::1\]|::1)$/.test(host)) return false;   // 只认环回主机
+      var href = String(loc.href || "");
+      if (href.indexOf("r=mn") >= 0) return false;                                    // 手机版不并入本机入口（判据照旧）
+      var path = String(loc.pathname || "");
+      if (/^\/client\/api(-old)?\.html$/.test(path)) return true;                      // 游戏宿主页（老判据，原样保留）
+      if (/^\/ro\/api(-old)?\.html$/.test(path)) return true;                          // 与原站同名路径
+      // 其余路径（含根页 / 与 /index.html）必须「页面自证」——否则 127.0.0.1:3080/ 这类本机无关页面也会被注入。
+      return roAssistLooksLikeClientPage();
+    } catch (e) { return false; }
+  }
+  function roAssistLooksLikeClientPage() {
+    try {
+      var d = document;
+      if (!d || !d.querySelector) return false;
+      // 按「目录」判，而不是按具体文件名 —— 以后重做皮肤/改文件名也不用再改这里。
+      if (d.querySelector('link[href*="launcher/"]')) return true;                      // 启动器 / 皮肤资源目录
+      if (d.querySelector('link[rel="icon"][href*="assets/ui/"]')) return true;        // 客户端图标目录
+      if (d.querySelector('script[src*="client/Config"]')) return true;                  // 客户端配置
+      if (d.querySelector('script[src*="client/Online"]')) return true;                  // 客户端引擎
+      if (d.querySelector('link[href*="client/Online"]')) return true;
+      if (window.ROConfig || window.ROConfigBase) return true;                            // 客户端预置配置
+      return roAssistTitleLooksLikeClient(d);                                             // 最后一道：页面标题自证
+    } catch (e) { return false; }
+  }
+  function roAssistTitleLooksLikeClient(d) {
+    try { return /仙境传说|仙境の传说|客户端/.test(String((d && d.title) || "")); } catch (e) { return false; }
+  }
   function roAssistPageAllowed() {
+  // UNIFIED-PROBE-END local-gate-helper
     try {
       var loc = window.location || {};
       var host = String(loc.hostname || "").toLowerCase();
       var href = String(loc.href || "");
-      // ① 本机私有客户端：环回主机 + 游戏宿主页路径。
-      //    V2.38.47 补路径判定：只判 host+port 时 127.0.0.1:8971/ 的登录页也会起助手（用户实报「注入到登录页而不是游戏页」）。
-      //    V2.38.47-r2 端口纠偏：写死 8971 会让「换端口后注入成功但助手静默不接管」（无悬浮球、无提示）变成哑失败 ——
-      //      改看页面自身 origin：环回主机（127.0.0.0/8 · localhost · ::1，含 IPv6 [::1]）不再比 port，端口随宿主页自定。
+  // UNIFIED-PROBE-BEGIN local-gate-branch ORIGINAL:ICAgICAgLy8g4pGgIOacrOacuuengeacieWuouaIt+err++8mueOr+WbnuS4u+acuiArIOa4uOaIj+Wuv+S4u+mhtei3r+W+hOOAggogICAgICAvLyAgICBWMi4zOC40NyDooaXot6/lvoTliKTlrprvvJrlj6rliKQgaG9zdCtwb3J0IOaXtiAxMjcuMC4wLjE6ODk3MS8g55qE55m75b2V6aG15Lmf5Lya6LW35Yqp5omL77yI55So5oi35a6e5oql44CM5rOo5YWl5Yiw55m75b2V6aG16ICM5LiN5piv5ri45oiP6aG144CN77yJ44CCCiAgICAgIC8vICAgIFYyLjM4LjQ3LXIyIOerr+WPo+e6oOWBj++8muWGmeatuyA4OTcxIOS8muiuqeOAjOaNouerr+WPo+WQjuazqOWFpeaIkOWKn+S9huWKqeaJi+mdmem7mOS4jeaOpeeuoeOAje+8iOaXoOaCrOa1rueQg+OAgeaXoOaPkOekuu+8ieWPmOaIkOWTkeWksei0pSDigJTigJQKICAgICAgLy8gICAgICDmlLnnnIvpobXpnaLoh6rouqsgb3JpZ2lu77ya546v5Zue5Li75py677yIMTI3LjAuMC4wLzggwrcgbG9jYWxob3N0IMK3IDo6Me+8jOWQqyBJUHY2IFs6OjFd77yJ5LiN5YaN5q+UIHBvcnTvvIznq6/lj6Ppmo/lrr/kuLvpobXoh6rlrprjgIIKICAgICAgdmFyIGlzTG9vcGJhY2sgPSAvXigxMjcoXC5cZHsxLDN9KXszfXxsb2NhbGhvc3R8XFs6OjFcXXw6OjEpJC8udGVzdChob3N0KTsKICAgICAgaWYgKGlzTG9vcGJhY2sgJiYgL15cL2NsaWVudFwvYXBpKC1vbGQpP1wuaHRtbCQvLnRlc3QoU3RyaW5nKGxvYy5wYXRobmFtZSB8fCAiIikpKSByZXR1cm4gdHJ1ZTs=
+      // ① 本机私有客户端：环回主机 + 本机客户端页面（游戏宿主页 / 根页自证）。
+      //    V2.38.78：启动器打开的是 http://127.0.0.1:8971/（根页），旧判据只认 /client/api.html，本机入口必须绕官网才能起助手（用户实报）。
+      //      现在：/client/api(-old).html · /ro/api(-old).html 直接认；其余路径（含根页 / 与 /index.html）必须页面自证
+      //      （launcher.css / client.ico / client/Config.js / client/Online.js / window.ROConfig*），避免注入到 127.0.0.1:3080/ 这类本机无关页面。
+      //      手机版（URL 含 r=mn）不并入本机入口，判据照旧。
       var isLoopback = /^(127(\.\d{1,3}){3}|localhost|\[::1\]|::1)$/.test(host);
-      if (isLoopback && /^\/client\/api(-old)?\.html$/.test(String(loc.pathname || ""))) return true;
+      if (isLoopback && roAssistIsLocalClientPage(loc)) return true;
+  // UNIFIED-PROBE-END local-gate-branch
       if (/(^|\.)lastro\.cn$/.test(host) && href.indexOf("/ro/api") >= 0) return true;
       if (href.indexOf("r=mn") >= 0) return true;
       return false;
@@ -690,8 +733,9 @@
   // 直接打开时无人启动，需由脚本自启。原站入口不设此旗标，判据与行为保持不变。
   // V2.38.47-r2：与页面闸门同口径 —— 环回主机（127.0.0.0/8 · localhost · ::1，不写死端口）+ 游戏宿主页路径。
   //   此前本机入口判据写死为「端口固定 8971」，用户改端口后本机入口会被静默当成原站（本机自启/模块化加载全丢，且无任何提示）。
-  var IS_LOCAL_HOST = /^(127(\.\d{1,3}){3}|localhost|\[::1\]|::1)$/.test(String(location.hostname || "").toLowerCase())
-    && /^\/client\/api(-old)?\.html$/.test(String(location.pathname || ""));
+  // UNIFIED-PROBE-BEGIN local-host-flag ORIGINAL:ICB2YXIgSVNfTE9DQUxfSE9TVCA9IC9eKDEyNyhcLlxkezEsM30pezN9fGxvY2FsaG9zdHxcWzo6MVxdfDo6MSkkLy50ZXN0KFN0cmluZyhsb2NhdGlvbi5ob3N0bmFtZSB8fCAiIikudG9Mb3dlckNhc2UoKSkKICAgICYmIC9eXC9jbGllbnRcL2FwaSgtb2xkKT9cLmh0bWwkLy50ZXN0KFN0cmluZyhsb2NhdGlvbi5wYXRobmFtZSB8fCAiIikpOw==
+  var IS_LOCAL_HOST = roAssistIsLocalClientPage(location);   // V2.38.78：与页面闸门同判据（本机根页也算本机入口）
+  // UNIFIED-PROBE-END local-host-flag
   // 手机版页面路径：/?r=mn/index（PC 版为 /ro/api.html）
   var MN_PATH = "/?r=mn/index";
   var PC_PATH = "/ro/api.html";
@@ -705,7 +749,7 @@
   }
   var LS_KEY = "dsh_ro_plugin_v1";
   var VERSION_RE = /\?([0-9.]+)/;
-  var VER = "2.38.77.5"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
+  var VER = "2.38.77.6"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
   try { window.__dshCombinedActive = true; } catch (e) {} // V2.30.0 防双浮层让位旗标：独立版词条色脚本见旗标即让位
   // ==================== 统一采集器注册表（dsh-collect v1 · 内部命名空间，不新增 window 全局）====================
   // 五方法：register 注册 / sample 采集 / query 查询 / refresh 刷新 / release 释放

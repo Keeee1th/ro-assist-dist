@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         仙境传说 · 原站插件模式（游戏助手）
 // @namespace    dsh.ro-plugin
-// @version      2.38.76
+// @version      2.38.78
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js
 // @description  在 post.lastro.cn / game.lastro.cn 原站以插件模式启动《仙境的传说》ROBrowser 客户端并连接原服务器；数据自动走本地镜像（127.0.0.1:8973）避免加载卡死，支持自动登录。PC 版直接打开 https://post.lastro.cn/ro/api.html 或备用线路 https://game.lastro.cn/ro/api.html?69.8；手机版打开 https://post.lastro.cn/?r=mn/index（登录页可选择平台与线路）。 新增私有本机客户端入口匹配（环回主机 127.0.0.1 / localhost，端口以页面自身 origin 为准、不写死）。
@@ -18,6 +18,10 @@
 // @match        https://game.lastro.cn/ro/api.html*
 // @match        http://127.0.0.1/client/api.html*
 // @match        http://localhost/client/api.html*
+// @match        http://127.0.0.1/*
+// @match        http://localhost/*
+// @match        https://127.0.0.1/*
+// @match        https://localhost/*
 // @run-at       document-idle
 // @grant        none
 // ==/UserScript==
@@ -654,17 +658,51 @@
   //             且路径为 /client/api.html 或 /client/api-old.html
   //             （V2.38.47 补路径判定：只判 host+port 时 127.0.0.1:8971/ 的登录页也会起助手，用户实报「注入到登录页而不是游戏页」）；
   //             ② lastro.cn 域名下 URL 含 /ro/api（api.html / api-old.html）；③ 手机版客户端 URL 含 r=mn（用户未否决，保留放行并修好不抛）。
+  // V2.38.78：本机客户端判定 —— 页面闸门与 IS_LOCAL_HOST 共用同一套判据，避免两处口径漂移。
+  function roAssistIsLocalClientPage(loc) {
+    try {
+      loc = loc || window.location || {};
+      var host = String(loc.hostname || "").toLowerCase();
+      if (!/^(127(\.\d{1,3}){3}|localhost|\[::1\]|::1)$/.test(host)) return false;   // 只认环回主机
+      var href = String(loc.href || "");
+      if (href.indexOf("r=mn") >= 0) return false;                                    // 手机版不并入本机入口（判据照旧）
+      var path = String(loc.pathname || "");
+      if (/^\/client\/api(-old)?\.html$/.test(path)) return true;                      // 游戏宿主页（老判据，原样保留）
+      if (/^\/ro\/api(-old)?\.html$/.test(path)) return true;                          // 与原站同名路径
+      // 其余路径（含根页 / 与 /index.html）必须「页面自证」——否则 127.0.0.1:3080/ 这类本机无关页面也会被注入。
+      return roAssistLooksLikeClientPage();
+    } catch (e) { return false; }
+  }
+  function roAssistLooksLikeClientPage() {
+    try {
+      var d = document;
+      if (!d || !d.querySelector) return false;
+      // 按「目录」判，而不是按具体文件名 —— 以后重做皮肤/改文件名也不用再改这里。
+      if (d.querySelector('link[href*="launcher/"]')) return true;                      // 启动器 / 皮肤资源目录
+      if (d.querySelector('link[rel="icon"][href*="assets/ui/"]')) return true;        // 客户端图标目录
+      if (d.querySelector('script[src*="client/Config"]')) return true;                  // 客户端配置
+      if (d.querySelector('script[src*="client/Online"]')) return true;                  // 客户端引擎
+      if (d.querySelector('link[href*="client/Online"]')) return true;
+      if (window.ROConfig || window.ROConfigBase) return true;                            // 客户端预置配置
+      return roAssistTitleLooksLikeClient(d);                                             // 最后一道：页面标题自证
+    } catch (e) { return false; }
+  }
+  function roAssistTitleLooksLikeClient(d) {
+    try { return /仙境传说|仙境の传说|客户端/.test(String((d && d.title) || "")); } catch (e) { return false; }
+  }
   function roAssistPageAllowed() {
     try {
       var loc = window.location || {};
       var host = String(loc.hostname || "").toLowerCase();
       var href = String(loc.href || "");
-      // ① 本机私有客户端：环回主机 + 游戏宿主页路径。
-      //    V2.38.47 补路径判定：只判 host+port 时 127.0.0.1:8971/ 的登录页也会起助手（用户实报「注入到登录页而不是游戏页」）。
-      //    V2.38.47-r2 端口纠偏：写死 8971 会让「换端口后注入成功但助手静默不接管」（无悬浮球、无提示）变成哑失败 ——
-      //      改看页面自身 origin：环回主机（127.0.0.0/8 · localhost · ::1，含 IPv6 [::1]）不再比 port，端口随宿主页自定。
+      // ① 本机私有客户端：环回主机 + 本机客户端页面（根页 / 游戏宿主页 / 带客户端自证标记的页面）。
+      //    V2.38.78：启动器打开的是 http://127.0.0.1:8971/（根页），旧判据只认 /client/api.html ——
+      //      本机入口因此必须绕官网主页才能起助手（用户实报）。现在本机入口与游戏宿主页同判：
+      //      ① 路径认：/ · /index.html · /client/api(-old).html · /ro/api(-old).html；
+      //      ② 路径不认识时看页面自证（launcher.css / client.ico / client/Config.js / client/Online.js / window.ROConfig*）。
+      //      手机版（URL 含 r=mn）不并入本机入口，判据照旧。
       var isLoopback = /^(127(\.\d{1,3}){3}|localhost|\[::1\]|::1)$/.test(host);
-      if (isLoopback && /^\/client\/api(-old)?\.html$/.test(String(loc.pathname || ""))) return true;
+      if (isLoopback && roAssistIsLocalClientPage(loc)) return true;
       if (/(^|\.)lastro\.cn$/.test(host) && href.indexOf("/ro/api") >= 0) return true;
       if (href.indexOf("r=mn") >= 0) return true;
       return false;
@@ -690,8 +728,7 @@
   // 直接打开时无人启动，需由脚本自启。原站入口不设此旗标，判据与行为保持不变。
   // V2.38.47-r2：与页面闸门同口径 —— 环回主机（127.0.0.0/8 · localhost · ::1，不写死端口）+ 游戏宿主页路径。
   //   此前本机入口判据写死为「端口固定 8971」，用户改端口后本机入口会被静默当成原站（本机自启/模块化加载全丢，且无任何提示）。
-  var IS_LOCAL_HOST = /^(127(\.\d{1,3}){3}|localhost|\[::1\]|::1)$/.test(String(location.hostname || "").toLowerCase())
-    && /^\/client\/api(-old)?\.html$/.test(String(location.pathname || ""));
+  var IS_LOCAL_HOST = roAssistIsLocalClientPage(location);   // V2.38.78：与页面闸门同判据（本机根页也算本机入口）
   // 手机版页面路径：/?r=mn/index（PC 版为 /ro/api.html）
   var MN_PATH = "/?r=mn/index";
   var PC_PATH = "/ro/api.html";
@@ -705,7 +742,7 @@
   }
   var LS_KEY = "dsh_ro_plugin_v1";
   var VERSION_RE = /\?([0-9.]+)/;
-  var VER = "2.38.76"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
+  var VER = "2.38.78"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
   try { window.__dshCombinedActive = true; } catch (e) {} // V2.30.0 防双浮层让位旗标：独立版词条色脚本见旗标即让位
   // ==================== 统一采集器注册表（dsh-collect v1 · 内部命名空间，不新增 window 全局）====================
   // 五方法：register 注册 / sample 采集 / query 查询 / refresh 刷新 / release 释放
@@ -2801,10 +2838,6 @@ function createRoItemCapture(env) {
       '<div class="row"><label class="switch"><input id="dsh-z-returnauto" type="checkbox" checked>回到目标图自动开启助手挂机（默认开）</label></div>' +
       '<div class="row"><label class="switch"><input id="dsh-z-deathguard" type="checkbox" checked>连续死亡自动下线（5 分钟死 3 次，默认开）</label></div>' +
       '<div class="log">在目标图开着自动战斗时若角色死亡：助手自动点「重新开始」回城复活（点不动会重试，最多 4 次，仍失败就等你手点），坐下回满血后传回目标地图。回图后按上面的开关继续：勾选=自动开助手挂机；不勾=按死亡前的方式恢复（助手/内挂）。状态不确定或超时即停。<br>连续死亡自动下线：5 分钟内死亡 3 次（只统计助手或内挂在跑时）就停掉助手/内挂，并按正确下线方式自动下线——地图内 ESC →「选择角色」→ 角色选择界面右下角「取消」→ 确认结束游戏；某一步走不完会提示你手动下线。</div>' +
-      '<div class="sec">背包快照定期上报（V2.15.27）</div>' +
-      '<div class="row"><label class="switch"><input id="dsh-invshot" type="checkbox" checked>开启定期上报</label>' +
-      '<span class="lb" style="margin-left:8px">间隔</span><input id="dsh-invshotint" type="number" value="120" style="flex:0 0 44px"><span style="color:#5a6b7f">秒</span></div>' +
-      '<div class="row"><span class="st" id="dsh-invshotlog" style="font-size:10px"></span></div>' +
       '<div class="sec">辅助对象 · 自动跟随玩家</div>' +
       '<div class="row"><span class="lb">跟随目标</span><select id="dsh-followtarget" style="flex:0 0 auto;max-width:140px"><option value="">选择玩家…（侦测）</option></select>' +
       '<button class="ghost" id="dsh-followscan" style="flex:0 0 auto">刷新</button></div>' +
@@ -7109,7 +7142,7 @@ function createRoItemCapture(env) {
     ["dsh-z-deathreturn", "c"], ["dsh-z-returnmap", "v"], ["dsh-z-returnauto", "c"], ["dsh-z-deathguard", "c"],
     ["dsh-z-attint", "v"], ["dsh-z-range", "v"], ["dsh-z-pmrange", "v"], ["dsh-z-mgrange", "v"], ["dsh-z-minrange", "v"], ["dsh-z-mapbound", "c"], ["dsh-z-mapbound-r", "v"], ["dsh-z-mapbound-edge", "v"],
     ["dsh-z-switchdelay", "v"], ["dsh-z-moveint", "v"], ["dsh-z-huntmode", "v"], ["dsh-z-takeover", "v"], ["dsh-z-follow", "c"], ["dsh-z-next", "c"],
-    ["dsh-arrowen", "c"], ["dsh-invshot", "c"], ["dsh-invshotint", "v"],
+    ["dsh-arrowen", "c"],
     ["dsh-autoskill", "v"], ["dsh-autoskilllv", "v"], ["dsh-autoskillpro", "v"],
 
     ["dsh-automatic", "v"], ["dsh-touchskill", "v"], ["dsh-touchskillop", "c"],
@@ -9725,36 +9758,6 @@ function createRoItemCapture(env) {
   }
   masterTickReg(function () { try { tickArrow(); } catch (e) {} try { arrowBagDiagRender(); } catch (e) {} });
   // V2.38.38-arrow9：总开关控件已搬进「换箭设置」浮窗，建窗时应用存档值（旧扁平键 saved.arrowEn===false 由 arrowManageSaved 兼容）
-
-  // ---------------- 背包快照定期上报（V2.15.27：复用仓库查询读取，到点上报道本机采集服务）----------------
-  var invShotLast = 0, invShotSent = 0, invShotFail = 0;
-  function renderInvShot() {
-    try { var el = $id("dsh-invshotlog"); if (el) el.textContent = "已上报 " + invShotSent + " 次" + (invShotFail ? "，失败 " + invShotFail + " 次" : ""); } catch (e) {}
-  }
-  function tickInvShot() {
-    try {
-      if (!clientReady()) return;
-      var en = $id("dsh-invshot"); if (!en || !en.checked) return;
-      var int = parseInt($id("dsh-invshotint") ? $id("dsh-invshotint").value : "120", 10);
-      if (!(int > 0)) int = 120;
-      var now = Date.now();
-      if (now - invShotLast < int * 1000) return;
-      invShotLast = now;
-      try { readStorageAndInventory(); } catch (e) {} // 复用仓库查询读取（背包必有，仓库需开窗）
-      var data = {};
-      try { data = JSON.parse(localStorage.getItem("dsh_ro_inventory_v1") || "{}"); } catch (e) {}
-      var account = (typeof getInventoryAccount === "function") ? getInventoryAccount() : "";
-      var charName = (typeof getCurrentCharName === "function") ? getCurrentCharName() : "";
-      var acc = (data[account] || {}), ch = (acc.characters || {})[charName] || {};
-      var bag = ch.bag || null, sto = acc.storage || null;
-      if (!bag && !sto) return;
-      if (typeof fetch !== "function") return;
-      DSHCollect.post(INGEST_URL, { type: "invshot", account: account, charName: charName, bag: bag, storage: sto, ts: new Date().toISOString() }, function (ok) { if (ok) invShotSent++; else invShotFail++; renderInvShot(); });
-    } catch (e) {}
-  }
-  masterTickReg(function () { try { tickInvShot(); } catch (e) {} });
-  try { renderInvShot(); } catch (e) {}
-  if (saved.invshot === false) { var iv = $id("dsh-invshot"); if (iv) iv.checked = false; }
 
   // ---------------- B5：自动使用技能（点选技能栏主动辅助 · 调序）----------------
   var askList = (function () {
@@ -24159,7 +24162,7 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
     ITIP.el = d;
     return d;
   }
-  function itipHide() { try { if (ITIP.el) ITIP.el.style.display = "none"; ITIP.elKey = ""; ITIP.over = false; } catch (e) {} }
+  function itipHide() { try { if (ITIP.el) ITIP.el.style.display = "none"; ITIP.elKey = ""; ITIP.over = false; ITIP.bagTarget = null; } catch (e) {} } // V2.38.77：收起时一并清掉指向背包实例的引用，避免留下过期目标
   function itipPlace(x, y) {
     try {
       var d = ITIP.el; if (!d) return;
@@ -24320,13 +24323,39 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   function itipPlainHtml(item, itid) {
     try {
       if (itid == null || itid === "") return "";
-      if (itipIsEquip(item)) return ""; // 装备：维持原早退（没有隐藏信息就不显示），绝不套用普通物品格式
+      if (itipIsEquip(item)) return itipItemLines(item, itid, true); // V2.38.77：装备也要能看见名字；只出真名+物品ID、不写数量，绝不套用材料格式
       return itipItemLines(item, itid);
     } catch (e) { return ""; }
   }
   // V2.38.35 鉴定界面（放大镜 → 客户端 ItemSelection 窗口）：格子只有 data-index，没有 data-itid。
   //   只有「本次列表确实来自物品」时才认（ITIP.selItem 由 setList 包装记录），技能列表（自动咏唱）与别的窗口
   //   一律不认；认不出主机就返回 false（fail-closed，宁可不显示）。
+  // V2.38.77：装备窗口判定——必须证明这只格子就在「助手自己那扇装备窗」的根里，且取值同源。
+  //   绝不可只按 id==="Equipment" 认：旧客户端「查看他人装备」是同一份 Equipment.html 的克隆，根 id 一样；
+  //   新客户端那份根 id 是 PlayerViewEquip。按 id 认就会把别人的格子当自己的，再套本方装备表 → 显示错物品。
+  //   只采信组件自己声明的根（getRoot / ui）；拿不到根就判 false（宁可不显示，绝不显示错物品）。
+  function itipEquipRoot() {
+    try {
+      var EQ = (typeof gearEquipmentComp === "function") ? gearEquipmentComp() : null;
+      if (!EQ) return null;
+      var r = null;
+      try { if (typeof EQ.getRoot === "function") r = EQ.getRoot(); } catch (e1) { r = null; }
+      if (!r) { try { r = EQ.ui; } catch (e2) { r = null; } }
+      if (typeof gearDomEl === "function") r = gearDomEl(r);
+      if (r && r.jquery) r = r[0];
+      if (r && !r.nodeType && r.length) r = r[0];
+      return (r && r.nodeType === 1) ? r : null;
+    } catch (e) { return null; }
+  }
+  function itipIsEquipWindow(el) {
+    try {
+      var root = itipEquipRoot();
+      if (!root) return false;
+      var chain = itipChain(el);
+      for (var i = 0; i < chain.length; i++) { if (chain[i] === root) return true; }
+      return false;
+    } catch (e) { return false; }
+  }
   function itipIsItemSelect(el) {
     try {
       if (!ITIP.selItem) return false;
@@ -24430,9 +24459,12 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
         var side = itipShopSide(el);
         var isSell = !!side && itipShopSellMode(el);
         var si = el.getAttribute("data-index");
-        var inv = itipInvMap();
-        var sItem = (si != null) ? inv[Number(si)] : null;
-        html = (isSell && sItem) ? itipBody(sItem, ITIP.sell[Number(si)] || null) : itipShopRow(el);
+        // V2.38.77：下标只认十进制非负整数串；空串/空白/非数字一律当非法，且非法时连背包都不读
+        //   （Number("") === 0 曾让空售格命中背包 0 号）。合法时行为与本分支原口径完全一致。
+        var siT = (si == null) ? "" : String(si).trim();
+        var siOk = /^[0-9]{1,10}$/.test(siT);
+        var sItem = siOk ? itipInvMap()[Number(siT)] : null;
+        html = (isSell && sItem) ? itipBody(sItem, ITIP.sell[Number(siT)] || null) : itipShopRow(el);
       } else if (itipIsTrade(el)) {
         // V2.38.36 交易框：data-index 是客户端 _send/_recv 的下标，不是背包 index —— 不映射背包、不显示售价。
         //   认不出哪一侧 / data-index 非数 / 镜像里没有（含助手注入晚于入列、抓不到快照）→ 一律不显示，绝不回退 itipInvMap()。
@@ -24452,27 +24484,42 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
         html = itipBody(tItem, null, true); // 交易没有售价：price 一律 null；noBag：对方物品与本方快照都不得回连背包实例
       } else if (itipIsStorage(el)) {
         var storageIndex = el.getAttribute("data-index");
-        var storageItem = (storageIndex != null) ? itipStorageMap()[Number(storageIndex)] : null;
+        var stT = (storageIndex == null) ? "" : String(storageIndex).trim(); // V2.38.77：空串/非数字下标一律非法（非法时不读仓库表）
+        var storageItem = /^[0-9]{1,10}$/.test(stT) ? itipStorageMap()[Number(stT)] : null;
         if (!storageItem) { itipHide(); return; }
         html = itipBody(storageItem, null, true); // 仓库 index 是仓库实例空间：绝不拿它去背包里找同号实例。
       } else if (itipIsItemSelect(el)) {
         // V2.38.36：格子按 data-index 精确映射背包实例（该窗口的 data-index 就是背包 index，与背包悬停同源）。
         //   装备先走装备展示（真名/精炼/词条）；没有可展示的隐藏信息时退回「真名 + 物品ID」，绝不退化成材料格式（不写数量）。
         var sIdx = el.getAttribute("data-index");
-        var sItem = (sIdx != null) ? itipInvMap()[Number(sIdx)] : null;
+        var sIdxT = (sIdx == null) ? "" : String(sIdx).trim(); // V2.38.77：空串/非数字下标一律非法（非法时不读背包）
+        var sItem = /^[0-9]{1,10}$/.test(sIdxT) ? itipInvMap()[Number(sIdxT)] : null;
         if (!sItem) { itipHide(); return; }
         var sItid = (sItem.ITID != null) ? sItem.ITID : sItem.itemid;
         html = itipIsEquip(sItem) ? (itipBody(sItem, null) || itipItemLines(sItem, sItid, true)) : itipItemLines(sItem, sItid);
       } else {
+        // V2.38.77：装备栏格子可能只写槽位 data-index、不写 data-itid。只有确证是助手自己那扇装备窗
+        //   （认窗与取组件同源）才按装备组件反查槽位实例；其它缺 data-itid 的格子照旧 fail-closed 不显示。
         var itid = el.getAttribute("data-itid");
-        if (!itid) { itipHide(); return; }
         var idx = el.getAttribute("data-index");
-        var inv2 = itipInvMap();
-        var item = (idx != null) ? inv2[Number(idx)] : null;
+        var eqWin = itipIsEquipWindow(el);
+        var item = null;
+        if (eqWin) {
+          var eIdx = (typeof gearDomIdxVal === "function") ? gearDomIdxVal(idx) : null;
+          if (eIdx != null && typeof gearEqItemByIndex === "function" && typeof gearEquipmentComp === "function") item = gearEqItemByIndex(gearEquipmentComp(), eIdx);
+          if (item && !itid) itid = String(item.ITID != null ? item.ITID : item.itemid); // 只在格子没写 data-itid 时由组件补；写了就必须一致，否则上面那条核对会隐藏
+        } else {
+          // 他人装备窗（旧端克隆 / 新端 PlayerViewEquip）与商店空售格都落在这里：没有 data-itid 就不显示，
+          //   绝不用 data-index 去背包回查（否则会显示本方同名号物品）。
+          if (!itid) { itipHide(); return; }
+          var inv2 = itipInvMap();
+          item = (idx != null) ? inv2[Number(idx)] : null;
+        }
         // 装备/交易实例只能按 data-index 精确映射；同 ITID 可能有不同精炼与词条，禁止反查替代。
         if (item && String(item.ITID != null ? item.ITID : item.itemid) !== String(itid)) item = null;
-        if (!item) { itipHide(); return; }
-        html = itipBody(item, null);
+        if (!item || itid == null || itid === "") { itipHide(); return; }
+        // V2.38.77：装备槽位号不是背包索引，绝不按它回连背包实例（否则 ITIP.bagTarget 会指向别的物品）。
+        html = itipBody(item, null, eqWin);
       }
       if (!html) { itipHide(); return; }
       var key = html.length + "|" + html.slice(0, 80);
