@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         仙境传说 · 原站插件模式（游戏助手 · 实验版）
 // @namespace    dsh.ro-plugin
-// @version      2.38.77.6
+// @version      2.38.77.8
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
 // @description  本地新UI实验版（不发布）。在 post.lastro.cn / game.lastro.cn 原站以插件模式启动《仙境的传说》ROBrowser 客户端并连接原服务器；数据自动走本地镜像（127.0.0.1:8973）避免加载卡死，支持自动登录。PC 版直接打开 https://post.lastro.cn/ro/api.html 或备用线路 https://game.lastro.cn/ro/api.html?69.8；手机版打开 https://post.lastro.cn/?r=mn/index（登录页可选择平台与线路）。 新增私有本机客户端入口匹配（环回主机 127.0.0.1 / localhost，端口以页面自身 origin 为准、不写死）。
@@ -749,7 +749,7 @@
   }
   var LS_KEY = "dsh_ro_plugin_v1";
   var VERSION_RE = /\?([0-9.]+)/;
-  var VER = "2.38.77.6"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
+  var VER = "2.38.77.8"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
   try { window.__dshCombinedActive = true; } catch (e) {} // V2.30.0 防双浮层让位旗标：独立版词条色脚本见旗标即让位
   // ==================== 统一采集器注册表（dsh-collect v1 · 内部命名空间，不新增 window 全局）====================
   // 五方法：register 注册 / sample 采集 / query 查询 / refresh 刷新 / release 释放
@@ -846,7 +846,278 @@
   try{window.addEventListener("pagehide",upPersist);}catch(e){}
   // UNIFIED-PROBE-END core
 
+  // UNIFIED-PROBE-BEGIN npcflow ORIGINAL:ICAvLyBWMi4xMS4w77ya5LuT5bqTK+iDjOWMheivu+WPluWFqOWxgOWPmOmHjw==
   // V2.11.0：仓库+背包读取全局变量
+  // ==================== 任务流程采集探针（全颗粒度 · 默认开 · 只读）====================
+  // 用户口径：再跑任务流程时自动留证，不需要人工截图/复制。
+  //   · 采集：NPC 名字/GID/地图/坐标、完整对话文本、全部选项文本、「你选了第几项」+ 该项文本、时间戳、
+  //     角色 One ID/地图/会话世代；另记一次本次流程的起止（flow-start / flow-end）把一次跑流程的记录串起来。
+  //   · 两处都存：本机浏览器环形留档（最近 NFT_MAX 条）+ 自动 POST 到助手既有的本机采集服务（沿用 INGEST_URL / DSHCollect.post）。
+  //   · 只读：不发游戏包、不拦事件、不改任何判定；探针自身异常只丢一条记录，绝不冒泡到游戏。
+  //   · 本行自己一个开关（默认勾选），不挂在统一探针总开关 UP.on 之下。
+  var NFT_MAX = 400, NFT_TEXT_MAX = 8000, NFT_OPT_MAX = 400, NFT_SEND_MS = 5000, NFT_SAVE_MS = 3000, NFT_PEND_MAX = 200, NFT_BATCH = 40, NFT_OPT_TEXT_MAX = 400;
+  var NFT_KEY = "dsh_ro_taskflow_v1";
+  var NFT = { on: true, ring: [], pending: [], seq: 0, gen: 0, scope: null, chain: null, lastMenu: null, sent: 0, fail: 0, dropped: 0, lastSendAt: 0, lastSaveAt: 0, dirty: false, saving: 0, err: "", saveErr: "", saved: null, restored: 0, blockSave: false, inited: false };
+  function nftOn() { return NFT.on === true; }
+  function nftIso() { try { return new Date().toISOString(); } catch (e) { return null; } }
+  function nftGid(v) { var n = Number(v); return (!isFinite(n) || n === 0) ? null : (n >>> 0); }
+  function nftCut(v, max) {
+    var s = String(v == null ? "" : v), lim = Number(max) || NFT_TEXT_MAX;
+    if (s.length <= lim) return { text: s, loss: null };
+    return { text: s.slice(0, lim), loss: { full: s.length, limit: lim, clipped: true } };
+  }
+  // 身份口径完全沿用助手既有那一套（upIdentity 是纯读，不触发 UP 的作用域切分）。
+  function nftIdentity() {
+    var out = { oneId: null, world: null, charId: null, epoch: null, map: null, source: "unavailable" };
+    try { if (typeof upIdentity === "function") { var id = upIdentity(); if (id) { out.oneId = id.role; out.world = id.world; out.charId = id.charId; out.epoch = id.epoch; out.map = id.map; out.source = "助手既有身份口径 upIdentity()"; } } } catch (e) {}
+    if (out.map == null) { try { out.map = getMapName() || null; } catch (e2) {} }
+    return out;
+  }
+  function nftSessionId() { try { return (typeof upSession === "string" && upSession) ? upSession : null; } catch (e) { return null; } }
+  function nftUpGen() { try { return (typeof UP !== "undefined" && UP) ? (Number(UP.gen) || 0) : null; } catch (e) { return null; } }
+  function nftScope() {
+    var id = nftIdentity(), sig = [id.oneId, id.epoch, id.map].join("|");
+    if (!NFT.scope || NFT.scope.sig !== sig) { NFT.gen++; NFT.scope = { sig: sig, id: id, at: Date.now() }; NFT.chain = null; NFT.lastMenu = null; }
+    return NFT.scope;
+  }
+  // NPC 身份：优先用助手上一次交谈 NPC 的现场记录，其次用助手既有的 upNPC（包 NAID ↔ 活体实体 GID）；拿不到就如实标未解析。
+  function nftNpc(gid, name, pos, naid) {
+    var src = [], out = { gid: null, name: null, map: null, xy: null, provenance: "", uncertainty: true };
+    var g = nftGid(gid); if (g == null) g = nftGid(naid);
+    out.gid = g;
+    if (name) { out.name = String(name); src.push("助手上一次交谈 NPC 现场记录的名字"); }
+    if (pos && pos.length >= 2 && isFinite(Number(pos[0])) && isFinite(Number(pos[1]))) { out.xy = [Number(pos[0]), Number(pos[1])]; src.push("助手上一次交谈 NPC 现场记录的坐标"); }
+    try {
+      if (g != null && (out.name == null || out.xy == null) && typeof upNPC === "function") {
+        var u = upNPC(g);
+        if (u) {
+          if (out.name == null && u.name) out.name = u.name;
+          if (out.xy == null && u.observedXY) out.xy = u.observedXY;
+          if (u.provenance) src.push(u.provenance);
+        }
+      }
+    } catch (e) {}
+    if (out.map == null) { try { out.map = getMapName() || null; } catch (e2) {} }
+    out.provenance = src.length ? src.join(" + ") : "只拿到 NAID，名字/坐标没解析出来（未编造）";
+    out.uncertainty = !(out.name != null && out.xy != null);
+    return out;
+  }
+  function nftRec(kind, detail) {
+    var ev = null;
+    try {
+      if (!nftOn()) return null;
+      var scope = nftScope();
+      ev = { n: NFT.seq + 1, id: (nftSessionId() || "nosession") + ":tf:" + (NFT.seq + 1), kind: kind, at: Date.now(), iso: nftIso(), session: nftSessionId(), gen: NFT.gen, upGen: nftUpGen(), oneId: scope.id.oneId, world: scope.id.world, charId: scope.id.charId, epoch: scope.id.epoch, map: scope.id.map, identitySource: scope.id.source, detail: detail || {} };
+      ev = JSON.parse(JSON.stringify(ev));
+      NFT.seq++;
+      NFT.ring.push(ev);
+      if (NFT.ring.length > NFT_MAX) NFT.ring.splice(0, NFT.ring.length - NFT_MAX);
+      NFT.pending.push(ev);
+      if (NFT.pending.length > NFT_PEND_MAX) { NFT.pending.splice(0, NFT.pending.length - NFT_PEND_MAX); NFT.dropped++; }
+      NFT.dirty = true;
+    } catch (e) { try { NFT.err = "记录异常（只丢这一条）：" + (e && e.message ? e.message : e); } catch (e2) {} return null; }
+    try { nftRender(); } catch (e3) {}
+    try { nftFlush(); } catch (e4) {}
+    try { nftSave(); } catch (e5) {}
+    return ev;
+  }
+  // 本次流程的起止标记：一次对话/菜单只要 NAID 不变就串在同一个 flowId 下。
+  function nftFlowStart(naid, source) {
+    try {
+      if (!nftOn()) return null;
+      nftScope();
+      var g = nftGid(naid);
+      if (g == null) return null;
+      if (NFT.chain && NFT.chain.naid === g) return null;
+      var flowId = (nftSessionId() || "nosession") + ":flow:" + (NFT.seq + 1);
+      NFT.chain = { id: flowId, naid: g, startAt: Date.now(), steps: 0 };
+      return nftRec("flow-start", { npc: nftNpc(g, null, null, naid), naid: g, flowId: flowId, source: source, note: "本次任务流程开始（同一次对话/菜单都串在这个 flowId 下）" });
+    } catch (e) { return null; }
+  }
+  function nftFlowEnd(reason) {
+    try {
+      if (!nftOn()) return null;
+      nftScope();
+      var c = NFT.chain;
+      if (!c) return null;
+      NFT.chain = null;
+      return nftRec("flow-end", { npc: nftNpc(c.naid, null, null, c.naid), naid: c.naid, flowId: c.id, durationMs: Date.now() - c.startAt, source: reason, note: "本次任务流程结束" });
+    } catch (e) { return null; }
+  }
+  function nftDialog(gid, textFull, textShort, name, pos, naid) {
+    try {
+      if (!nftOn()) return null;
+      nftScope();
+      var g = nftGid(gid); if (g == null) g = nftGid(naid);
+      if (g != null) nftFlowStart(g, "收到对话正文（ZC.SAY_DIALOG）");
+      var picked = (textFull != null && textFull !== "") ? textFull : textShort;
+      var full = nftCut(picked, NFT_TEXT_MAX);
+      var targets = [];
+      try { if (typeof upTargets === "function") targets = upTargets(full.text, "ZC.SAY_DIALOG"); } catch (e0) {}
+      if (NFT.chain) NFT.chain.steps++;
+      return nftRec("dialog", { npc: nftNpc(g, name, pos, naid), naid: g, flowId: NFT.chain ? NFT.chain.id : null, text: full.text, textLength: full.text.length, textLoss: full.loss, textShortDiffers: String(textFull == null ? "" : textFull) !== String(textShort == null ? "" : textShort), textShort: nftCut(textShort, NFT_TEXT_MAX).text, targets: targets, source: "ZC.SAY_DIALOG（opcode 180，原始字节按 GBK 解码）" });
+    } catch (e) { return null; }
+  }
+  function nftMenu(naid, msg, items, name, pos) {
+    try {
+      if (!nftOn()) return null;
+      nftScope();
+      var g = nftGid(naid), raw = nftCut(msg, NFT_TEXT_MAX), list = Array.isArray(items) ? items : [], opts = [], i = 0;
+      for (i = 0; i < list.length && i < NFT_OPT_MAX; i++) { var c = nftCut(list[i], NFT_OPT_TEXT_MAX); opts.push({ idx0: i, idx1: i + 1, text: c.text, loss: c.loss }); }
+      if (g != null) nftFlowStart(g, "收到菜单（ZC.MENU_LIST）");
+      NFT.lastMenu = { naid: g, items: opts, at: Date.now(), raw: raw.text };
+      if (NFT.chain) NFT.chain.steps++;
+      return nftRec("menu", { npc: nftNpc(g, name, pos, naid), naid: g, flowId: NFT.chain ? NFT.chain.id : null, options: opts, optionsCount: list.length, optionsLimit: NFT_OPT_MAX, optionsClipped: list.length > NFT_OPT_MAX, menuText: opts.map(function (o) { return o.text; }).join(" | "), raw: raw.text, rawLoss: raw.loss, source: "ZC.MENU_LIST（opcode 183，原始字节按 GBK 解码）" });
+    } catch (e) { return null; }
+  }
+  // 「你选了第几项」：协议 num 从 1 起（官方 _index+1），界面显示也是第 n 项；该项原文取同一次 MENU_LIST 的选项表，取不到就写未编造。
+  function nftChoice(num, naid) {
+    try {
+      if (!nftOn()) return null;
+      nftScope();
+      var n1 = Number(num), n0 = isFinite(n1) ? n1 - 1 : null, g = nftGid(naid);
+      if (g != null) nftFlowStart(g, "发出选择（CZ.CHOOSE_MENU）");
+      var m = NFT.lastMenu, match = !!(m && g != null && m.naid === g);
+      var opt = (match && n0 != null && n0 >= 0 && n0 < m.items.length) ? m.items[n0] : null;
+      if (NFT.chain) NFT.chain.steps++;
+      return nftRec("choice", { npc: nftNpc(g, null, null, naid), naid: g, flowId: NFT.chain ? NFT.chain.id : null, chosenIdx1: (isFinite(n1) ? n1 : null), chosenIdx0: n0, chosenText: opt ? opt.text : null, chosenTextSource: opt ? "同一次 MENU_LIST 的选项表（协议序号从 1 起）" : "没有匹配到该 NPC 的最近一次 MENU_LIST，选项原文未知（未编造）", optionsCount: match ? m.items.length : null, optionsAt: match ? m.at : null, source: "CZ.CHOOSE_MENU（已发出）" });
+    } catch (e) { return null; }
+  }
+  function nftNext(naid) {
+    try {
+      if (!nftOn()) return null;
+      nftScope();
+      var g = nftGid(naid);
+      if (NFT.chain) NFT.chain.steps++;
+      return nftRec("next-step", { npc: nftNpc(g, null, null, naid), naid: g, flowId: NFT.chain ? NFT.chain.id : null, source: "CZ.REQ_NEXT_SCRIPT（点了「下一段对话」）" });
+    } catch (e) { return null; }
+  }
+  function nftCzIs(p, name) { try { var cz = (typeof CLIENT !== "undefined" && CLIENT && CLIENT.PS && CLIENT.PS.CZ) || null; return !!(cz && typeof cz[name] === "function" && p instanceof cz[name]); } catch (e) { return false; } }
+  // 出站观察：只认助手自己已经在包的那几个客户端包类型（与 upSent 同一手法），不拦不丢不改。
+  function nftSent(p) {
+    try {
+      if (!nftOn() || !p) return null;
+      if (nftCzIs(p, "CHOOSE_MENU")) return nftChoice(p.num, p.NAID);
+      if (nftCzIs(p, "CONTACTNPC")) return nftFlowStart(p.NAID, "CZ.CONTACTNPC（点了 NPC 开始对话）");
+      if (nftCzIs(p, "REQ_NEXT_SCRIPT")) return nftNext(p.NAID);
+      return null;
+    } catch (e) { return null; }
+  }
+  // 自动发本机接收服务：只走助手既有通道；收不到就静默丢弃，不重试、不弹窗、不阻塞。
+  function nftFlush(force) {
+    try {
+      if (!nftOn() || !NFT.pending.length) return false;
+      var now = Date.now();
+      if (!force && NFT.lastSendAt && now - NFT.lastSendAt < NFT_SEND_MS) return false;
+      if (typeof DSHCollect === "undefined" || !DSHCollect || typeof DSHCollect.post !== "function") return false;
+      if (typeof INGEST_URL === "undefined") return false;
+      NFT.lastSendAt = now;
+      var batch = NFT.pending.slice(0, NFT_BATCH);
+      NFT.pending.splice(0, batch.length);
+      NFT.dirty = false;
+      var payload = { type: "taskflow", ver: (typeof VER === "string" ? VER : ""), ts: nftIso(), session: nftSessionId(), gen: NFT.gen, count: batch.length, total: NFT.ring.length, records: batch };
+      try { DSHCollect.post(INGEST_URL, payload, function (ok) { try { if (ok) NFT.sent++; else NFT.fail++; } catch (e9) {} }); }
+      catch (e2) { NFT.fail++; }
+      return true;
+    } catch (e) { try { NFT.fail++; } catch (e3) {} return false; }
+  }
+  function nftSave(force) {
+    try {
+      if (NFT.blockSave) return false;
+      var now = Date.now();
+      if (!force && NFT.lastSaveAt && now - NFT.lastSaveAt < NFT_SAVE_MS) return false;
+      if (typeof localStorage === "undefined" || !localStorage) return false;
+      NFT.lastSaveAt = now;
+      localStorage.setItem(NFT_KEY, JSON.stringify({ v: 1, at: now, seq: NFT.seq, gen: NFT.gen, ring: NFT.ring }));
+      NFT.saved = true; NFT.saveErr = "";
+      return true;
+    } catch (e) { NFT.saved = false; NFT.saveErr = "浏览器本地留档失败（只影响留档，采集与上报照常）：" + (e && e.message ? e.message : e); return false; }
+  }
+  function nftRestore() {
+    try {
+      if (typeof localStorage === "undefined" || !localStorage) return false;
+      var raw = localStorage.getItem(NFT_KEY);
+      if (!raw) return false;
+      var d = JSON.parse(raw);
+      if (!d || d.v !== 1 || !Array.isArray(d.ring)) throw new Error("留档结构不认识");
+      var kept = d.ring.filter(function (r) { return r && typeof r.kind === "string" && typeof r.at === "number" && r.detail && typeof r.detail === "object"; }).slice(-NFT_MAX);
+      NFT.ring = kept;
+      NFT.seq = Math.max(Number(d.seq) || 0, kept.length);
+      NFT.restored = kept.length;
+      NFT.saved = true;
+      return true;
+    } catch (e) { NFT.blockSave = true; NFT.saveErr = "本地留档读不出来（不覆盖原数据，先点「清空本地留档」再继续）：" + (e && e.message ? e.message : e); return false; }
+  }
+  function nftKindLabel(k) { return ({ "flow-start": "流程开始", "flow-end": "流程结束", "dialog": "对话", "menu": "菜单", "choice": "选择", "next-step": "下一段" })[k] || k; }
+  function nftTime(at) { try { var d = new Date(at); return (d && d.toLocaleTimeString) ? d.toLocaleTimeString() : String(at); } catch (e) { return String(at); } }
+  function nftLine(r) {
+    try {
+      var d = r.detail || {}, n = d.npc || {};
+      var head = "#" + r.n + " " + nftKindLabel(r.kind) + " " + nftTime(r.at) + " · NPC " + (n.name || "（名字未解析）") + " GID " + (n.gid == null ? "?" : n.gid) + " · 地图 " + (n.map || r.map || "?") + (n.xy ? ("(" + n.xy[0] + "," + n.xy[1] + ")") : "（坐标未解析）");
+      if (r.kind === "dialog") return head + " · 对话原文 " + JSON.stringify(d.text);
+      if (r.kind === "menu") return head + " · 选项 " + d.optionsCount + " 个：" + JSON.stringify(d.menuText);
+      if (r.kind === "choice") return head + " · 选了第 " + (d.chosenIdx1 == null ? "?" : d.chosenIdx1) + " 项（0 起 " + d.chosenIdx0 + "）→ " + JSON.stringify(d.chosenText);
+      if (r.kind === "flow-start") return head + " · 本次流程开始 " + (d.flowId || "");
+      if (r.kind === "flow-end") return head + " · 本次流程结束 用时 " + (d.durationMs == null ? "?" : d.durationMs + "ms") + " " + (d.flowId || "");
+      return head + " · " + (d.source || r.kind);
+    } catch (e) { return "#" + (r && r.n) + " " + (r && r.kind) + "（格式化异常）"; }
+  }
+  function nftText() {
+    try {
+      var L = [], i = 0, rs = NFT.ring;
+      L.push("任务流程采集：" + (NFT.on ? "开（默认勾选）" : "关（一条都不记）") + " · 本地留档 " + rs.length + "/" + NFT_MAX + " 条 · 待发 " + NFT.pending.length + " 条 · 已发 " + NFT.sent + " 次 / 收不到 " + NFT.fail + " 次 / 超量丢弃 " + NFT.dropped + " 条 · 本会话世代 " + NFT.gen + (NFT.restored ? " · 本次启动已恢复 " + NFT.restored + " 条" : "") + (NFT.on ? "" : " · 关掉后一条都不记"));
+      L.push("接收服务：" + (typeof INGEST_URL === "string" ? INGEST_URL : "未定义") + " · 通道 DSHCollect.post（只走本机回环；服务没开就静默丢弃，不重试、不弹窗、不阻塞）");
+      L.push("身份口径：" + ((NFT.scope && NFT.scope.id && NFT.scope.id.oneId) ? ("One ID " + NFT.scope.id.oneId) : "One ID 未识别") + " · 会话 " + (nftSessionId() || "?") + " · 地图 " + ((NFT.scope && NFT.scope.id && NFT.scope.id.map) || "?") + " · 助手世代 " + nftUpGen());
+      if (NFT.err) L.push("最近一次异常（只丢了一条）：" + NFT.err);
+      if (NFT.saveErr) L.push(NFT.saveErr);
+      for (i = rs.length - 1; i >= 0 && L.length < 60; i--) L.push(nftLine(rs[i]));
+      if (!rs.length) L.push("（还没有记录：去点一次 NPC 对话/菜单就会自动记）");
+      return L.join("\n");
+    } catch (e) { return "任务流程采集读取异常（不影响游戏）：" + (e && e.message ? e.message : e); }
+  }
+  function nftRender(force) {
+    try {
+      var el = document.getElementById("dsh-taskflow-view");
+      var box = document.getElementById("dsh-taskflow-on");
+      if (box) box.checked = NFT.on === true;
+      if (!el) return;
+      var now = Date.now();
+      if (!force && now - (NFT.renderAt || 0) < 1000) return;
+      NFT.renderAt = now;
+      el.value = nftText();
+    } catch (e) {}
+  }
+  // 探针区那一行：与既有探针行同风格；默认勾选（开），并且不挂在统一探针总开关之下。
+  function nftRowControl(host) {
+    var box = document.createElement("input"); box.type = "checkbox"; box.id = "dsh-taskflow-on"; box.checked = NFT.on === true;
+    box.addEventListener("change", function () { try { NFT.on = box.checked === true; nftRender(true); } catch (e) {} });
+    try { roMenuRow(host, "任务流程采集（NPC 对话/菜单 · 默认开）", box); } catch (e) { host.appendChild(box); }
+    var out = document.createElement("textarea"); out.id = "dsh-taskflow-view"; out.readOnly = true;
+    out.style.cssText = "width:100%;height:120px;margin-top:3px;font:10px monospace;white-space:pre;overflow:auto";
+    host.appendChild(out);
+    var bar = document.createElement("div"); bar.className = "log";
+    var btn = document.createElement("button"); btn.type = "button"; btn.textContent = "查看最近记录（可整段复制）";
+    btn.addEventListener("click", function () { try { out.value = nftText(); if (out.focus) { try { out.focus(); } catch (e2) {} } if (out.select) { try { out.select(); } catch (e3) {} } } catch (e) {} });
+    bar.appendChild(btn);
+    var clr = document.createElement("button"); clr.type = "button"; clr.textContent = "清空本地留档";
+    clr.addEventListener("click", function () { try { NFT.ring = []; NFT.pending = []; NFT.blockSave = false; NFT.saveErr = ""; nftSave(true); nftRender(true); } catch (e) {} });
+    bar.appendChild(clr);
+    host.appendChild(bar);
+    var tip = document.createElement("div"); tip.className = "log";
+    tip.textContent = "只读：只记 NPC 名字/GID/地图/坐标、对话原文、全部选项、你选了第几项、时间与身份，不发游戏包、不拦事件、不改任何判定。本行自己一个开关（默认开），不受统一探针总开关影响。本机浏览器留最近 " + NFT_MAX + " 条，同时自动发本机接收服务；服务没开就静默丢弃。";
+    host.appendChild(tip);
+    nftRender(true);
+    return out;
+  }
+  function nftInit() {
+    try { nftRestore(); } catch (e) {}
+    try { if (typeof window !== "undefined" && window && typeof window.addEventListener === "function") window.addEventListener("pagehide", function () { try { nftSave(true); } catch (e1) {} }); } catch (e2) {}
+    try { if (typeof setInterval === "function") setInterval(function () { try { nftFlush(false); } catch (e3) {} }, NFT_SEND_MS); } catch (e4) {}
+    NFT.inited = true;
+    return NFT;
+  }
+  try { nftInit(); } catch (e5) {}
+  // UNIFIED-PROBE-END npcflow
   var inventoryReadTimer = null; // 仓库读取定时器
   var inventoryReadChar = null; // 触发读取时的角色名
 
@@ -2824,13 +3095,19 @@ function createRoItemCapture(env) {
       '<span style="color:#5a6b7f;font-size:11px;line-height:1.4">选中后=该状态不在身才补（消失补）· 数字ID或英文EFST直认</span></div>' +
       '<div class="row"><span class="lb">新增技能默认间隔</span><input id="dsh-askint" type="number" value="120" min="0" max="86400" style="flex:0 0 62px"><span class="st">秒（每个技能可在下方单独修改；0=关闭纯定时，状态消失补仍有效）</span>' +
       '<span class="lb" style="min-width:52px">SP不低于</span><input id="dsh-asksp" type="number" value="30" style="flex:0 0 44px"><span class="st">%</span>' +
+  // UNIFIED-PROBE-BEGIN combo-ui-gap ORIGINAL:ICAgICAgJzxsYWJlbCBjbGFzcz0ic3dpdGNoIiBzdHlsZT0ibWFyZ2luLWxlZnQ6YXV0byI+PGlucHV0IGlkPSJkc2gtYXNrZW4iIHR5cGU9ImNoZWNrYm94Ij7lkK/nlKjoh6rliqjph4rmlL48L2xhYmVsPjwvZGl2PicgKw==
       '<label class="switch" style="margin-left:auto"><input id="dsh-asken" type="checkbox">启用自动释放</label></div>' +
+      '<div class="row"><span class="lb">补buff兜底间隔</span><input id="dsh-combo-gap" type="number" value="800" min="200" max="5000" style="flex:0 0 66px"><span class="st">毫秒：服务器没下发该技能后摇时按它排队</span><button class="ghost" id="dsh-combo-diag" style="margin-left:auto">补 buff 诊断</button></div>' +
+  // UNIFIED-PROBE-END combo-ui-gap
       '<div class="box"><div class="b-hd">技能释放列表 <span class="tag green" id="dsh-askcount" style="float:right">0 项</span></div>' +
       '<div id="dsh-asklist"><span class="st">空（点选技能加入，可拖拽调序）</span></div>' +
       '<div class="row" style="margin-top:2px"><button class="ghost" id="dsh-askup" style="flex:0 0 auto">↑上移</button>' +
       '<button class="ghost" id="dsh-askdown" style="flex:0 0 auto">↓下移</button>' +
       '<button class="ghost" id="dsh-askdel" style="flex:0 0 auto">删除选中</button></div></div>' +
+  // UNIFIED-PROBE-BEGIN combo-ui-log ORIGINAL:ICAgICAgJzxkaXYgY2xhc3M9ImxvZyIgaWQ9ImRzaC1idWZmbG9nIiBzdHlsZT0ibWFyZ2luLXRvcDoycHgiPui+heWKqeaKgOiDve+8muacquWQr+eUqDwvZGl2PicgKw==
       '<div class="log" id="dsh-bufflog" style="margin-top:2px">辅助技能：未启用</div>' +
+      '<div class="log" id="dsh-combo-log" style="margin-top:2px;white-space:pre-wrap;max-height:96px;overflow:auto">补 buff 诊断：（还没执行过组合）</div>' +
+  // UNIFIED-PROBE-END combo-ui-log
       '<div class="row"><span class="lb" style="min-width:48px">当前状态</span><span class="st" id="dsh-statusview" style="flex:1;line-height:1.6">未读取（游戏画面就绪后显示）</span>' +
       '<button class="ghost" id="dsh-statehelp" style="flex:0 0 auto">状态速查</button></div>' +
       '</div>' +
@@ -5374,10 +5651,13 @@ function createRoItemCapture(env) {
     // Test UI: optional probes live at the absolute bottom of the floating-ball feature menu.
     var probeHub = document.createElement("details"); probeHub.id = "dsh-probe-hub";
     probeHub.style.cssText = "margin-top:9px;border-top:1px solid #8e8e8e;padding-top:5px";
-    var probeTitle = document.createElement("summary"); probeTitle.textContent = "探针功能（默认关闭 · 点击展开）"; probeHub.appendChild(probeTitle);
+  // UNIFIED-PROBE-BEGIN probe-hub-title ORIGINAL:ICAgIHZhciBwcm9iZVRpdGxlID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudCgic3VtbWFyeSIpOyBwcm9iZVRpdGxlLnRleHRDb250ZW50ID0gIuaOoumSiOWKn+iDve+8iOm7mOiupOWFs+mXrSDCtyDngrnlh7vlsZXlvIDvvIkiOyBwcm9iZUh1Yi5hcHBlbmRDaGlsZChwcm9iZVRpdGxlKTs=
+    var probeTitle = document.createElement("summary"); probeTitle.textContent = "探针功能（多数默认关闭；任务流程采集默认开启 · 点击展开）"; probeHub.appendChild(probeTitle);
+  // UNIFIED-PROBE-END probe-hub-title
     var probeBody = document.createElement("div"); probeHub.appendChild(probeBody); body.appendChild(probeHub);
   // UNIFIED-PROBE-BEGIN footer ORIGINAL:ICAgIHZhciBhdXRvSW5mbyA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoImRpdiIpOyBhdXRvSW5mby5jbGFzc05hbWUgPSAicm8taW5mbyI7CiAgICBhdXRvSW5mby50ZXh0Q29udGVudCA9ICLmiJjmlpfnirbmgIHmnKrnn6XjgIHlm57miaflvILluLjmiJblgZzkvY/ku43kuI3otbDml7boh6rliqjmiormnInpmZDlv6vnhaflhpnliLDmnKzmnLrvvJvml6DpnIDngrnlh7vjgILku6XkuIvmiYvliqjmjqLpkojpu5jorqTlhbPpl63vvIzkuI3lvbHlk43kv53lkb3kuI7lhaXlnLrkv53miqTjgIIiOwogICAgcHJvYmVCb2R5LmFwcGVuZENoaWxkKGF1dG9JbmZvKTsKICAgIHZhciBhdXRvR2VhciA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoImlucHV0Iik7IGF1dG9HZWFyLmlkID0gImRzaC1wcm9iZS1hdXRvLWdlYXIiOyBhdXRvR2Vhci50eXBlID0gImNoZWNrYm94IjsKICAgIGF1dG9HZWFyLmNoZWNrZWQgPSAhIWRpYWdBdXRvUHJvYmVPbjsKICAgIGF1dG9HZWFyLmFkZEV2ZW50TGlzdGVuZXIoImNoYW5nZSIsIGZ1bmN0aW9uICgpIHsgZGlhZ0F1dG9Qcm9iZU9uID0gYXV0b0dlYXIuY2hlY2tlZCA9PT0gdHJ1ZTsgaWYgKCFkaWFnQXV0b1Byb2JlT24pIGRpYWdMYXN0S2V5ID0gIiI7IH0pOwogICAgcm9NZW51Um93KHByb2JlQm9keSwgIuiHquWKqOijheWkh+W3oeajgO+8iOmcgOaJi+WKqOW8gOWQr++8iSIsIGF1dG9HZWFyKTsKICAgIHJvUHJvYmVNb3ZlKHByb2JlQm9keSwgImRzaC16LWJvc3NkaWFnIiwgIi5yb3ciKTsKICAgIHJvUHJvYmVNb3ZlKHByb2JlQm9keSwgImRzaC16LWJvc3NkaWFnYm94IiwgIi5yb3ciKTsKICAgIHJvUHJvYmVNb3ZlKHByb2JlQm9keSwgImRzaC16LWJvc3NrZWVwc21wIiwgIi5yb3ciKTsKICAgIHJvUHJvYmVNb3ZlKHByb2JlQm9keSwgImRzaC16LWJvc3NrZWVwc21wYm94IiwgIi5yb3ciKTsKICAgIHJvUHJvYmVNb3ZlKHByb2JlQm9keSwgImRzaC16LWRpYWciLCAiLnJvdyIpOwogICAgcm9Qcm9iZU1vdmUocHJvYmVCb2R5LCAiZHNoLXotZGlhZ2JveCIsICIucm93Iik7CiAgICByb1Byb2JlTW92ZShwcm9iZUJvZHksICJkc2gtYnQtZGlhZyIsICJkZXRhaWxzIik7CiAgICByb1Byb2JlTW92ZShwcm9iZUJvZHksICJkc2gtZnctYnRuLWxvc3Byb2JlIiwgIi5yb3ciKTsKICAgIHZhciBsb3NCdG4gPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgiZHNoLWZ3LWJ0bi1sb3Nwcm9iZSIpOwogICAgaWYgKGxvc0J0biAmJiAhbG9zQnRuLl9fZHNoUHJvYmVEaXJlY3RCb3VuZCkgewogICAgICBsb3NCdG4uX19kc2hQcm9iZURpcmVjdEJvdW5kID0gdHJ1ZTsKICAgICAgbG9zQnRuLmFkZEV2ZW50TGlzdGVuZXIoImNsaWNrIiwgZnVuY3Rpb24gKGV2KSB7IGV2LnN0b3BQcm9wYWdhdGlvbigpOyBmd1RvZ2dsZSgibG9zcHJvYmUiKTsgfSk7CiAgICB9CiAgICByb1Byb2JlUGFyaygiZHNoLWZ3LWxvc3Byb2JlIik7IC8vIOaMgeS5hemakOiXj+WBnOaUvu+8mua1rueql+aJk+W8gOWQjuiPnOWNlemHjee7mOS4jeW+l+aKiuWuv+S4u+aKoui1sAogICAgcm9Qcm9iZU1vdmUocHJvYmVCb2R5LCAiZHNoLWdlYXJkaWFnIiwgIi5yb3ciKTsKICAgIHJvUHJvYmVNb3ZlKHByb2JlQm9keSwgImRzaC1nZWFyZGlhZ2JveCIsICJzZWxmIik7CiAgICB2YXIga2V5UHJvYmVIZWFkaW5nID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudCgiZGl2Iik7IGtleVByb2JlSGVhZGluZy5jbGFzc05hbWUgPSAic2VjIjsga2V5UHJvYmVIZWFkaW5nLnRleHRDb250ZW50ID0gIumUruS9jeajgOa1iyI7IHByb2JlQm9keS5hcHBlbmRDaGlsZChrZXlQcm9iZUhlYWRpbmcpOwogICAgcm9Qcm9iZU1vdmUocHJvYmVCb2R5LCAiZHNoLWhrcHJvYmUiLCAiLnJvdyIpOwogICAgdmFyIGtleVByb2JlSGVscCA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoImRpdiIpOyBrZXlQcm9iZUhlbHAuY2xhc3NOYW1lID0gImxvZyI7CiAgICBrZXlQcm9iZUhlbHAudGV4dENvbnRlbnQgPSAi5oyJ5Lu75oSP6ZSu5pi+56S66ZSu56CB44CB5oyJ6ZSu44CB5L+u6aWw6ZSu5ZKM5piv5ZCm5ZG95Lit5Yqf6IO977yb55So5LqO5Yy65YiG5pS25LiN5Yiw5oyJ6ZSu5LiO5Yik5a6a5Ye66ZSZ44CC5ZG95Lit5L2G5Yqf6IO95rKh5Y+N5bqU5pe25qOA5p+l5Yqf6IO95oC75byA5YWz44CCIjsKICAgIHByb2JlQm9keS5hcHBlbmRDaGlsZChrZXlQcm9iZUhlbHApOwogICAgdmFyIHBhY2tldEJ0biA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoImJ1dHRvbiIpOyBwYWNrZXRCdG4udHlwZSA9ICJidXR0b24iOyBwYWNrZXRCdG4udGV4dENvbnRlbnQgPSAi5omT5byA5pWw5o2u5oqT5YyF77yI6L+b5YWl5rWu56qX5ZCO5YaN54K55byA5aeL77yJIjsKICAgIHBhY2tldEJ0bi5hZGRFdmVudExpc3RlbmVyKCJjbGljayIsIGZ1bmN0aW9uICgpIHsgcm9Nb2RPcGVuKCJ0eGNhcCIpOyB9KTsKICAgIHJvTWVudVJvdyhwcm9iZUJvZHksICLmlbDmja7mipPljIUiLCBwYWNrZXRCdG4pOwogICAgdmFyIHByb2JlU3RhdHVzID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudCgiZGl2Iik7IHByb2JlU3RhdHVzLmlkID0gImRzaC1wcm9iZS1nZWFyZGlhZy1zdGF0dXMiOyBwcm9iZVN0YXR1cy5jbGFzc05hbWUgPSAicm8taW5mbyI7CiAgICBwcm9iZVN0YXR1cy50ZXh0Q29udGVudCA9ICLoo4XlpIfor4rmlq3mnKrov5DooYwiOyBwcm9iZUJvZHkuYXBwZW5kQ2hpbGQocHJvYmVTdGF0dXMpOw==
     upMenu(probeBody);
+    try{if(typeof nftRowControl==="function")nftRowControl(probeBody);}catch(eTF){}
   // UNIFIED-PROBE-BEGIN invhovershot ORIGINAL:
   // 物品栏悬停自检（只读）：只记录「这次悬停落在哪一格、最后显示还是隐藏、为什么」，绝不发游戏包、
   //   不 preventDefault/stopPropagation、不改任何判定结果、不读写背包数据；每条记录与渲染都包 try/catch，
@@ -10488,18 +10768,84 @@ function createRoItemCapture(env) {
       }
     } catch (e) {}
   }
-  // 一键补 buff 组合：手动快捷键触发，按 askList 顺序强制施放全部 buff（无视状态判活/间隔），
-  // 每技能约 300ms 链式施放；不受 dsh-asken 总开关影响；组合进行中再按忽略（防重入）。
+  // UNIFIED-PROBE-BEGIN combo-queue ORIGINAL:ICAvLyDkuIDplK7ooaUgYnVmZiDnu4TlkIjvvJrmiYvliqjlv6vmjbfplK7op6blj5HvvIzmjIkgYXNrTGlzdCDpobrluo/lvLrliLbmlr3mlL7lhajpg6ggYnVmZu+8iOaXoOinhueKtuaAgeWIpOa0uy/pl7TpmpTvvInvvIwKICAvLyDmr4/mioDog73nuqYgMzAwbXMg6ZO+5byP5pa95pS+77yb5LiN5Y+XIGRzaC1hc2tlbiDmgLvlvIDlhbPlvbHlk43vvJvnu4TlkIjov5vooYzkuK3lho3mjInlv73nlaXvvIjpmLLph43lhaXvvInjgIIKICB2YXIgY2FzdENvbWJvQnVzeSA9IGZhbHNlOwogIGZ1bmN0aW9uIGNhc3RCdWZmQ29tYm8oKSB7CiAgICBpZiAoY2FzdENvbWJvQnVzeSkgeyBzZXRTdGF0dXMoIuihpSBidWZmIOe7hOWQiOi/m+ihjOS4re+8jOivt+eojeWAmSIsICJ3YXJuIik7IHJldHVybjsgfQogICAgaWYgKCFhc2tMaXN0IHx8ICFhc2tMaXN0Lmxlbmd0aCkgeyBzZXRTdGF0dXMoIuihpSBidWZmIOe7hOWQiO+8mmJ1ZmYg5YiX6KGo5Li656m6IiwgIndhcm4iKTsgcmV0dXJuOyB9CiAgICBpZiAoIWNsaWVudFJlYWR5KCkgfHwgIUNMSUVOVC5TUyB8fCAhQ0xJRU5ULlNTLkVudGl0eSkgeyBzZXRTdGF0dXMoIuihpSBidWZmIOe7hOWQiO+8muacqui/m+WFpea4uOaIjyIsICJ3YXJuIik7IHJldHVybjsgfQogICAgY2FzdENvbWJvQnVzeSA9IHRydWU7CiAgICB2YXIgbGlzdCA9IGFza0xpc3Quc2xpY2UoKSwgaWR4ID0gMDsKICAgIGZ1bmN0aW9uIG5leHQoKSB7CiAgICAgIGlmIChpZHggPj0gbGlzdC5sZW5ndGgpIHsgY2FzdENvbWJvQnVzeSA9IGZhbHNlOyBzZXRTdGF0dXMoIuihpSBidWZmIOe7hOWQiOWujOaIkCIsICJvayIpOyByZXR1cm47IH0KICAgICAgdmFyIHMgPSBsaXN0W2lkeCsrXTsKICAgICAgdHJ5IHsKICAgICAgICB2YXIgcCA9IG5ldyAoY3pwKCJVU0VfU0tJTEwiKSkoKTsKICAgICAgICBwLlNLSUQgPSBzLnNraWQ7CiAgICAgICAgcC5zZWxlY3RlZExldmVsID0gcy5sdjsKICAgICAgICBwLnRhcmdldElEID0gYXNrVGFyZ2V0SWQocy5za2lkKTsKICAgICAgICBpZiAoKHMuc2tpZCA9PT0gNTAzNSB8fCBzLnNraWQgPT09IDUwNDEpICYmICFwLnRhcmdldElEKSB0aHJvdyBFcnJvcigi6Ieq6Lqr6KeS6ImyIElEIOacquWwsee7qu+8jOaLkue7neaXoOebruagh+aWveazlSIpOwogICAgICAgIGRzaENhc3RNYXJrKHMuc2tpZCwgcy5sdiwgcC50YXJnZXRJRCwgImNvbWJvIik7CiAgICAgICAgQ0xJRU5ULk5NLnNlbmRQYWNrZXQocCk7CiAgICAgIH0gY2F0Y2ggKGUpIHsKICAgICAgICB0cnkgeyB0bG9nKCJjb21iby1jYXN0LWVycm9yIHNraWQ9IiArIChzICYmIHMuc2tpZCkgKyAiICIgKyAoZS5tZXNzYWdlIHx8IGUpKTsgfSBjYXRjaCAoZTIpIHt9CiAgICAgIH0KICAgICAgc2V0VGltZW91dChuZXh0LCAzMDApOwogICAgfQogICAgbmV4dCgpOwogIH0=
+  // 一键补 buff 组合：手动快捷键触发，按 askList 顺序施放全部 buff（无视状态判活）。
+  // V2.38.77.7 重写：① 每条等「服务器下发的真实后摇」skillDelay[skid]（拿不到用兜底间隔，窗口可调，默认 800ms）
+  //   过去才放下一条 —— 旧版硬连发 300ms，后摇没过去，第 2 条及以后的包被服务端丢掉（用户实报「只放第一个」）。
+  //   ② 逐条记录发送时刻/后摇/前后状态，结束给一条可复制总结（生效 / 未见变化 / 无法判定）。
+  //   ③ 组合进行中可被打断；不受 dsh-asken 总开关影响。
   var castComboBusy = false;
+  var comboDiag = [];          // 最近一次组合的逐条记录（诊断）
+  var comboLastReport = "";    // 最近一次组合的总结（可复制）
+  function comboGapMs() {
+    var v = Number(saved && saved.comboGapMs);
+    if (!isFinite(v) || v < 200) v = 800;
+    if (v > 5000) v = 5000;
+    return v;
+  }
+  function comboSrvDelay(skid) {
+    try { var d = (typeof skillDelay !== "undefined" && skillDelay) ? skillDelay[skid] : null; var n = Number(d); return isFinite(n) && n > 0 ? n : null; } catch (e) { return null; }
+  }
+  function comboDiagText() {
+    if (!comboDiag.length) return comboLastReport || "（还没有执行过补 buff 组合）";
+    var rows = comboDiag.map(function (d) {
+      return "[" + (d.i + 1) + "] " + d.name + "(skid " + d.skid + ")" +
+        " 发送于 " + (d.t / 1000).toFixed(2) + "s" +
+        " 后摇 " + (d.delay == null ? "无(用具兜底)" : d.delay + "ms") +
+        " 实际间隔 " + d.gap + "ms" +
+        " 状态 " + d.before + "→" + d.after +
+        " 判定 " + d.verdict +
+        (d.err ? " 错误 " + d.err : "");
+    });
+    return "补 buff 诊断（最近一次 · " + comboDiag.length + " 条）\n" + rows.join("\n") + "\n" + (comboLastReport || "");
+  }
+  function comboShowReport() {
+    var txt = comboDiagText(), el = $id("dsh-combo-log");
+    if (el) el.textContent = txt;
+    try { console.log("[补buff诊断]\n" + txt); } catch (e) {}
+    return txt;
+  }
   function castBuffCombo() {
     if (castComboBusy) { setStatus("补 buff 组合进行中，请稍候", "warn"); return; }
     if (!askList || !askList.length) { setStatus("补 buff 组合：buff 列表为空", "warn"); return; }
     if (!clientReady() || !CLIENT.SS || !CLIENT.SS.Entity) { setStatus("补 buff 组合：未进入游戏", "warn"); return; }
     castComboBusy = true;
-    var list = askList.slice(), idx = 0;
+    comboDiag = []; comboLastReport = "";
+    var list = askList.slice(), t0 = Date.now(), i = 0, sent = 0, errCnt = 0;
+    list.forEach(function (s) {
+      s.__stId = s.st ? buffStId(s.st) : -1;
+      s.__before = s.__stId >= 0 ? buffStateOn(s.__stId) : null;
+    });
+    function finish() {
+      setTimeout(function () {
+        var eff = 0, un = 0, uk = 0;
+        comboDiag.forEach(function (d) {
+          var s = list[d.i];
+          if (d.err) { d.verdict = "发送失败"; d.after = "—"; return; }
+          if (!s || s.__stId < 0) { d.after = "无状态ID"; d.verdict = "无法判定"; uk++; return; }
+          var on = buffStateOn(s.__stId);
+          d.after = on ? "在身" : "不在身";
+          if (s.__before !== on) { d.verdict = "已生效"; eff++; }
+          else { d.verdict = "未见变化（疑似被后摇吃掉或状态未识别）"; un++; }
+        });
+        comboLastReport = "本次共 " + list.length + " 条：发送 " + sent + " 条 · 已生效 " + eff + " · 未见变化 " + un +
+          " · 无法判定 " + uk + (errCnt ? (" · 发送失败 " + errCnt) : "") + "（耗时 " + ((Date.now() - t0) / 1000).toFixed(1) + "s）";
+        castComboBusy = false;
+        setStatus("补 buff：" + comboLastReport, un ? "warn" : "ok");
+        comboShowReport();
+        try { tlog("combo-done " + comboLastReport); } catch (e) {}
+      }, 1200);
+    }
     function next() {
-      if (idx >= list.length) { castComboBusy = false; setStatus("补 buff 组合完成", "ok"); return; }
-      var s = list[idx++];
+      if (!castComboBusy) return;
+      if (i >= list.length) { finish(); return; }
+      var idx = i++, s = list[idx];
+      var delay = comboSrvDelay(s.skid);
+      var gap = Math.max(comboGapMs(), delay || 0);
+      var rec = { i: idx, name: (s && s.name) || ("技能" + (s && s.skid)), skid: s && s.skid, lv: s && s.lv,
+        t: Date.now() - t0, delay: delay, gap: gap,
+        before: s && s.__before === null ? "无状态ID" : (s && s.__before ? "在身" : "不在身"), after: "—", verdict: "待判定", err: "" };
+      comboDiag.push(rec);
       try {
         var p = new (czp("USE_SKILL"))();
         p.SKID = s.skid;
@@ -10508,13 +10854,17 @@ function createRoItemCapture(env) {
         if ((s.skid === 5035 || s.skid === 5041) && !p.targetID) throw Error("自身角色 ID 未就绪，拒绝无目标施法");
         dshCastMark(s.skid, s.lv, p.targetID, "combo");
         CLIENT.NM.sendPacket(p);
+        sent++;
+        setStatus("补 buff " + (idx + 1) + "/" + list.length + "：" + rec.name + "（等 " + gap + "ms 放下一条）", "st");
       } catch (e) {
-        try { tlog("combo-cast-error skid=" + (s && s.skid) + " " + (e.message || e)); } catch (e2) {}
+        rec.err = String((e && e.message) || e); errCnt++;
+        try { tlog("combo-cast-error skid=" + (s && s.skid) + " " + rec.err); } catch (e2) {}
       }
-      setTimeout(next, 300);
+      setTimeout(next, gap + 50);
     }
     next();
   }
+  // UNIFIED-PROBE-END combo-queue
   masterTickReg(function () { try { tickAskSkills(); } catch (e) {} try { renderBuffLog(); } catch (e) {} });
   // 状态挂钩定时重试：asken 开着但 SI 模块未就绪时持续重试，确保 buffActive 判活表可用（否则状态判活失效）
   setInterval(function () { try { if ($id("dsh-asken") && $id("dsh-asken").checked) hookStatusIcons(); } catch (e) {} }, 3000);
@@ -10594,7 +10944,24 @@ function createRoItemCapture(env) {
   // V2.38.2：自动 buff 默认关闭——新档不勾 dsh-asken，只有存档里明确 askEn===true 才勾上
   if (saved.askEn === true) { var akeOn = $id("dsh-asken"); if (akeOn) akeOn.checked = true; hookStatusIcons(); }
   else { var akeOff = $id("dsh-asken"); if (akeOff) akeOff.checked = false; }
+  // UNIFIED-PROBE-BEGIN combo-ui-wire ORIGINAL:ICBvbklkKCJkc2gtYXNrZW4iLCAiY2hhbmdlIiwgZnVuY3Rpb24gKCkgeyBzYXZlZC5hc2tFbiA9IHRoaXMuY2hlY2tlZDsgc2F2ZVNhdmVkKHNhdmVkKTsgaWYgKHRoaXMuY2hlY2tlZCkgaG9va1N0YXR1c0ljb25zKCk7IHJlbmRlckJ1ZmZMb2coKTsgfSk7
   onId("dsh-asken", "change", function () { saved.askEn = this.checked; saveSaved(saved); if (this.checked) hookStatusIcons(); renderBuffLog(); });
+  // V2.38.77.7：补 buff 兜底间隔（本机保存）+ 诊断按钮接线
+  (function comboUiInit() {
+    var gi = $id("dsh-combo-gap");
+    if (gi) {
+      gi.value = String(comboGapMs());
+      gi.addEventListener("change", function () {
+        var v = Number(this.value);
+        if (!isFinite(v) || v < 200 || v > 5000) { setStatus("兜底间隔请填 200~5000 毫秒", "warn"); this.value = String(comboGapMs()); return; }
+        saved.comboGapMs = v; saveSaved(saved);
+        setStatus("补 buff 兜底间隔已存：" + v + "ms", "ok");
+      });
+    }
+    var db = $id("dsh-combo-diag");
+    if (db) db.addEventListener("click", function () { comboShowReport(); setStatus("补 buff 诊断已输出到下方与浏览器控制台（可复制）", "st"); });
+  })();
+  // UNIFIED-PROBE-END combo-ui-wire
   // V1.7.0 一次性清空：多辅助/自动技能 历史数据（用户要求默认清空「助手内按间隔自动施放的增益」）
   // V2.38.2 修复：原来的清空标志只存在【角色档】里（saveSaved 把非登录键全写进 profiles[档].saved），
   //   凡是没带这个标志的角色档，下次加载都会再清一遍 askList 并把启用开关强制关掉 —— 表现就是「buff 技能设置刷新后丢失、要重新写」。
@@ -19414,7 +19781,10 @@ function createRoItemCapture(env) {
       var items = splitMenu(msg);
       menuRecon = { NAID: NAID, msg: msg, items: items, map: getMapName(), npcName: npcName, pos: pos, time: Date.now(), generation: ++menuReconGeneration };
       renderMenuRecon();
+  // UNIFIED-PROBE-BEGIN taskflow-menu ORIGINAL:ICAgICAgcHVzaFN0ZXAoIm1lbnUiLCBtc2csIGl0ZW1zLCBtZW51UmVjb24ubWFwLCBucGNOYW1lLCAobGFzdFRhbGtOcGMgJiYgbGFzdFRhbGtOcGMuR0lEICE9IG51bGwpID8gbGFzdFRhbGtOcGMuR0lEIDogTkFJRCwgcG9zKTs=
       pushStep("menu", msg, items, menuRecon.map, npcName, (lastTalkNpc && lastTalkNpc.GID != null) ? lastTalkNpc.GID : NAID, pos);
+      try { if (typeof nftMenu === "function") nftMenu(NAID, msg, items, npcName, pos); } catch (eTF) {}
+  // UNIFIED-PROBE-END taskflow-menu
     } catch (e) {}
 
   }
@@ -19438,7 +19808,10 @@ function createRoItemCapture(env) {
       var msgFull = decodeMenuMsgFull(new Uint8Array(bytes, 6, bytes.byteLength - 6)); // 2.15.2 完整多段（含算式段）
       try { capDiag(bytes, msgFull); } catch (e) {} // 2.15.1-diag 分段诊断
       try { capTrigger(msgFull); } catch (e) {} // V2.14.0 登录验证自动过
+  // UNIFIED-PROBE-BEGIN taskflow-say ORIGINAL:ICAgICAgcHVzaFN0ZXAoImRpYWxvZyIsIG1zZywgbnVsbCwgZ2V0TWFwTmFtZSgpLCBubSwgZ2lkLCBwcyk7
       pushStep("dialog", msg, null, getMapName(), nm, gid, ps);
+      try { if (typeof nftDialog === "function") nftDialog(gid, (typeof msgFull === "string" && msgFull) ? msgFull : msg, msg, nm, ps, NAID); } catch (eTF) {}
+  // UNIFIED-PROBE-END taskflow-say
     } catch (e) {}
   }
   // ---------------- V2.14.0 登录验证自动过（中文数字算式 → 填输入框 → 等N秒 → 点下面）----------------
@@ -19628,7 +20001,10 @@ function createRoItemCapture(env) {
   }
   //（onSayDialog 内调用 capTrigger）
   function onCloseDialog() {
+  // UNIFIED-PROBE-BEGIN taskflow-close ORIGINAL:ICAgIHRyeSB7IHB1c2hTdGVwKCJjbG9zZSIsICIiLCBudWxsLCBnZXRNYXBOYW1lKCksIChsYXN0VGFsa05wYyAmJiBsYXN0VGFsa05wYy5uYW1lKSB8fCAiIiwgKGxhc3RUYWxrTnBjICYmIGxhc3RUYWxrTnBjLkdJRCAhPSBudWxsKSA/IGxhc3RUYWxrTnBjLkdJRCA6IDAsIG51bGwpOyB9IGNhdGNoIChlKSB7fQ==
     try { pushStep("close", "", null, getMapName(), (lastTalkNpc && lastTalkNpc.name) || "", (lastTalkNpc && lastTalkNpc.GID != null) ? lastTalkNpc.GID : 0, null); } catch (e) {}
+    try { if (typeof nftFlowEnd === "function") nftFlowEnd("收到关闭对话（ZC.CLOSE_DIALOG，opcode 182）"); } catch (eTF) {}
+  // UNIFIED-PROBE-END taskflow-close
     reconSteps = [];
   }
   // V2.9.0 任务正文取证：未知 opcode 里含中文的包 → 上报（定位 lastro 自研任务正文包）
@@ -20432,6 +20808,7 @@ function createRoItemCapture(env) {
         }
   // UNIFIED-PROBE-BEGIN send-observer ORIGINAL:ICAgICAgICByZXR1cm4gb3JpZy5hcHBseSh0aGlzLCBhcmd1bWVudHMpOwogICAgICB9OwogICAgICB0eENhcC5ob29rZWQgPSB0cnVlOw==
         try{upSent(p);}catch(eUP){UP.hooks="outgoing observation failed";}
+        try{if(typeof nftSent==="function")nftSent(p);}catch(eTF){}
         return orig.apply(this, arguments);
       };
       txCap.hooked = true;
@@ -23197,11 +23574,31 @@ function createRoItemCapture(env) {
     scrLogLine("已入队（第 " + scrQueue.length + " 个待运行 · 串行）");
     scrQueueStart();
   }
+  // UNIFIED-PROBE-BEGIN scr-import ORIGINAL:ICBmdW5jdGlvbiBzY3JJbXBvcnRSYXcobmFtZSwgcmF3KSB7CiAgICB2YXIgbXNnID0gJGlkKCJkc2gtc2NyLW1zZyIpOwogICAgaWYgKCFyYXcpIHsgaWYgKG1zZykgbXNnLnRleHRDb250ZW50ID0gIuivt+eymOi0tCBKU09OIOaooeadvyI7IHJldHVybjsgfQogICAgdmFyIG9iaiA9IG51bGw7CiAgICB0cnkgeyBvYmogPSBKU09OLnBhcnNlKHJhdyk7IH0gY2F0Y2ggKGUpIHsgaWYgKG1zZykgbXNnLnRleHRDb250ZW50ID0gIkpTT04g6Kej5p6Q5aSx6LSlOiAiICsgZS5tZXNzYWdlOyByZXR1cm47IH0KICAgIHZhciBpdGVtcyA9IEFycmF5LmlzQXJyYXkob2JqKSA/IG9iaiA6IFtvYmpdLCBsaXN0ID0gc2NyTG9hZCgpLCBvayA9IDAsIGVyciA9ICIiOwogICAgaXRlbXMuZm9yRWFjaChmdW5jdGlvbiAoc3JjLCBuKSB7CiAgICAgIHZhciB2ID0gc2NyVmFsaWRhdGUoc3JjKTsKICAgICAgaWYgKCF2Lm9rKSB7IGlmICghZXJyKSBlcnIgPSAi56ysICIgKyAobiArIDEpICsgIiDmnaHvvJoiICsgdi5lcnI7IHJldHVybjsgfQogICAgICBpZiAoaXRlbXMubGVuZ3RoID09PSAxKSB2LnNjcmlwdC5uYW1lID0gbmFtZSB8fCB2LnNjcmlwdC5uYW1lIHx8IHYuc2NyaXB0LnRlbXBsYXRlSWQgfHwgKCLohJrmnKwiICsgKGxpc3QubGVuZ3RoICsgMSkpOwogICAgICBlbHNlIHYuc2NyaXB0Lm5hbWUgPSB2LnNjcmlwdC5uYW1lIHx8IHYuc2NyaXB0LnRlbXBsYXRlSWQgfHwgKCLohJrmnKwiICsgKGxpc3QubGVuZ3RoICsgMSkpOwogICAgICBsaXN0LnB1c2godi5zY3JpcHQpOwogICAgICBvaysrOwogICAgfSk7CiAgICBpZiAob2spIHsgc2NyU2F2ZShsaXN0KTsgc2NyUmVuZGVyTGlzdCgpOyB9CiAgICBpZiAobXNnKSBtc2cudGV4dENvbnRlbnQgPSBvayA/ICgi5bey5a+85YWlICIgKyBvayArICIg5Liq77yM5YWxICIgKyBsaXN0Lmxlbmd0aCArICIg5Liq6ISa5pysIiArIChlcnIgPyAi77ybIiArIGVyciA6ICIiKSkgOiAoZXJyIHx8ICLmsqHmnInlj6/lr7zlhaXnmoTohJrmnKwiKTsKICB9
+  // V2.38.77.8：导入失败不再把引擎原文抛给用户——先看内容形态，再给中文人话；粘贴与文件两条路共用这一处判断。
+  function scrExplainImportError(raw, err) {
+    var s = String(raw == null ? "" : raw).replace(/^\uFEFF/, "");
+    if (s.indexOf("==UserScript==") >= 0) {
+      return "这是用户脚本源码（// ==UserScript==），不是 JSON 模板。脚本库只跑 JSON 模板（{templateId, steps[]}）；要在助手里运行用户脚本需要「用户脚本容器」能力，目前还没做；无限挑战请单独安装或等容器做好。";
+    }
+    var head = s.replace(/^\s+/, ""), c = head.charAt(0), pos = "";
+    if (err && err.message) { var m = String(err.message).match(/position\s+(\d+)/i); if (m) pos = "（引擎报第 " + m[1] + " 个字符附近）"; }
+    if (c === "{" || c === "[") {
+      var why = [];
+      if (head.indexOf("//") >= 0 || head.indexOf("/*") >= 0) why.push("里面有注释（JSON 不允许注释）");
+      if (/'/.test(head)) why.push("用了单引号（JSON 只认双引号）");
+      if (/,\s*[}\]]/.test(head)) why.push("多了一个逗号（末尾多逗号）");
+      if (!why.length) why.push("JSON 写法不合法（键名必须双引号、不能有 undefined/NaN、不能少逗号）");
+      return "看着像 JSON，但解析失败" + pos + "。常见原因：" + why.join("；") + "。改完再点一次导入。";
+    }
+    return "既不是 JSON 模板也不是用户脚本：脚本库只吃 JSON 模板（{templateId, steps[]}）。" + pos;
+  }
   function scrImportRaw(name, raw) {
     var msg = $id("dsh-scr-msg");
-    if (!raw) { if (msg) msg.textContent = "请粘贴 JSON 模板"; return; }
+    if (!raw || !String(raw).trim()) { if (msg) msg.textContent = "请粘贴 JSON 模板"; return; }
     var obj = null;
-    try { obj = JSON.parse(raw); } catch (e) { if (msg) msg.textContent = "JSON 解析失败: " + e.message; return; }
+    // 解析失败就到此为止：不改任何已存脚本，也绝不把用户脚本源码当成模板存进脚本库。
+    try { obj = JSON.parse(raw); } catch (e) { if (msg) msg.textContent = scrExplainImportError(raw, e); return; }
     var items = Array.isArray(obj) ? obj : [obj], list = scrLoad(), ok = 0, err = "";
     items.forEach(function (src, n) {
       var v = scrValidate(src);
@@ -23214,6 +23611,7 @@ function createRoItemCapture(env) {
     if (ok) { scrSave(list); scrRenderList(); }
     if (msg) msg.textContent = ok ? ("已导入 " + ok + " 个，共 " + list.length + " 个脚本" + (err ? "；" + err : "")) : (err || "没有可导入的脚本");
   }
+  // UNIFIED-PROBE-END scr-import
   // V2.36.11：脚本只存在浏览器 localStorage，清缓存即丢——支持整表导出为 .json 备份
   function scrExportAll() {
     var msg = $id("dsh-scr-msg");
@@ -23241,7 +23639,9 @@ function createRoItemCapture(env) {
       + '<textarea id="dsh-scr-json" rows="4" placeholder=\'JSON 模板：{"templateId":"daily","version":1,"steps":[{"action":"walk","params":{"x":100,"y":80}}]}\'></textarea>'
       + '<div class="row"><button id="dsh-scr-imp">导入上面的 JSON</button><button class="ghost" id="dsh-scr-file">从文件导入…</button><span class="st" id="dsh-scr-msg" style="font-size:10px"></span></div>'
       + '<div class="row"><button class="ghost" id="dsh-scr-clear">清空输入</button><button class="ghost" id="dsh-scr-backup">备份全部脚本到文件</button></div>'
-      + '<input id="dsh-scr-fileinput" type="file" accept=".json,application/json,text/plain" style="display:none">'
+  // UNIFIED-PROBE-BEGIN scr-accept ORIGINAL:ICAgICAgKyAnPGlucHV0IGlkPSJkc2gtc2NyLWZpbGVpbnB1dCIgdHlwZT0iZmlsZSIgYWNjZXB0PSIuanNvbixhcHBsaWNhdGlvbi9qc29uLHRleHQvcGxhaW4iIHN0eWxlPSJkaXNwbGF5Om5vbmUiPic=
+      + '<input id="dsh-scr-fileinput" type="file" accept=".json,.js,.user.js,.txt,application/json,text/javascript,application/javascript,text/plain" style="display:none">'
+  // UNIFIED-PROBE-END scr-accept
       + '<div class="box"><div class="b-hd">已导入脚本 <span class="tag green" id="dsh-scr-count" style="float:right">0</span></div>'
       + '<div id="dsh-scr-list" style="font-size:11px;max-height:130px;overflow:auto"><span class="st">空（粘贴 JSON → 点「导入上面的 JSON」；或用「从文件导入…」）</span></div></div>'
       + '<div class="row"><span class="lb" style="min-width:42px">运行</span><span class="st" id="dsh-scr-state" style="font-size:11px">未运行</span><button class="ghost" id="dsh-scr-stop" style="flex:0 0 auto;color:#b91c1c;border-color:#e5b3b3">停止</button></div>'

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         仙境传说 · 脚本入口（独立版）
 // @namespace    dsh.ro-plugin
-// @version      1.0.12
+// @version      1.0.13
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-infinite-dojo.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-infinite-dojo.user.js
 // @description  无限挑战（独立脚本）：到报名点报名，服务器确认本轮出怪后才代打；无怪不猜结算，付费选项需手动确认；需要先启用 RO 助手。
@@ -111,7 +111,7 @@
 
   /* ==================== 常量 ==================== */
 
-  var VERSION        = "1.0.12";
+  var VERSION        = "1.0.13";
   var API_PROTOCOL   = 1;
   var OWNER          = "ro-infinite-dojo";      // 控制权属主，全程一致
   var SCOPES         = ["dojo", "battle", "movement", "dialog", "fly"];
@@ -144,7 +144,8 @@
     entryMap: "prontera",
     entryX: 148,
     entryY: 147,
-    npcName: "荣耀管理员",
+    npcName: "荣誉管理员",                            // 报名点管理员（旧默认值「荣耀管理员」是错名，见 applyCfg 里的迁移）
+    entryNpcAliases: ["荣誉管理员", "荣耀管理员"],    // 报名点 NPC 别名表：任一命中即算，可被配置覆盖
     dojoNpcAliases: ["喵达人", "猫达人", "白猫", "白猫达人"],
     challengeKeywords: ["无限挑战"],
     challengeIndex: 2,
@@ -162,7 +163,7 @@
   };
   var CFG_KEYS = [
     "difficulty", "stop100", "maxRound", "fly", "emergency", "autoSignup", "settleEvery",
-    "entryMap", "entryX", "entryY", "npcName", "dojoNpcAliases",
+    "entryMap", "entryX", "entryY", "npcName", "entryNpcAliases", "dojoNpcAliases",
     "challengeKeywords", "challengeIndex", "signupKeywords", "signupIndex",
     "settleKeywords", "continueKeywords", "configUrl"
   ];
@@ -198,7 +199,9 @@
         if (typeof v === "string" && v) c[k] = v;
       }
     }
-    if (c.npcName === "荣誉管理员") c.npcName = DEFAULTS.npcName; // 旧档错字仅对已知默认值迁移
+    // 旧档迁移（仅对已知的旧默认错名生效）：旧默认值「荣耀管理员」不是本图 NPC 的名字，一律改回正确名；
+    // 用户自己配的名字（如「别的管理员」）原样保留，不被本行覆盖
+    if (c.npcName === "荣耀管理员") c.npcName = DEFAULTS.npcName;
     if (!/^(basic|middle|advanced)$/.test(String(c.difficulty))) c.difficulty = DEFAULTS.difficulty;
     return c;
   }
@@ -311,17 +314,55 @@
     for (var k2 in seen) if (Object.prototype.hasOwnProperty.call(seen, k2)) out.push(k2 + " x" + seen[k2]);
     return out.join("、") + "（共 " + rows.length + " 个）";
   }
-  function findNpc(s, name) {
-    var want = norm(name).replace(/\s/g, "");
-    if (!want) return null;
+  // 单个名字的匹配：全等或子串（保持原宽松度）
+  function npcNameHit(nm, want) {
+    return !!nm && !!want && (nm === want || nm.indexOf(want) >= 0);
+  }
+  // 在找的名字（全部别名）——日志里与「本图识别到的 NPC」成对打印
+  function entryNpcNameText() {
+    var al = entryNpcAliasList();
+    if (!al.length) return "（别名表为空，请检查配置）";
+    return "「" + al.join("」「") + "」";
+  }
+  // 报名点 NPC 别名表：空表 / 没配时回落到 npcName
+  function entryNpcAliasList() {
+    var al = cfg.entryNpcAliases;
+    var byName = (Array.isArray(al) && al.length) ? al : [cfg.npcName];
+    return (byName || []).map(function (x) { return norm(x).replace(/\s/g, ""); }).filter(function (x) { return !!x; });
+  }
+  // 按别名表找报名点 NPC；命中第 2 个起（非首选名）时把用了哪个别名记在 e.npcName 上
+  function findNpc(s, name, e) {
+    var al = entryNpcAliasList();
+    if (name) {
+      var w = norm(name).replace(/\s/g, "");
+      if (w && al.indexOf(w) < 0) al = [w];        // 直传了别名表外的名字：只认这一个
+    }
+    if (!al.length) return null;
     var list = (s && s.npcs) || [];
+    for (var k = 0; k < al.length; k++) {
+      for (var i = 0; i < list.length; i++) {
+        var n = list[i];
+        if (!n) continue;
+        if (!npcNameHit(norm(n.name).replace(/\s/g, ""), al[k])) continue;
+        if (e) { e.npcName = al[k]; e.npcNameIndex = k; }
+        return n;
+      }
+    }
+    if (e) { e.npcName = al[0]; e.npcNameIndex = 0; }
+    return null;
+  }
+  // 报名点邻近兜底（防 NPC 以后再改名）：别名全都不命中时，
+  // 取报名点周围 12 格（切比雪夫距离）内、名字含「管理员」的 NPC，只有恰好 1 个才用它
+  function findEntryNpcNear(s, ex, ey) {
+    var list = (s && s.npcs) || [], out = [];
     for (var i = 0; i < list.length; i++) {
       var n = list[i];
-      if (!n) continue;
-      var nm = norm(n.name).replace(/\s/g, "");
-      if (nm && (nm === want || nm.indexOf(want) >= 0)) return n;
+      if (!n || !n.position) continue;
+      if (norm(n.name).indexOf("管理员") < 0) continue;
+      if (cheb(n.position, [ex, ey]) > 12) continue;
+      out.push(n);
     }
-    return null;
+    return out.length === 1 ? out[0] : null;
   }
   function dojoNpcList(s) {
     var al = cfg.dojoNpcAliases || [];
@@ -731,15 +772,22 @@
 
     var p = s.player && s.player.position;
 
-    // 找入口 NPC
-    var npc = findNpc(s, cfg.npcName);
+    // 找入口 NPC：先按别名表匹配；全不命中才走报名点邻近兜底
+    e.npcNameText = entryNpcNameText();
+    var npc = findNpc(s, cfg.npcName, e);
+    if (!npc) {
+      npc = findEntryNpcNear(s, cfg.entryX, cfg.entryY);
+      if (npc) logLine("按报名点邻近兜底选中了 " + norm(npc.name) + "（12 格内只有这一个「管理员」）", "warn");
+    }
+    if (npc && e.npcNameIndex > 0) logLine("别名命中：「" + norm(npc.name) + "」（别名表第 " + (e.npcNameIndex + 1) + " 项）");
     if (!npc) {
       if (now - e.startedAt >= cfg.findNpcTimeoutMs) {
+        logLine("在找的名字（全部别名）：" + e.npcNameText, "warn");
         logLine("本图识别到的 NPC：" + npcDigest(s.npcs), "warn");
-        return doStop("在 " + cfg.entryMap + " " + cfg.entryX + "," + cfg.entryY + " 附近找不到「" + cfg.npcName + "」（npc-not-found）", "npc-not-found");
+        return doStop("在 " + cfg.entryMap + " " + cfg.entryX + "," + cfg.entryY + " 附近找不到" + e.npcNameText + "（npc-not-found）", "npc-not-found");
       }
       run.dist = null;
-      setPhase("寻找「" + cfg.npcName + "」", "已等 " + sec((now - e.startedAt) / 1000));
+      setPhase("寻找" + e.npcNameText, "已等 " + sec((now - e.startedAt) / 1000));
       return;
     }
     if (e.gid !== npc.gid) {
@@ -753,33 +801,33 @@
     if (!isFinite(d) || d > 1 || d === 0) {
       var adj = adjacentCell(npc.position, p);
       if (!adj) {
-        setPhase("读不到「" + cfg.npcName + "」的坐标", "");
+        setPhase("读不到「" + e.npcName + "」的坐标", "");
         return;
       }
       if (e.walkTarget && (e.walkTarget[0] !== adj[0] || e.walkTarget[1] !== adj[1])) e.walkAt = 0;
       if (now - e.walkAt >= cfg.walkRetryMs) {
         e.walkAt = now; e.walkTries++; e.walkTarget = adj; e.walkIssuedAt = now; e.walkWarned = false;
         var wr = call(a, "walkTo", [OWNER, { x: adj[0], y: adj[1] }]);
-        logLine("走向「" + cfg.npcName + "」相邻格 (" + adj[0] + "," + adj[1] + ")，当前距离 " + (isFinite(d) ? d : "未知") +
+        logLine("走向「" + e.npcName + "」相邻格 (" + adj[0] + "," + adj[1] + ")，当前距离 " + (isFinite(d) ? d : "未知") +
           "（第 " + e.walkTries + " 次）" + (wr && wr.ok === false ? "｜助手返回 " + wr.error : ""), e.walkTries > 1 ? "warn" : "");
       }
       if (e.walkIssuedAt && now - e.walkIssuedAt > 3000 && !e.walkWarned) {
         e.walkWarned = true;
         logLine("走路没有靠近（距离 " + (isFinite(d) ? d : "未知") + "），继续重试", "warn");
       }
-      setPhase("走向「" + cfg.npcName + "」相邻格", "距离 " + (isFinite(d) ? d : "未知"));
+      setPhase("走向「" + e.npcName + "」相邻格", "距离 " + (isFinite(d) ? d : "未知"));
       if (now - e.startedAt >= cfg.findNpcTimeoutMs * 2) {
-        return doStop("走不到「" + cfg.npcName + "」的相邻格（walk-failed，距离 " + (isFinite(d) ? d : "未知") + "）", "walk-failed");
+        return doStop("走不到「" + e.npcName + "」的相邻格（walk-failed，距离 " + (isFinite(d) ? d : "未知") + "，在找的名字：" + e.npcNameText + "）", "walk-failed");
       }
       return;
     }
     if (!e.arrivedLogged) {
       e.arrivedLogged = true;
-      logLine("已到达「" + cfg.npcName + "」相邻格（距离 " + d + "），准备对话");
+      logLine("已到达「" + e.npcName + "」相邻格（距离 " + d + "），准备对话");
     }
 
     // 接触
-    setPhase("接触「" + cfg.npcName + "」", "距离 " + d);
+    setPhase("接触「" + e.npcName + "」", "距离 " + d);
     if (!e.firstContactAt) e.firstContactAt = now;
     if (now - e.contactAt >= 1000) {
       e.contactAt = now;
@@ -787,8 +835,8 @@
       if (!cr || cr.ok !== true) {
         e.contactErr = (cr && cr.error) || "unknown";
         e.failStreak++;
-        logLine("接触「" + cfg.npcName + "」失败：" + e.contactErr + "（连续 " + e.failStreak + " 次）", "warn");
-        if (e.failStreak === 3) logLine("连续 3 次点不开对话，先核对坐标与 NPC 名字；本图识别到的 NPC：" + npcDigest(s.npcs), "warn");
+        logLine("接触「" + e.npcName + "」失败：" + e.contactErr + "（连续 " + e.failStreak + " 次）｜在找的名字（全部别名）：" + e.npcNameText, "warn");
+        if (e.failStreak === 3) logLine("连续 3 次点不开对话，先核对坐标与 NPC 名字；在找的名字（全部别名）：" + e.npcNameText + "；本图识别到的 NPC：" + npcDigest(s.npcs), "warn");
       } else {
         if (e.failStreak) logLine("接触已恢复");
         e.contactErr = "";
@@ -801,8 +849,9 @@
       return dialogTick(a, s, now);
     }
     if (now - e.firstContactAt >= cfg.contactTimeoutMs) {
+      logLine("在找的名字（全部别名）：" + e.npcNameText, "warn");
       logLine("本图识别到的 NPC：" + npcDigest(s.npcs), "warn");
-      return doStop("点不开「" + cfg.npcName + "」的对话（contact-failed" + (e.contactErr ? "：" + e.contactErr : "") + "）", "contact-failed");
+      return doStop("点不开「" + e.npcName + "」的对话（contact-failed" + (e.contactErr ? "：" + e.contactErr : "") + "）", "contact-failed");
     }
   }
 
