@@ -2,7 +2,7 @@
 // @name         仙境传说 · 原站插件模式（游戏助手 · 实验版）
 // @namespace    dsh.ro-plugin
   // CLEANUP-RELEASE-BEGIN version-header ORIGINAL:Ly8gQHZlcnNpb24gICAgICAyLjM4Ljc3Ljk=
-// @version      2.38.77.12
+// @version      2.38.77.13
   // CLEANUP-RELEASE-END version-header
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
@@ -763,7 +763,7 @@
   var LS_KEY = "dsh_ro_plugin_v1";
   var VERSION_RE = /\?([0-9.]+)/;
   // CLEANUP-RELEASE-BEGIN version-runtime ORIGINAL:ICB2YXIgVkVSID0gIjIuMzguNzcuOSI7IC8vIOmdouadv+agh+mimC/liqDovb3mj5DnpLov5pel5b+X57uf5LiA54mI5pys5Y+377yIYnVtcCDml7bkuI4gQHZlcnNpb24g5ZCM5q2l5pS577yJ
-  var VER = "2.38.77.12"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
+  var VER = "2.38.77.13"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
   // CLEANUP-RELEASE-END version-runtime
   try { window.__dshCombinedActive = true; } catch (e) {} // V2.30.0 防双浮层让位旗标：独立版词条色脚本见旗标即让位
   // ==================== 统一采集器注册表（dsh-collect v1 · 内部命名空间，不新增 window 全局）====================
@@ -823,11 +823,11 @@
   function upXY(v){return v&&v.length>=2&&v[0]!=null&&v[1]!=null&&Number.isFinite(Number(v[0]))&&Number.isFinite(Number(v[1]))?[Number(v[0]),Number(v[1])]:null;}
   function upIdentity(){try{var id=resolveSelfIdentity(),role=activeProfileKey();if(!id||id.known!==true||!id.oneId||!id.realm||!id.account||!(id.charId>0)||role!==id.oneId||!profileTrusted(role)||!getMapName())return null;return {role:String(id.oneId),world:String(id.realm),charId:Number(id.charId),epoch:identityEpoch,map:String(getMapName())};}catch(e){return null;}}
   function upSync(){var id=upIdentity();if(!id){if(UP.scope)UP.scopeNotice={transition:"known-to-unknown-to-known",result:"unknown identity interval; no cross-chain attribution"};UP.scope=null;UP.chain=null;UP.challengeNpc=null;UP.move=null;UP.pos=null;return null;}var sig=[id.role,id.epoch,id.map].join("|");if(!UP.scope||UP.scope.sig!==sig||UP.entity!==(CLIENT.SS&&CLIENT.SS.Entity)){if(UP.scope)UP.scopeNotice={transition:"role/map/epoch/entity changed",roleChanged:UP.scope.role!==id.role,mapChanged:UP.scope.map!==id.map,epochChanged:UP.scope.epoch!==id.epoch,result:"scope boundary; prior chain reset"};UP.gen++;UP.scope=id;UP.scope.sig=sig;UP.entity=CLIENT.SS&&CLIENT.SS.Entity;UP.chain=null;UP.challengeNpc=null;UP.move=null;UP.pos=null;UP.recent=[];UP.posAt=upNow();UP.stallAt=0;}return UP.scope;}
-  function upPersist(){if(!UP.dirty)return;try{var index=upSessions();if(index.length>UP_INDEX_MAX)throw Error("session history capacity; export existing records");if(index.indexOf(upSession)<0){if(index.length>=UP_INDEX_MAX)throw Error("session index full");index.push(upSession);}localStorage.setItem(upKey,JSON.stringify({schema:1,session:upSession,seq:UP.seq,ring:UP.ring,archive:UP.archive,incomplete:UP.incomplete,queue:UP.queue}));localStorage.setItem(UP_INDEX,JSON.stringify(index));UP.dirty=false;UP.saved=true;UP.storageError="";}catch(e){UP.saved=false;UP.storageError="local persistence/index failed; memory/export retained (not saved)";}}
+  function upPersist(){if(!UP.dirty||UP.storageReadOnly)return;try{var index=upSessions();if(index.length>UP_INDEX_MAX)throw Error("session history capacity; export existing records");if(index.indexOf(upSession)<0){if(index.length>=UP_INDEX_MAX)throw Error("session index full");index.push(upSession);}localStorage.setItem(upKey,JSON.stringify({schema:1,session:upSession,seq:UP.seq,ring:UP.ring,archive:UP.archive,incomplete:UP.incomplete,queue:UP.queue}));localStorage.setItem(UP_INDEX,JSON.stringify(index));UP.dirty=false;UP.saved=true;UP.storageError="";}catch(e){UP.saved=false;UP.storageError="local persistence/index failed; memory/export retained (not saved)";}}
   function upRecord(category,kind,detail){if(!upAllowed(category))return null;var scope=upSync();if(!scope){UP.refused++;upRender();return null;}if(UP.queue.length>=UP_MAX)return upIncomplete("pending queue full");var ev={id:upSession+":"+(UP.seq+1),session:upSession,generation:UP.gen,role:scope.role,world:scope.world,charId:scope.charId,epoch:scope.epoch,map:scope.map,state:{selfXY:upXY(CLIENT.SS&&CLIENT.SS.Entity&&CLIENT.SS.Entity.position),battleCached:typeof npBattleKnown!=="undefined"&&npBattleKnown?!!npHuntOn:null},at:Date.now(),category:category,kind:kind,chain:UP.chain?UP.chain.id:null,detail:detail};ev=JSON.parse(JSON.stringify(ev));var size=JSON.stringify(ev).length*2;if(category==="npc"&&(UP.archive.length>=UP_ARCHIVE_MAX||UP.archiveBytes+size>UP_ARCHIVE_BYTES))return upIncomplete("NPC/task local archive full");UP.seq++;upFreeze(ev);if(category==="npc"){UP.archive.push(ev);UP.archiveBytes+=size;}DSHCollect.ringPush(UP.ring,ev,UP_MAX);UP.queue.push({event:ev,attempts:0,nextAt:0});UP.dirty=true;DSHCollect.ringPush(UP.recent,{id:ev.id,kind:kind,at:ev.at},12);upPersist();return ev;}
-  function upFlush(){if(!UP.on||UP.busy)return;var scope=upSync();if(!scope)return;var q=UP.queue.filter(function(v){return v.event.role===scope.role&&UP[v.event.category]&&v.attempts<UP_RETRIES&&v.nextAt<=Date.now();})[0];if(!q)return;var wire=upWire(q.event);if(!wire)return;q.attempts++;q.nextAt=Date.now()+5000*q.attempts;UP.dirty=true;upPersist();var ticket={q:q,revision:UP.revision,at:Date.now()};UP.busy=ticket;DSHCollect.post("http://127.0.0.1:8899/api/probe-collect",{t:"unified-probe",schema:2,ver:VER,session:upSession,summaryOnly:true,events:[wire]},function(ok){if(UP.busy!==ticket||ticket.revision!==UP.revision)return;UP.busy=null;if(ok){var i=UP.queue.indexOf(q);if(i>=0)UP.queue.splice(i,1);UP.error="";UP.receipt="loopback summary accepted; NOT raw text durability";}else{UP.failures++;UP.error="receiver failed; queued, bounded retries; restart to retry";}UP.dirty=true;upPersist();upRender();});}
-  function upSet(on){UP.on=on===true&&!UP.incomplete;UP.chain=null;UP.move=null;UP.pos=null;UP.posAt=upNow();UP.lastTick=null;UP.lastWall=null;if(UP.on){UP.queue.forEach(function(q){q.attempts=0;q.nextAt=0;});UP.dirty=true;upInstall();upSnapshot("start");}try{txCap.on=false;btDiagOn=false;diagAutoProbeOn=false;zKeepSmp.on=false;}catch(e){}["dsh-z-diag","dsh-z-bosskeepsmp","dsh-bt-diagon"].forEach(function(id){var el=document.getElementById(id);if(el)el.checked=false;});upPersist();upRender();}
-  function upClear(){UP.revision++;UP.busy=null;UP.ring=[];UP.archive=[];UP.archiveBytes=0;UP.incomplete=null;UP.queue=[];UP.recent=[];UP.chain=null;UP.move=null;UP.overflow=0;UP.error="";UP.dirty=true;upPersist();upRender();}
+  function upFlush(){if(!UP.on||UP.busy||UP.storageReadOnly)return;var scope=upSync();if(!scope)return;var q=UP.queue.filter(function(v){return v.event.role===scope.role&&UP[v.event.category]&&v.attempts<UP_RETRIES&&v.nextAt<=Date.now();})[0];if(!q)return;var wire=upWire(q.event);if(!wire)return;q.attempts++;q.nextAt=Date.now()+5000*q.attempts;UP.dirty=true;upPersist();var ticket={q:q,revision:UP.revision,at:Date.now()};UP.busy=ticket;DSHCollect.post("http://127.0.0.1:8899/api/probe-collect",{t:"unified-probe",schema:2,ver:VER,session:upSession,summaryOnly:true,events:[wire]},function(ok){if(UP.busy!==ticket||ticket.revision!==UP.revision)return;UP.busy=null;if(ok){var i=UP.queue.indexOf(q);if(i>=0)UP.queue.splice(i,1);UP.error="";UP.receipt="loopback summary accepted; NOT raw text durability";}else{UP.failures++;UP.error="receiver failed; queued, bounded retries; restart to retry";}UP.dirty=true;upPersist();upRender();});}
+  function upSet(on){UP.on=on===true&&!UP.incomplete&&!UP.storageReadOnly;UP.chain=null;UP.move=null;UP.pos=null;UP.posAt=upNow();UP.lastTick=null;UP.lastWall=null;if(UP.on){UP.queue.forEach(function(q){q.attempts=0;q.nextAt=0;});UP.dirty=true;upInstall();upSnapshot("start");}try{txCap.on=false;btDiagOn=false;diagAutoProbeOn=false;zKeepSmp.on=false;}catch(e){}["dsh-z-diag","dsh-z-bosskeepsmp","dsh-bt-diagon"].forEach(function(id){var el=document.getElementById(id);if(el)el.checked=false;});upPersist();upRender();}
+  function upClear(){if(UP.storageReadOnly){upRender();return;}UP.revision++;UP.busy=null;UP.ring=[];UP.archive=[];UP.archiveBytes=0;UP.incomplete=null;UP.queue=[];UP.recent=[];UP.chain=null;UP.move=null;UP.overflow=0;UP.error="";UP.dirty=true;upPersist();upRender();}
   function upExport(){return JSON.stringify({schema:2,ver:VER,session:upSession,enabled:UP.on,failures:UP.failures,refused:UP.refused,overflow:UP.overflow,incomplete:UP.incomplete,persistence:UP.storageError,saved:UP.saved===true,delivery:UP.error,receiver:"diagnostic summary only; raw NPC/task text is browser-local",questSnapshot:UP.questStatus,localNpcTaskArchive:UP.archive,events:UP.ring,pending:UP.queue},null,2);}
   function upRender(){var el=document.getElementById("dsh-unified-status");if(el)el.textContent=(UP.on?"已开启（只读；暂停仍观察）":"已关闭")+" · 战斗 "+(UP.battle?"开":"关")+" / NPC任务 "+(UP.npc?"开":"关")+" · 待发送 "+UP.queue.length+" · 失败 "+UP.failures+" · 拒绝未知身份 "+UP.refused+" · "+(UP.storageError||(UP.saved?"浏览器本地已保存":"本地尚未保存"))+" · NPC原文本地 "+UP.archive.length+" · 接收器仅诊断摘要 · 任务快照 "+UP.questStatus+(UP.error?" · "+UP.error:"")+(UP.hooks?" · "+UP.hooks:"")+(UP.on&&!UP.scope?" · 身份未知：拒绝归属采集":"");var cb=document.getElementById("dsh-unified-master");if(cb)cb.checked=UP.on;}
   function upMenu(host){var label=document.createElement("label"),cb=document.createElement("input");cb.type="checkbox";cb.id="dsh-unified-master";cb.checked=UP.on;cb.addEventListener("change",function(){upSet(cb.checked);});label.appendChild(cb);label.appendChild(document.createTextNode("统一探针总开关（默认关）"));host.appendChild(label);[["battle","战斗停滞证据"],["npc","NPC任务录制"]].forEach(function(v){var l=document.createElement("label"),c=document.createElement("input");c.type="checkbox";c.checked=UP[v[0]];c.addEventListener("change",function(){var prior=UP[v[0]];UP[v[0]]=c.checked;UP.chain=null;UP.move=null;UP.pos=null;UP.posAt=upNow();if(UP.on)upRecord(UP.battle?"battle":"npc","scope-change",{scope:v[0],enabled:c.checked,wasEnabled:prior,result:"observation category changed; chain reset"});upRender();});l.appendChild(c);l.appendChild(document.createTextNode(v[1]));host.appendChild(l);});var out=document.createElement("textarea");out.id="dsh-unified-view";out.readOnly=true;out.style.cssText="display:none;width:100%;height:180px;font:10px monospace";[["开始",function(){upSet(true);}],["停止",function(){upSet(false);}],["查看",function(){out.style.display="block";out.value=upExport();}],["导出",function(){var url=URL.createObjectURL(new Blob([upExport()],{type:"application/json"})),a=document.createElement("a");a.href=url;a.download="ro-unified-probe-"+Date.now()+".json";a.click();setTimeout(function(){URL.revokeObjectURL(url);},1000);}],["清空",function(){if(confirm("清空本地记录与待发送队列？"))upClear();}]].forEach(function(v){var b=document.createElement("button");b.type="button";b.textContent=v[0];b.addEventListener("click",v[1]);host.appendChild(b);});var st=document.createElement("div");st.id="dsh-unified-status";st.className="ro-info";host.appendChild(st);host.appendChild(out);upRecoveryMenu(host,out);upInvRowControl(host);var note=document.createElement("div");note.className="log";note.textContent="NPC/任务完整已捕获文本仅在浏览器本地记录；8899只收诊断摘要，HTTP成功不代表原文保存。不录输入/私聊/密码/验证码。只读，暂停仍观察；容量满停录并标记不完整。";host.appendChild(note);upRender();}
@@ -857,7 +857,7 @@
   function upSnapshot(reason){if(!upAllowed("npc")||!upSync())return;var ui=upQuestUI(),root=ui&&typeof ui.getRoot==="function"?ui.getRoot():null;if(!ui||typeof ui.getQuest!=="function"||!root||typeof root.querySelectorAll!=="function"){UP.questStatus="unsupported: Quest.getUI().getQuest(id)/root ID metadata unavailable";return;}var ids={},quests=[];Array.prototype.forEach.call(root.querySelectorAll('[id^="qid"],[id^="sid"],.quest-item'),function(el){var m=String(el.id||"").match(/^[qs]id(\d+)$/)||String(el.className||"").match(/\bqid(\d+)\b/);if(m)ids[m[1]]=true;});var keys=Object.keys(ids);keys.slice(0,80).forEach(function(k){var q=ui.getQuest(Number(k));if(q)quests.push(upQuestEntry(q,"Quest.getUI().getQuest("+k+"); QuestCommon closure via qid/sid metadata"));});UP.questStatus="partial: exposed qid/sid IDs; hidden closure not enumerable";upRecord("npc","quest-snapshot",{source:"Quest.getUI().getQuest(id)",reason:reason,quests:quests,complete:false,unknownReason:"private sparse _questList cannot be enumerated; UI IDs may omit hidden/unrendered quests",loss:{total:keys.length,limit:80,clipped:keys.length>80},result:"existing controller state after server handler; completion unverified"});}
   function upTap(S,prop,sink){try{var proto=S&&S.prototype;if(!proto)return "no prototype";var slots=upTaps.get(proto);if(!slots){slots={};upTaps.set(proto,slots);}var current=Object.getOwnPropertyDescriptor(proto,prop),slot=slots[prop];if(slot&&current&&current.set===slot.set){slot.sink=sink;return "";}if(current&&(!current.configurable||("value" in current&&!current.writable)||(!("value" in current)&&!current.set)))return "unsafe descriptor refused";if(!current){var parent=Object.getPrototypeOf(proto);while(parent){if(Object.getOwnPropertyDescriptor(parent,prop))return "inherited descriptor refused";parent=Object.getPrototypeOf(parent);}}var prior=slot,values=new WeakMap(),fallback=current&&current.value,oldSet=current&&current.set,oldGet=current&&current.get;slot={sink:sink};slot.set=function(v){var result;if(oldSet)result=oldSet.call(this,v);else values.set(this,v);try{slot.sink(this);}catch(e){}return result;};Object.defineProperty(proto,prop,{configurable:current?current.configurable:true,enumerable:current?current.enumerable:true,get:current&&!("value" in current)?oldGet:function(){return values.has(this)?values.get(this):fallback;},set:slot.set});if(prior)prior.sink=function(){};slots[prop]=slot;return "";}catch(e){return "tap installation failed";}}
   // Restore bounded evidence, never enabled state; preserve original role/world attribution.
-  try{var storedUP=JSON.parse(localStorage.getItem(upKey)||"null");if(storedUP&&storedUP.schema===1&&storedUP.session===upSession){function validUP(e){return e&&e.session===upSession&&typeof e.id==="string"&&typeof e.role==="string"&&/^ro1:/.test(e.role)&&typeof e.world==="string"&&(e.category==="battle"||e.category==="npc")&&typeof e.kind==="string"&&JSON.stringify(e).length*2<=UP_ARCHIVE_BYTES;}UP.ring=(storedUP.ring||[]).filter(validUP).slice(-UP_MAX);UP.queue=(storedUP.queue||[]).filter(function(q){return q&&validUP(q.event);}).slice(-UP_MAX).map(function(q){return {event:q.event,attempts:Math.min(UP_RETRIES,Number(q.attempts)||0),nextAt:Number(q.nextAt)||0};});if(!Array.isArray(storedUP.archive||[])||(storedUP.archive||[]).length>UP_ARCHIVE_MAX||(storedUP.archive||[]).some(function(e){return !validUP(e)||e.category!=="npc";}))throw Error("invalid archive; retained in local storage for history export");UP.archive=(storedUP.archive||[]).map(upFreeze);UP.archiveBytes=UP.archive.reduce(function(n,e){return n+JSON.stringify(e).length*2;},0);if(UP.archiveBytes>UP_ARCHIVE_BYTES)throw Error("archive byte bound exceeded; retained for history export");UP.incomplete=storedUP.incomplete||null;UP.seq=Math.max(Number(storedUP.seq)||0,UP.ring.length);UP.saved=true;}}catch(e){UP.saved=false;UP.incomplete={reason:"recovery validation failed; original local record retained for history export before explicit clear"};UP.storageError="local queue/archive unreadable; original local record retained (not saved)";}
+  try{var storedUPRaw=localStorage.getItem(upKey),storedUP=JSON.parse(storedUPRaw||"null");if(storedUPRaw!==null&&(!storedUP||storedUP.schema!==1||storedUP.session!==upSession)){UP.storageReadOnly=true;UP.incomplete={reason:"newer/unknown schema retained read-only; no sending or overwrite"};UP.storageError="newer/unknown local schema preserved in original history key";}if(storedUP&&storedUP.schema===1&&storedUP.session===upSession){function validUP(e){return e&&e.session===upSession&&typeof e.id==="string"&&typeof e.role==="string"&&/^ro1:/.test(e.role)&&typeof e.world==="string"&&(e.category==="battle"||e.category==="npc")&&typeof e.kind==="string"&&JSON.stringify(e).length*2<=UP_ARCHIVE_BYTES;}UP.ring=(storedUP.ring||[]).filter(validUP).slice(-UP_MAX);UP.queue=(storedUP.queue||[]).filter(function(q){return q&&validUP(q.event);}).slice(-UP_MAX).map(function(q){return {event:q.event,attempts:Math.min(UP_RETRIES,Number(q.attempts)||0),nextAt:Number(q.nextAt)||0};});if(!Array.isArray(storedUP.archive||[])||(storedUP.archive||[]).length>UP_ARCHIVE_MAX||(storedUP.archive||[]).some(function(e){return !validUP(e)||e.category!=="npc";}))throw Error("invalid archive; retained in local storage for history export");UP.archive=(storedUP.archive||[]).map(upFreeze);UP.archiveBytes=UP.archive.reduce(function(n,e){return n+JSON.stringify(e).length*2;},0);if(UP.archiveBytes>UP_ARCHIVE_BYTES)throw Error("archive byte bound exceeded; retained for history export");UP.incomplete=storedUP.incomplete||null;UP.seq=Math.max(Number(storedUP.seq)||0,UP.ring.length);UP.saved=true;}}catch(e){UP.saved=false;UP.incomplete={reason:"recovery validation failed; original local record retained for history export before explicit clear"};UP.storageError="local queue/archive unreadable; original local record retained (not saved)";}
   try{window.addEventListener("pagehide",upPersist);}catch(e){}
   // UNIFIED-PROBE-END core
 
@@ -8527,7 +8527,9 @@ function createRoItemCapture(env) {
       var key = profileKeyFor(cid); // V2.38.46：统一档键（新 OneID / 旧 ch<cid>）
       claimProfileForChar(key, cid, gid);
       var curKey = activeProfileKey(), curP = profiles[curKey];
-      if (curKey === key && curP && gidInt(curP.charId) === cid && lastCharId === cid && lastCharGid === gid) {
+      if (curKey === key && curP && gidInt(curP.charId) === cid && lastCharId === cid && resolveSelfIdentity().known && key === resolveSelfIdentity().oneId) {
+        // Same OneID: a new scene entity is not a new character/login.
+        lastCharGid = gid; curP.gid = gid > 0 ? gid : curP.gid;
         var nmKeep = selfName(); // 档已对齐：只顺手刷新显示名，绝不重跑切档
         if (nmKeep && curP.name !== nmKeep) { curP.name = nmKeep; try { saveProfiles(); } catch (eN) {} }
         return;
@@ -8537,9 +8539,7 @@ function createRoItemCapture(env) {
       //   否则「A 死 2 次 → 切到 B → B 再死 1 次」会累计到 3 次把 B 自动下线；deathGuardDone 同理会让本页面内永久不再保护。
       try { deathGuardAt = []; deathGuardDone = false; deathGuardDead = false; } catch (eDG) {}
       try { dlogReset("切换角色"); } catch (eDL) {}
-      var npZeroWasOn = false; try { npZeroWasOn = (npBattleState() === true); } catch (e0) {} // V2.38.2：换角色=挂机结束，先记下旧角色内挂是否确认在跑（复位之后就查不到了）
-      // V2.38.34 审计 P2：置零必须排在复位之前——复位会把 npBattleKnown 置回未知，之后置零走到 npRequestBattle 只会拿到 unknown，一个包都不发（2.38.32 对外行为回归）
-      try { if (npZeroWasOn) npZeroBattle("换角色"); } catch (e0) {} // 此刻读到的仍是旧角色的真状态：发出这一个包，随后由复位整份作废
+      // The current entity may already belong to the new role; never send its predecessor shutdown toggle.
       try { npResetBattleState(); } catch (e0) {} // 换角色：旧角色排队意图绝不能落到新角色
       if (typeof selfSpirits !== "undefined" && selfSpiritCount(ent) === null) selfSpirits = { aid: 0, num: 0, map: "" };
       try { captureAll(); } catch (e) {} // 旧档先落盘
@@ -11088,6 +11088,7 @@ function createRoItemCapture(env) {
   }
   var reconnecting = false;
   function onDisconnect(msg) {
+    try { clearPktIdentity("disconnect"); npServerAutoAtk.blocked = true; } catch (eIdentity) {}
     if (reconnecting) return;
     var doAlert = $id("dsh-alert") && $id("dsh-alert").checked;
     var doReload = !IS_MN && $id("dsh-reconn") && $id("dsh-reconn").checked && saved.account;
@@ -11828,7 +11829,157 @@ function createRoItemCapture(env) {
       }
     } catch (e) {}
   }
-  function npBattleState() { return npBattleKnown ? !!npHuntOn : null; }
+  // Receipt provenance is captured at the game socket event, never reconstructed from latest inbound globals.
+  function npCaptureSource(socket) {
+    var s = npServerAutoAtk, id = resolveSelfIdentity();
+    npBattleIdentityValid();
+    return Object.freeze({ socket: socket, epoch: s.epoch, generation: s.generation || 0, key: id.known ? id.oneId : "", runtime: npRuntimeKey });
+  }
+  function npSourceValid(source, transportOnly) {
+    var s = npServerAutoAtk;
+    if (!source || source.socket !== s.socket || source.epoch !== s.epoch || source.generation !== (s.generation || 0) || source.runtime !== npRuntimeKey) return false;
+    if (transportOnly) return true; // login/zone identity packets still need to reach the existing identity collector
+    return !!(npBattleIdentityValid() && source.key && source.key === resolveSelfIdentity().oneId && npBattleTransportReady());
+  }
+  function npReceiptSource(pkt, capture) {
+    if (!pkt || typeof pkt !== "object") return null;
+    var s = npServerAutoAtk;
+    if (!s.receipts) s.receipts = new WeakMap();
+    if (capture && !s.receipts.has(pkt)) { s.receipts.set(pkt, s.fieldSource || null); s.fieldSource = null; }
+    return s.receipts.get(pkt) || null;
+  }
+  function npBindGameSocket(inst, binding) {
+    var s = npServerAutoAtk;
+    if (!inst || !binding || binding.generation !== s.generation) return false;
+    binding.socket = inst; s.socket = inst;
+    var previousBinding = inst.__npReceiptBinding;
+    if (previousBinding && previousBinding.runtime === npRuntimeKey && previousBinding.active) return true;
+    if (previousBinding && previousBinding.revoke) previousBinding.revoke();
+    var registration = { runtime: npRuntimeKey, active: true, revoke: function () { registration.active = false; npResetBattleState(); s.blocked = true; } };
+    inst.__npReceiptBinding = registration;
+    var events = new WeakMap(), handler = inst.onmessage, proto = Object.getPrototypeOf(inst), nativeSet = null, nativeGet = null;
+    while (proto && !nativeSet) { var descriptor = Object.getOwnPropertyDescriptor(proto, "onmessage"); nativeSet = descriptor && descriptor.set; nativeGet = descriptor && descriptor.get; proto = Object.getPrototypeOf(proto); }
+    function observe(ev) {
+      if (!registration.active || !ev || s.socket !== inst || binding.generation !== s.generation) return null;
+      if (events.has(ev)) return events.get(ev);
+      var source = npCaptureSource(inst); events.set(ev, source);
+      if (ev.data instanceof ArrayBuffer) npTagBattleBuffer(ev.data, source);
+      s.inboundSocket = inst; // diagnostic only
+      onReconInbound(ev.data, inst, source);
+      return source;
+    }
+    function deliver(ev) {
+      var source = observe(ev), read = CLIENT.NM && CLIENT.NM.read;
+      if (npSourceValid(source) && typeof read === "function") {
+        var previous = read.callback;
+        read(function (fp) {
+          if (fp && npSourceValid(source) && npBindMergedBattleBuffer(fp.buffer, ev.data, source)) { s.tailBuffer = fp.buffer; npHookReceiptReaders(fp); }
+          if (typeof previous === "function") previous.call(read, fp);
+        });
+      }
+      try { if (typeof handler === "function") return handler.call(this, ev); }
+      finally { s.fieldSource = null; }
+    }
+    // Preserve the browser's native event-handler slot, not merely the JS property.
+    Object.defineProperty(inst, "onmessage", { configurable: true, enumerable: true,
+      get: function () { var current = nativeGet ? nativeGet.call(inst) : typeof handler === "function" ? deliver : null; return nativeGet && current === deliver ? handler : current; },
+      set: function (next) { handler = next; if (nativeSet) nativeSet.call(inst, typeof next === "function" ? deliver : null); } });
+    if (nativeSet) nativeSet.call(inst, typeof handler === "function" ? deliver : null);
+    inst.addEventListener("open", function () { if (registration.active && s.socket === inst && binding.generation === s.generation) s.blocked = !binding.zone; });
+    inst.addEventListener("error", function () { if (registration.active && s.socket === inst) clearPktIdentity("socket-error"); });
+    inst.addEventListener("close", function () { if (registration.active && s.socket === inst && (!s.handoff || s.handoff.socket !== inst)) clearPktIdentity("socket-close"); });
+    inst.addEventListener("message", observe);
+    return true;
+  }
+  function npTagBattleBuffer(buffer, source) {
+    var s = npServerAutoAtk;
+    if (!(buffer instanceof ArrayBuffer) || !npSourceValid(source, true)) return false;
+    if (!s.buffers) s.buffers = new WeakMap();
+    if (s.buffers.has(buffer)) return s.buffers.get(buffer) === source || npSourceValid(s.buffers.get(buffer));
+    s.buffers.set(buffer, source);
+    // NM.receive uses this buffer's native slice for partial frames and batch yield.
+    try { Object.defineProperty(buffer, "slice", { configurable: true, value: function () {
+      var copy = ArrayBuffer.prototype.slice.apply(this, arguments);
+      if (npTagBattleBuffer(copy, source)) s.tailBuffer = copy;
+      return copy;
+    } }); } catch (e) {} // non-extensible buffers remain readable; no guessed provenance
+    return true;
+  }
+  function npBindMergedBattleBuffer(buffer, incoming, source) {
+    var s = npServerAutoAtk;
+    if (s.buffers && npSourceValid(s.buffers.get(buffer))) return true;
+    var tail = s.tailBuffer, prior = s.buffers && tail && s.buffers.get(tail);
+    if (!npSourceValid(source) || !npSourceValid(prior) || !(incoming instanceof ArrayBuffer) || !tail) return false;
+    var prefixLength = buffer.byteLength - incoming.byteLength;
+    if (!(prefixLength > 0) || prefixLength > tail.byteLength) return false;
+    var bytes = new Uint8Array(buffer), left = new Uint8Array(tail, tail.byteLength - prefixLength), right = new Uint8Array(incoming);
+    for (var i = 0; i < bytes.length; i++) if (bytes[i] !== (i < left.length ? left[i] : right[i - left.length])) return false;
+    s.tailBuffer = null;
+    return npTagBattleBuffer(buffer, source);
+  }
+  function npHookLateTransport(nm) {
+    // Observe only NM-selected game traffic; do not send a bootstrap/probe packet.
+    var scope = nm.__npSendScope || (nm.__npSendScope = { zoneDepth: 0 });
+    function qualify(pkt) {
+      var cz = CLIENT.PS && CLIENT.PS.CZ;
+      return !!(cz && ["REQUEST_TIME", "REQUEST_TIME2", "REQUEST_MOVE", "REQUEST_MOVE2"].some(function (key) { return typeof cz[key] === "function" && pkt instanceof cz[key]; }));
+    }
+    var prior = nm.sendPacket;
+    if (typeof prior === "function" && !prior.__npSocketScope) {
+      var route = { qualify: qualify };
+      var wrapper = function (pkt) {
+        var zone = route.qualify(pkt); if (zone) scope.zoneDepth++;
+        try { return prior.apply(this, arguments); } finally { if (zone) scope.zoneDepth--; }
+      };
+      wrapper.__npSocketScope = route; nm.sendPacket = wrapper;
+    } else if (prior && prior.__npSocketScope) prior.__npSocketScope.qualify = qualify;
+    var proto = window.WebSocket && window.WebSocket.prototype, send = proto && proto.send;
+    if (typeof send !== "function") return;
+    if (send.__npLateSocket) { send.__npLateSocket.bind = bind; return; }
+    var slot = { bind: bind };
+    var wrapped = function () { slot.bind(this); return send.apply(this, arguments); };
+    wrapped.__npLateSocket = slot; proto.send = wrapped;
+    function bind(socket) {
+      var s = npServerAutoAtk, id = resolveSelfIdentity();
+      if (!scope.zoneDepth || !id.known || !CLIENT.SS || !CLIENT.SS.Entity || !socket || socket.readyState !== 1 || s.socket || s.generation || s.blocked || s.connecting) return;
+      clearPktIdentity("late-game-binding"); s.generation = (s.generation || 0) + 1;
+      npBindGameSocket(socket, { zone: true, generation: s.generation }); s.blocked = false;
+    }
+  }
+  function npHookReceiptReaders(reader) {
+    try {
+      var proto = reader && Object.getPrototypeOf(reader);
+      if (!proto || !reader.buffer) return false;
+      ["readString", "readUChar", "readLong"].forEach(function (key) {
+        var read = proto[key]; if (typeof read !== "function") return;
+        if (read.__npReceiptReader) { read.__npReceiptReader.capture = capture; return; }
+        var slot = { capture: capture };
+        var wrapped = function () { var value = read.apply(this, arguments); slot.capture(this); return value; };
+        wrapped.__npReceiptReader = slot; proto[key] = wrapped;
+      });
+      function capture(fp) {
+        var s = npServerAutoAtk;
+        s.fieldSource = s.buffers && fp && s.buffers.get(fp.buffer) || null;
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+  function npBattleIdentityValid() {
+    try {
+      var id = resolveSelfIdentity(), s = npServerAutoAtk;
+      // Full OneID loss revokes actions once; Entity/GID scene gaps alone do not.
+      if (!id.known || (s.ownerKey && s.ownerKey !== id.oneId)) {
+        if (!s.identityLost) { npResetBattleState(); s.identityLost = true; s.ownerKey = ""; }
+        return false;
+      }
+      s.identityLost = false; s.ownerKey = id.oneId;
+      return !!(id.oneId === activeProfileKey() && CLIENT.SS && CLIENT.SS.Entity && !s.blocked && (!pktCharId || pktCharId === id.charId));
+    } catch (e) { return false; }
+  }
+  function npBattleTransportReady() { var s = npServerAutoAtk; return !!(!s.handoff && s.socket && s.socket.readyState === 1 && !s.blocked); }
+  function npBattleState() {
+    return npBattleIdentityValid() && npBattleTransportReady() && npBattleKnown && npServerAutoAtk.key === resolveSelfIdentity().oneId ? !!npHuntOn : null;
+  }
   function npEffectiveHuntOn() {
     // V2.38.41：切换方向依据——报告已知用权威值；报告未到但刚发过 toggle 且在乐观窗口内，用最近一次已发意图；
     // 两者都不满足则退回报告值（初始 false）。只影响「切到相反方向」的意图计算，绝不授权盲发包。
@@ -11924,6 +12075,13 @@ function createRoItemCapture(env) {
   }
   function npStopDebtArm(reason) {
     var p = npAssistantOnSend, key = activeProfileKey();
+    if (reason === "map-change") {
+      var id = resolveSelfIdentity();
+      if (!id.known || id.oneId !== key || npServerAutoAtk.key !== key || !npBattleKnown || !npHuntOn || npAckWait || npOffWait) return false;
+      if (npShutdownDebt && npShutdownDebt.reason === reason && npShutdownDebt.key === key && npShutdownDebt.epoch === npServerAutoAtk.epoch) return true;
+      npShutdownDebt = { key: key, epoch: npServerAutoAtk.epoch, session: npRuntimeKey, seq: null, reason: reason, at: Date.now(), attempted: false };
+      return true;
+    }
     if (!p || !npOwnerIdentityValid(key) || p.key !== key || p.epoch !== npServerAutoAtk.epoch || p.session !== npRuntimeKey) return false;
     if (reason === "stopZhu" && !npZeroEnabled()) { npStopDebtClear(); return false; }
     npShutdownDebt = { key: key, epoch: p.epoch, session: p.session, seq: p.seq, reason: reason, at: Date.now(), attempted: false };
@@ -11942,9 +12100,9 @@ function createRoItemCapture(env) {
     }
     var key = activeProfileKey();
     if (d.epoch !== npServerAutoAtk.epoch || d.session !== npRuntimeKey || key !== d.key || !npOwnerIdentityValid(key) ||
-        !npAssistantOnSend || npAssistantOnSend.seq !== d.seq) { npStopDebtClear(); return; }
-    if (d.reason === "stopZhu" ? (zRunning || !npZeroEnabled()) : (npHuntMode() === "np" || isHybrid())) { npStopDebtClear(); return; }
-    if (externalAutomationOwns("battle") || (typeof apiCombatActive === "function" && apiCombatActive())) { npStopDebtClear(); return; }
+        (d.reason !== "map-change" && (!npAssistantOnSend || npAssistantOnSend.seq !== d.seq))) { npStopDebtClear(); return; }
+    if (d.reason !== "map-change" && (d.reason === "stopZhu" ? (zRunning || !npZeroEnabled()) : (npHuntMode() === "np" || isHybrid()))) { npStopDebtClear(); return; }
+    if (d.reason !== "map-change" && (externalAutomationOwns("battle") || (typeof apiCombatActive === "function" && apiCombatActive()))) { npStopDebtClear(); return; }
     if (npAckWait || npOffWait) return; // 关闭包仍在途时等服务器确认，不补第三次翻转
     d.attempted = true; // 重入、原始包/解析包的重复观察都只能补一次
     var result = npHuntStop("late-stop:" + d.reason, true);
@@ -11962,7 +12120,8 @@ function createRoItemCapture(env) {
   // UNIFIED-PROBE-END legacy-ack-post
     } catch (e) {}
   }
-  function npOffAck(text, fromRaw, receivedAt) {
+  function npOffAck(text, fromRaw, receivedAt, receiptSource) {
+    if (!npSourceValid(receiptSource)) return;
     var t = String(text == null ? "" : text);
     if (t.charCodeAt(t.length - 1) === 0) t = t.slice(0, -1); // 仅容忍游戏包末尾的单个 NUL，绝不修剪空格或消除包内字节
     if (t.indexOf(String.fromCharCode(0)) !== -1) return;
@@ -11988,10 +12147,10 @@ function createRoItemCapture(env) {
       return;
     }
     if (fromRaw) npRawAckRepeat = { text: t, at: at };
-    try { npApplyBattleState(on, "chat-notice" + (fromRaw ? "-packet" : "-parsed")); } catch (eN) {}
+    try { npApplyBattleState(on, "chat-notice" + (fromRaw ? "-packet" : "-parsed"), receiptSource); } catch (eN) {}
   }
   // 网络帧到达的本机时间早于 ChatBox requestAnimationFrame 批量绘制时间；包中没有服务器逐句时间。
-  function npRawBattleNotice(bytes, op) {
+  function npRawBattleNotice(bytes, op, receiptSource) {
     if (op !== 142 || !bytes || bytes.byteLength < 5 || bytes.byteLength > 80 || typeof TextDecoder !== "function") return;
     try {
       var view = ArrayBuffer.isView(bytes) ? new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength) : new DataView(bytes);
@@ -11999,7 +12158,10 @@ function createRoItemCapture(env) {
       var u8 = new Uint8Array(view.buffer, view.byteOffset + 4, view.byteLength - 4);
       if (u8[u8.length - 1] === 0) u8 = u8.subarray(0, u8.length - 1);
       if (u8.indexOf(0) >= 0) return;
-      npOffAck(new TextDecoder("utf-8", { fatal: true }).decode(u8), true, Date.now());
+      var text;
+      try { text = new TextDecoder("utf-8", { fatal: true }).decode(u8); }
+      catch (eUtf) { text = new TextDecoder("gb18030", { fatal: true }).decode(u8); }
+      npOffAck(text, true, Date.now(), receiptSource);
     } catch (e) {}
   }
   function npAckStruct() {
@@ -12013,24 +12175,12 @@ function createRoItemCapture(env) {
   function npHookBattleAck() {
     try {
       var S = npAckStruct();
-      if (!S) return false;
-      if (npAckHooked && S.prototype.__npAckPatched) return true; // 每次都校验：客户端若重新注册 PacketStructure（新原型），必须能重新接管
-      if (S.prototype.__npAckPatched) { npAckHooked = true; return true; }
-      Object.defineProperty(S.prototype, "msg", {
-        configurable: true, enumerable: true,
-        get: function () { try { return npAckMsgStore ? npAckMsgStore.get(this) : this.__npAckMsg; } catch (eG) { return this.__npAckMsg; } },
-        set: function (v) {
-          try { if (npAckMsgStore) npAckMsgStore.set(this, v); else this.__npAckMsg = v; } catch (eS1) { try { this.__npAckMsg = v; } catch (eS2) {} }
-          try { npOffAck(v); } catch (e1) {}
-        }
-      });
-      S.prototype.__npAckPatched = true;
-      npAckHooked = true;
-      tlog("np-ack hook ok");
-      return true;
-    } catch (e) { tlog("np-ack hook failed " + (e && e.message)); return false; }
+      npAckHooked = npChainProto(S, "msg", "__npAckPatched", function (pkt, value) { npOffAck(value, false, undefined, npReceiptSource(pkt)); });
+      return npAckHooked;
+    } catch (e) { return false; }
   }
   function npSendBattle(want, source, beforeToggle, preSend) {
+    if (!npBattleIdentityValid() || !npBattleTransportReady() || npBattleState() === null) return "unknown";
     if (npBattleKnown && npHuntOn === want) return "already";
     if (beforeToggle && beforeToggle() === false) return "failed";
     if (preSend && preSend() === false) return "failed";
@@ -12067,12 +12217,13 @@ function createRoItemCapture(env) {
   }
   // 身份真换代（换角色 / 回角色列表 / 新连接）：采集状态与在途关闭确认一起作废。
   function npResetBattleState() {
-    npOffCancel(); npClearBattleIntent(); npDropServerAutoAtk(); npBattleLastSentAt = -Infinity; npLastIntent = null;
+    npOffCancel(); npClearBattleIntent(); npDropServerAutoAtk(); npBattleLastSentAt = -Infinity; npLastIntent = null; npRawAckRepeat = null; npServerAutoAtk.tailBuffer = null;
     try { npAtkSeedKey = null; npAtkSeedAt = 0; npVerifyUnresolved = false; npAckClear(); npStopDebtClear(); npAssistantOnSend = null; } catch (eSeed) {} // V2.38.47：换角色必须重新播种 + 丢掉旧角色的回执等待
     npOffArmAt = 0; npOffArmSrc = ""; npOffChatWin = -1; npOffChatMissWin = -1; npAckWarnWin = -1; // V2.38.33：换角色/复位必须解除武装并清时间片，否则旧角色那一次关闭动作的武装会活到新角色（第六轮 SC-6）
   }
   function npDropServerAutoAtk() {
-    npServerAutoAtk.value = null; npServerAutoAtk.at = 0; npServerAutoAtk.src = "";
+    npServerAutoAtk.value = null; npServerAutoAtk.at = 0; npServerAutoAtk.src = ""; npServerAutoAtk.key = "";
+    npServerAutoAtk.handoff = null;
     npServerAutoAtk.epoch++; // 世代 +1：换代前到手的状态/在途确认一律不兑现
     npBattleKnown = false; npHuntOn = false; npBattleConfirmedAt = 0;
   }
@@ -12094,6 +12245,7 @@ function createRoItemCapture(env) {
   }
   function npAtkRecSave(on) {
     try {
+      if (!npBattleIdentityValid()) return false;
       var p = npAtkRecProfile(true); if (!p) return false;
       p.npAtk = { on: on ? 1 : 0, at: Date.now(), epoch: npServerAutoAtk.epoch, session: npRuntimeKey };
       saveProfiles(); // 未识别身份时由 profWriteGuard 挡住（只读不写），这里不再重复判定
@@ -12103,7 +12255,7 @@ function createRoItemCapture(env) {
   function npAtkRecLoad() {
     try {
       var p = npAtkRecProfile(false), r = p && p.npAtk;
-      if (!r || typeof r !== "object") return null;
+      if (!npBattleIdentityValid() || !npBattleTransportReady() || !r || typeof r !== "object" || r.pending === true) return null;
       var at = Number(r.at) || 0;
       if (!at || at < npRuntimeAt || r.session !== npRuntimeKey || r.epoch !== npServerAutoAtk.epoch || (Date.now() - at) > NP_ATK_REC_MAX_AGE) return null; // 不采信上次页面/上个连接的旧回执
       if (r.on !== 0 && r.on !== 1 && r.on !== false && r.on !== true) return null;
@@ -12123,7 +12275,7 @@ function createRoItemCapture(env) {
   //   否则会拿发包前的档记录把状态改成「已知旧值」，绕过下面 npRequestBattle 的乐观方向保护，
   //   再发一次 toggle 就把 toggle 型开关翻回去（连点纪律在 10514 已写明）。
   function npSeedAllowed() {
-    if (npBattleKnown || npOffWait || npAckWait) return false;
+    if (!npBattleIdentityValid() || !npBattleTransportReady() || npBattleKnown || npOffWait || npAckWait || npVerifyUnresolved) return false;
     if (npLastIntent !== null && npBattleLastSentAt > 0 && (Date.now() - npBattleLastSentAt) < NP_TOGGLE_GRACE) return false;
     return true;
   }
@@ -12145,7 +12297,7 @@ function createRoItemCapture(env) {
   function npAtkRecClear() {
     try {
       var p = npAtkRecProfile(false); if (!p || !p.npAtk) return false;
-      delete p.npAtk;
+      p.npAtk.pending = true; // Keep the last historical observation, but never seed it after an unconfirmed toggle.
       saveProfiles();
       return true;
     } catch (e) { return false; }
@@ -12179,7 +12331,10 @@ function createRoItemCapture(env) {
   }
   // 服务器自动战斗状态的唯一落点：2805 整份配置、2806 单项推送、引擎自己的 vbk.setloadInfo，
   //   以及 V2.38.47 新增的两句服务器回执（开启/关闭自动战斗）都走这里。
-  function npApplyBattleState(on, source) {
+  function npApplyBattleState(on, source, receiptSource) {
+    if (!npBattleIdentityValid() || !npBattleTransportReady()) return;
+    if (source !== "profile-record" && !npSourceValid(receiptSource)) return;
+    npServerAutoAtk.key = resolveSelfIdentity().oneId;
   // UNIFIED-PROBE-BEGIN battle-config-report ORIGINAL:ICAgIG5wU2VydmVyQXV0b0F0ay52YWx1ZSA9ICEhb247IG5wU2VydmVyQXV0b0F0ay5hdCA9IERhdGUubm93KCk7IG5wU2VydmVyQXV0b0F0ay5zcmMgPSBTdHJpbmcoc291cmNlIHx8ICIiKTs=
     npServerAutoAtk.value = !!on; npServerAutoAtk.at = Date.now(); npServerAutoAtk.src = String(source || "");
   // UNIFIED-PROBE-END battle-config-report
@@ -12215,7 +12370,7 @@ function createRoItemCapture(env) {
   try { masterTickReg(function () { try { if (npSeedAllowed()) npSeedStateOnce(); } catch (e) {} }); } catch (eTick) {}
   function npAutoAtkOn2805(pkt) {
   // UNIFIED-PROBE-BEGIN config-2805 ORIGINAL:ICAgIHRyeSB7IHZhciB2ID0gcGt0ID8gcGt0LnN0YXJ0QXV0b0F0ayA6IHVuZGVmaW5lZDsgaWYgKHYgPT09IDAgfHwgdiA9PT0gMSkgbnBBcHBseUJhdHRsZVN0YXRlKHYgPT09IDEsICJsb2FkaW5mby0yODA1Iik7IH0gY2F0Y2ggKGUpIHt9
-    try { var v = pkt ? pkt.startAutoAtk : undefined; if (v === 0 || v === 1) { try{upRecord("battle","server-battle-report",{on:v===1,source:"ZC.NOTIFY_LOADINFO",result:"received config; protection acceptance separate"});}catch(eUP){} npApplyBattleState(v === 1, "loadinfo-2805"); } } catch (e) {}
+    try { var v = pkt ? pkt.startAutoAtk : undefined; if (v === 0 || v === 1) { try{upRecord("battle","server-battle-report",{on:v===1,source:"ZC.NOTIFY_LOADINFO",result:"received config; protection acceptance separate"});}catch(eUP){} npApplyBattleState(v === 1, "loadinfo-2805", npReceiptSource(pkt)); } } catch (e) {}
   // UNIFIED-PROBE-END config-2805
   }
   // 旧引擎 ZC.NOTIFY_RELOADINFOS 的 id→选项名映射里，唯一的自动战斗项就是 34
@@ -12227,7 +12382,7 @@ function createRoItemCapture(env) {
       if (!pkt || Number(pkt.id) !== NP_RELOAD_ID_AUTOATK) return;
       var v = Number(pkt.value);
   // UNIFIED-PROBE-BEGIN config-2806 ORIGINAL:ICAgICAgaWYgKHYgPT09IDAgfHwgdiA9PT0gMSkgbnBBcHBseUJhdHRsZVN0YXRlKHYgPT09IDEsICJyZWxvYWRpbmZvLTI4MDYiKTs=
-      if (v === 0 || v === 1) { try{upRecord("battle","server-battle-report",{on:v===1,source:"ZC.NOTIFY_RELOADINFOS id=34",result:"received config; protection acceptance separate"});}catch(eUP){} npApplyBattleState(v === 1, "reloadinfo-2806"); }
+      if (v === 0 || v === 1) { try{upRecord("battle","server-battle-report",{on:v===1,source:"ZC.NOTIFY_RELOADINFOS id=34",result:"received config; protection acceptance separate"});}catch(eUP){} npApplyBattleState(v === 1, "reloadinfo-2806", npReceiptSource(pkt)); }
   // UNIFIED-PROBE-END config-2806
     } catch (e) {}
   }
@@ -12237,24 +12392,20 @@ function createRoItemCapture(env) {
   function npChainProto(S, key, mark, sink) {
     try {
       if (!S || !S.prototype) return false;
-      if (S.prototype[mark] === sink) return true; // 已装且客户端没重新注册过
-      var d = Object.getOwnPropertyDescriptor(S.prototype, key);
+      var slot = S.prototype[mark];
+      if (slot && slot.set === (Object.getOwnPropertyDescriptor(S.prototype, key) || {}).set) { slot.sink = sink; slot.capture = npReceiptSource; return true; }
+      var d = Object.getOwnPropertyDescriptor(S.prototype, key), box = new WeakMap();
       var upGet = d && d.get, upSet = d && d.set;
-      var box = new WeakMap();
-      Object.defineProperty(S.prototype, key, {
-        configurable: true, enumerable: true,
-        get: function () {
-          try { if (box.has(this)) return box.get(this); } catch (e1) {}
-          return upGet ? upGet.call(this) : undefined;
-        },
-        set: function (v) {
-          try { box.set(this, v); } catch (e2) {}
-          if (upSet) { try { upSet.call(this, v); } catch (e3) {} }
-          try { sink(this, v); } catch (e4) {}
-        }
-      });
-      S.prototype[mark] = sink;
-      return S.prototype[mark] === sink; // 显式校验标记真的写进去了（defineProperty 抛错仍由外层 catch 走 fail-closed）
+      slot = { sink: sink, capture: npReceiptSource };
+      slot.set = function (v) {
+        box.set(this, v);
+        if (upSet) upSet.call(this, v);
+        try { slot.capture(this, true); slot.sink(this, v); } catch (e) {}
+      };
+      Object.defineProperty(S.prototype, key, { configurable: true, enumerable: true,
+        get: function () { return box.has(this) ? box.get(this) : upGet ? upGet.call(this) : undefined; }, set: slot.set });
+      S.prototype[mark] = slot;
+      return true;
     } catch (e) { return false; }
   }
   function npPktStruct(name) {
@@ -12269,15 +12420,16 @@ function createRoItemCapture(env) {
     try {
       var c = typeof uiComp === "function" ? uiComp("vbk") : null;
       if (!c || typeof c.setloadInfo !== "function") return false;
-      if (c.setloadInfo.__npConfigRead) return true;
-      var receive = c.setloadInfo;
-      var wrapper = function (pkt) { var r = receive.apply(this, arguments); npAutoAtkOn2805(pkt); return r; };
-      wrapper.__npConfigRead = true; c.setloadInfo = wrapper;
+      if (c.setloadInfo.__npConfigRead) { c.setloadInfo.__npConfigRead.sink = npAutoAtkOn2805; return true; }
+      var receive = c.setloadInfo, slot = { sink: npAutoAtkOn2805 };
+      var wrapper = function (pkt) { var r = receive.apply(this, arguments); slot.sink(pkt); return r; };
+      wrapper.__npConfigRead = slot; c.setloadInfo = wrapper;
       return c.setloadInfo === wrapper;
     } catch (e) { return false; }
   }
   // 幂等：客户端重新注册 PacketStructure（新原型）后必须能重新接管，所以每次调用都校验。
   function npHookServerBattle() {
+    try { npHookTransport(); } catch (eTransport) {}
     var a = npChainProto(npPktStruct("NOTIFY_LOADINFO"), "startAutoAtk", "__npAutoAtkSink", npAutoAtkOn2805);
     var b = npChainProto(npPktStruct("NOTIFY_RELOADINFOS"), "value", "__npReloadSink", npAutoAtkOn2806);
     var c = npHookBattleConfig();
@@ -12286,6 +12438,8 @@ function createRoItemCapture(env) {
   // 决策（唯一入口）：状态可知 → 已关 already 零发包 / 在开最多发一次 toggle；
   //   状态未知（本连接内没见过 2805，或 2806 只推过别的 id，或已被身份换代作废）→ 零 toggle 并如实报未执行。
   function npRequestBattle(want, source, immediate, beforeToggle, preSend) {
+    if (!npBattleIdentityValid() || !npBattleTransportReady()) return "unknown";
+    if (npBattleKnown && npServerAutoAtk.key !== resolveSelfIdentity().oneId) npResetBattleState();
   // UNIFIED-PROBE-BEGIN battle-intent ORIGINAL:ICAgIHdhbnQgPSAhIXdhbnQ7IHNvdXJjZSA9IHNvdXJjZSB8fCAidW5rbm93biI7
     want = !!want; source = source || "unknown";
     try{upRecord("battle","battle-toggle-intent",{want:want,source:upText(source,80),evidence:"npRequestBattle wrapper",result:"request only; dispatch and server report separate"});}catch(eUP){}
@@ -12482,6 +12636,7 @@ function createRoItemCapture(env) {
       var t = e.target;
       if (!t || !t.matches || !t.matches("#vbk input.openattack")) return;
       npBattleKnown = false; // 玩家点击只表示意图，未获服务器配置报告
+      try { npAtkRecClear(); } catch (eRec) {}
       npLastIntent = null; npBattleLastSentAt = -Infinity; npVerifyUnresolved = false; npAckClear(); npStopDebtClear(); npAssistantOnSend = null; // 玩家人工切换覆盖助手先前的停机意图
     });
   } catch (e) {}
@@ -14754,15 +14909,16 @@ function createRoItemCapture(env) {
     zAttTimer = setInterval(zAttack, sec * 1000);
     setStatus("助手模式已启动（扫描+攻击）· 动作自检 " + _czchk.brief, "ok");
   }
-  function stopZhu() {
+  function stopZhu(mapStopResult) {
     if (zFarPatrol.active) zFarPatrolClear(true); // 停止时撤销本轮远点巡图，不带到下次启动
     if (!deathReturnStopping) deathReturnCancel("手动停止战斗");
     zRunning = false;
     stopScan();
     if (zAttTimer) { clearInterval(zAttTimer); zAttTimer = null; }
     // 内挂机制寻怪：置零开关允许时，记录助手已发「开」的停机债务；超时后真实「开」仍须补关。
-    var npStopResult = "external";
-    if (externalAutomationOwns("battle") || (typeof apiCombatActive === "function" && apiCombatActive())) {
+    var npStopResult = typeof mapStopResult === "string" ? mapStopResult : "external";
+    if (typeof mapStopResult === "string") { /* Reuse the map stop transaction; never issue a second toggle. */ }
+    else if (externalAutomationOwns("battle") || (typeof apiCombatActive === "function" && apiCombatActive())) {
       npStopDebtClear(); // 外部代打持有战斗控制权时，停止助手不能翻转外部的内挂开关
     } else {
       if (npZeroEnabled()) npStopDebtArm("stopZhu"); else npStopDebtClear();
@@ -20326,12 +20482,12 @@ function createRoItemCapture(env) {
       blockMcTick();
     } catch (e) {}
   }
-  function dispatchInbound(bytes) {
+  function dispatchInbound(bytes, receiptSource) {
     try {
       if (!bytes || !bytes.byteLength) return;
       // V2.38.4 入站分帧：一条 WebSocket 消息里可能装着多个包。先按运行时长度表逐帧切分，再对每一帧执行下面的 opcode 分派链；
       //   长度表不可用、或首包长度未知时 walkInboundFrames 只回调一次整条消息 —— 与旧实现逐字等价，绝不回归。
-      var walk = walkInboundFrames(bytes, dispatchInboundFrame);
+      var walk = walkInboundFrames(bytes, function (frame, op, off, ok) { dispatchInboundFrame(frame, op, off, ok, receiptSource); });
       if (walk && walk.rest < bytes.byteLength) {
         framePartial++; // 尾部切不出的残包只计数：不做跨消息缓冲（只会漏读，绝不错位串包），下次抓包可见 partial 记录
         if (typeof txCap !== "undefined" && txCap && txCap.on) txCapPushInbound(bytes, -1, walk.rest, true, walk.rest);
@@ -20392,11 +20548,8 @@ function createRoItemCapture(env) {
     try { for (var i = 0; i < len; i++) { var c = dv.getUint8(off + i); if (!c) break; s += String.fromCharCode(c); } } catch (e) {}
     return s;
   }
-  // V2.38.33/V2.38.34：身份换代统一清理口径（换角 / 同角色换图 / 重登 / 新连接共用同一实现）——
-  //   ① 世代 +1（未识别期间缓冲整份作废）；② 内挂采集状态与在途关闭确认按换代真伪分别处理。
-  //   真换代（换角 / 回角色列表 / 新连接）：采集状态与在途确认一起作废。
-  //   换图（同 gid）：只清显示重试类残留，采集状态与在途关闭确认都留着——自动战斗设置是角色级，
-  //     且换图后服务器会再推 2805，等新快照更新即可；这里作废会把刚发起的停战丢掉（第三轮复审 P2）。
+  // Same-role maps preserve reports and in-flight toggles; new login/role invalidates them.
+  // 2805/2806 are optional on this server: absence of a fresh map report does not imply OFF.
   function npIdentityNewSession(why) {
     identityEpoch++;
     try { if (typeof arrowIdentityInvalidate === "function") arrowIdentityInvalidate(why || "identity-reset"); } catch (eA) {}
@@ -20412,6 +20565,7 @@ function createRoItemCapture(env) {
       npIdentityNewSession(why || "identity-reset");
       if (pktCharId > 0) identityLogLine("pkt-clear why=" + why + " was=" + pktCharId);
       pktCharId = 0; pktCharIdAt = 0; pktCharIdMap = ""; pktCharIdSrc = "";
+      npServerAutoAtk.blocked = true;
     } catch (e) {}
   }
   // 113/2757：GID(uint32@2) 就是 char_id；mapName[16]@6（诊断）。收到即视为身份到位，提交交由 1s 身份拍（重活不进收包路径）
@@ -20435,16 +20589,25 @@ function createRoItemCapture(env) {
         npIdentityNewSession("char-change");
       }
       pktCharId = gid; pktCharIdAt = Date.now(); pktCharIdMap = mapName; pktCharIdSrc = src;
+      npServerAutoAtk.blocked = false;
       identityLogLine("pkt-charid " + gid + " op=" + src + " map=" + mapName + " ss=" + cg);
     } catch (e) {}
   }
-  function identityPktHook(bytes, op) {
+  function identityPktHook(bytes, op, receiptSource) {
     try {
       if (typeof op !== "number") return;
       var ops = identityPktOps();
       if (!ops) return;
       if (ops.zone[op]) { onZoneNotifyFrame(bytes, op); return; }
       if (ops.charlist[op]) { clearPktIdentity("charlist"); return; }
+      // Only the currently bound game socket can authorize a map-server handoff.
+      if (op === 146 && bytes && bytes.byteLength === 28 && npBattleIdentityValid() && npServerAutoAtk.socket && npSourceValid(receiptSource)) {
+        var dv = new DataView(bytes), ip = [];
+        for (var i = 22; i < 26; i++) ip.push(dv.getUint8(i));
+        npServerAutoAtk.handoff = { socket: npServerAutoAtk.socket, key: resolveSelfIdentity().oneId, epoch: npServerAutoAtk.epoch, at: Date.now(), host: ip.join("."), port: dv.getUint16(26, true) };
+        var ticket = npServerAutoAtk.handoff;
+        setTimeout(function () { if (npServerAutoAtk.handoff === ticket) clearPktIdentity("handoff-timeout"); }, 10000);
+      }
     } catch (e) {} // 单帧解析异常只丢该帧，绝不影响其它包
   }
   // ---------------- V2.38.4 入站分帧：运行时长度表 + 逐帧遍历（一条消息可能含多个包） ----------------
@@ -20578,11 +20741,11 @@ function createRoItemCapture(env) {
     } catch (e) {}
   }
   // V2.38.4 单帧分派：opcode 判定链与 V2.38.2 逐字一致（条件与顺序不变），可被单独一帧调用；异常只吞掉这一帧
-  function dispatchInboundFrame(bytes, op, frameOff, lenTblOk) {
+  function dispatchInboundFrame(bytes, op, frameOff, lenTblOk, receiptSource) {
     try {
       if (typeof op !== "number") { try { op = new DataView(bytes).getUint16(0, true); } catch (e0) { return; } }
-      identityPktHook(bytes, op); // V2.38.6：手机端 char_id 包流来源（113/2757 记录身份、107 清身份）
-      if (op === 142) { npChatFrameCount++; npRawBattleNotice(bytes, op); } // 只记总帧数与到达时间，不读取/记录聊天内容
+      identityPktHook(bytes, op, receiptSource); // V2.38.6：手机端 char_id 包流来源（113/2757 记录身份、107 清身份）
+      if (op === 142) { npChatFrameCount++; npRawBattleNotice(bytes, op, receiptSource); } // 只记总帧数与到达时间，不读取/记录聊天内容
       // V2.38.7：装备整表 / 穿脱确认包流（只读；单帧异常只丢该帧）。
       //   typeof 守卫：局部切片测试环境里这个函数可能不在同一段代码中，缺了就当没有（绝不抛、绝不影响分帧与身份）。
       if (typeof gearPktHook === "function") gearPktHook(bytes, op);
@@ -20677,25 +20840,67 @@ function createRoItemCapture(env) {
       if (btDiagOn) btLog('post-delay', 'ACK3 skid=' + skid + ' delay=' + dly + 'ms');
     } catch (e) {}
   }
-  function onReconInbound(data) {
-    try { if(typeof arrowEquipHookTick === "function")arrowEquipHookTick(); } catch(eEquipBefore) {} // 新 socket 原始监听先于客户端解析，首个装备更新前接入
+  function onReconInbound(data, socket, receiptSource) {
+    try { if(typeof arrowEquipHookTick === "function")arrowEquipHookTick(); } catch(eEquipBefore) {}
     try {
-      if (data instanceof ArrayBuffer) { dispatchInbound(data); return; }
-      if (data && data.buffer instanceof ArrayBuffer) { dispatchInbound(data.buffer); return; }
-      if (typeof Blob !== "undefined" && data instanceof Blob && data.arrayBuffer) { data.arrayBuffer().then(dispatchInbound); }
+      if (!npSourceValid(receiptSource, true)) return;
+      if (data instanceof ArrayBuffer) { dispatchInbound(data, receiptSource); return; }
+      if (ArrayBuffer.isView(data)) { dispatchInbound(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), receiptSource); return; }
+      if (typeof Blob !== "undefined" && data instanceof Blob && data.arrayBuffer) data.arrayBuffer().then(function (bytes) {
+        if (npSourceValid(receiptSource, true)) dispatchInbound(bytes, receiptSource);
+      }).catch(function () {});
     } catch (e) {}
   }
+  function npHookTransport() {
+    var nm = CLIENT.NM;
+    if (!nm || typeof nm.connect !== "function") return;
+    npHookLateTransport(nm); npHookReceiptReaders();
+    var installed = nm.connect.__npTransport;
+    var original = installed && installed.original || nm.connect;
+    if (installed && installed.original) { installed.route = connect; return; }
+    function connect(host, port, callback, isZone) {
+      var s = npServerAutoAtk, h = s.handoff, id = resolveSelfIdentity();
+      var continuous = !!(isZone && h && h.socket === s.socket && h.key === id.oneId && id.known && h.epoch === s.epoch && Date.now() - h.at >= 0 && Date.now() - h.at < 10000 && String(host) === h.host && Number(port) === h.port);
+      if (!continuous) clearPktIdentity("socket-change");
+      else npIdentityNewSession("map-change");
+      s.handoff = null; s.inboundSocket = null; s.socket = null; s.blocked = true;
+      s.generation = (s.generation || 0) + 1;
+      var binding = { zone: !!isZone, generation: s.generation, socket: null };
+      s.connecting = binding;
+      var callArgs = Array.prototype.slice.call(arguments);
+      callArgs[2] = function (success) {
+        if (s.generation === binding.generation) {
+          if (success && this && this.ws) npBindGameSocket(this.ws, binding);
+          if (!success || !binding.socket) clearPktIdentity("connect-unbound-or-failed");
+          else s.blocked = !binding.zone;
+        }
+        if (typeof callback === "function") return callback.apply(this, arguments);
+      };
+      try {
+        var result = original.apply(this, callArgs);
+        if (!binding.socket) clearPktIdentity("connect-unbound");
+        setTimeout(function () { if (s.generation === binding.generation && (!binding.socket || binding.socket.readyState !== 1)) clearPktIdentity("connect-timeout"); }, 10000);
+        return result;
+      } catch (e) { clearPktIdentity("connect-error"); throw e; }
+      finally { s.connecting = null; }
+    }
+    var route = { original: original, route: connect };
+    var routed = function () { return route.route.apply(this, arguments); };
+    routed.__npTransport = route; nm.connect = routed;
+  }
   function hookMenuRecon() {
-    if (window.__dshMenuReconHooked) return;
+    try { npHookTransport(); } catch (eTransport) {}
     try {
       var N = window.WebSocket;
       if (!N) return;
+      function bindCurrent(inst) { var binding = npServerAutoAtk.connecting; if (binding) npBindGameSocket(inst, binding); }
+      if (N.__npCtorBinding) { N.__npCtorBinding = bindCurrent; return; }
       function PW(url, protocols) {
-        try { clearPktIdentity("new-socket"); } catch (eWS) {} // V2.38.6：新连接 = 身份作废（旧 GID 绝不复用）
         var inst = protocols !== undefined ? new N(url, protocols) : new N(url);
-        try { inst.addEventListener("message", function (ev) { onReconInbound(ev.data); }); } catch (e) {}
+        PW.__npCtorBinding(inst);
         return inst;
       }
+      PW.__npCtorBinding = bindCurrent;
       PW.prototype = N.prototype; PW.CONNECTING = N.CONNECTING; PW.OPEN = N.OPEN; PW.CLOSING = N.CLOSING; PW.CLOSED = N.CLOSED;
       window.WebSocket = PW;
       window.__dshMenuReconHooked = true;
@@ -22462,26 +22667,24 @@ function createRoItemCapture(env) {
         // 地图变更检测（功能性，后台保留）：换图 → 自动刷新 拾取页当前地图 + 本图锁定目录 + 地图怪物表
         try {
           if (!CLIENT.MR) CLIENT.MR = requireDB("Renderer/MapRenderer");
+          if (npShutdownDebt && npShutdownDebt.reason === "map-change" && !npShutdownDebt.attempted && npBattleKnown && npBattleIdentityValid() && npBattleTransportReady()) npStopDebtOnReport(npHuntOn);
           var curMap = CLIENT.MR && CLIENT.MR.currentMap ? String(CLIENT.MR.currentMap).split(".")[0] : "";
           if (curMap && curMap !== _lastMapKey) {
+            var mapChanged = !!_lastMapKey;
             _lastMapKey = curMap; zReinMapAt = Date.now(); // V2.38.4+：换图瞬间时间戳（自动上马判据⑦「换图/瞬移短窗口」用）
             if (selfSpiritCount(CLIENT.SS && CLIENT.SS.Entity) === null) selfSpirits = { aid: 0, num: 0, map: "" };
             dshDiag("map-change", { map: curMap, zRunning: zRunning, npHuntOn: npHuntOn });
             tlog("map-changed " + curMap);
-            // 换图自动停止战斗（用户需求）：不读旧面板猜状态，只看服务器推来的采集状态
+            // First observation initializes the key; only an observed A -> B stops battle.
             try {
-              npCalibrate(); // V2.38.33：历史遗留空实现（面板不再被当成服务器状态），不授权任何动作，保留仅为兼容旧调用序
-              if (zRunning) { stopZhu(); }       // 助手运行中 → 完整停止（内含内挂关闭）
-              // V2.38.34：换图必须停服务器侧自动战斗（含纯内挂模式；置零开关关闭时 stopZhu 也不置零，这里是兜底）——
-              //   决策只看服务器报告过的采集状态：已关 → 零发包（already）；在开 → 最多发一次 toggle；未知 → 零发包并如实说没执行。
-              //   采集状态不因换图作废（角色级设置，服务器换图后会再推 2805），所以刚发起的停战确认不会在这里被抹掉。
-              var npMapStop = npHuntStop("map-change", true);
-              if (npMapStop === "already") setStatus("换图：自动战斗已停止（服务器配置报告确认关闭）", "st");
-              else if (npMapStop === "sent") setStatus("换图：已发送停止自动战斗，等待游戏结果", "st");
-              else if (npMapStop === "queued") setStatus("换图：停止自动战斗尚未确认（已发送关闭，等待游戏确认）", "warn");
-              else if (npMapStop === "failed") setStatus("换图：自动战斗停止未执行（开关发送失败，不盲切开关）", "warn");
-              else setStatus("换图：自动战斗停止状态未知（未执行，还没收到游戏发来的内挂状态）", "warn");
-              tlog("map-changed: battle stop result=" + npMapStop);
+              npCalibrate();
+              if (mapChanged) {
+                npStopDebtArm("map-change");
+                var npMapStop = npHuntStop("map-change", true);
+                npStopDebtResult(npMapStop);
+                if (zRunning) stopZhu(npMapStop);
+                else if (npMapStop !== "already") setStatus("换图已请求停止内挂；关闭未确认，等待游戏回执或手动核实", "warn");
+              }
               // V2.35.2：换图清空瞬移/脱战/卡死残留，避免死后换图继续乱飞
               resetEmergencyEscape(0); escapeBackoffUntil = 0; flyFailCount = 0; flyFailUntil = 0; lastFly = 0;
               zStuckSince = null; zLastPos = null;
