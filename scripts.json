@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "kind": "lastro-script-manifest",
-  "updatedAt": "2026-10-13T06:27:55.800Z",
+  "updatedAt": "2026-10-14T17:03:41.720Z",
   "note": "固定寻址清单。feed 和 scripts 声明当前版本及地址；迁移地址须满足客户端与助手消费者的主机、路径白名单，新主机或文件名须先更新消费者。未发布条目不得作为下载源。",
   "feed": {
     "assist": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js",
@@ -20,19 +20,19 @@
       "id": "assist-exp",
       "name": "RO 助手（实验版）",
       "channel": "exp",
-      "version": "2.38.77.8",
+      "version": "2.38.77.12",
       "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js",
-      "sha256": "baa4089dc3d3c43725451a944a4a81d8f55ca4b2fe1ab61563992d4d5b34cf4d"
+      "sha256": "5d6f5757fe29a7be9c34d0e0d84430d0f22dc81247d7fabe521d7e1905a21295"
     },
     {
       "id": "dojo",
       "name": "无限挑战",
       "channel": "stable",
-      "version": "1.0.13",
+      "version": "1.0.14",
       "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-infinite-dojo.user.js",
       "status": "published",
-      "sha256": "845be3816a1ba676c7dfead2ee51c501c412cbdc3d0c5e9f7208c1226e549420",
-      "note": "无限挑战独立脚本，需玩家主动安装并启用助手；不由助手自动下载。"
+      "sha256": "ab39861473762179945ff89fd6c40d2d772385fe95023a3081f81797797070d4",
+      "note": "无限挑战独立脚本，需玩家在助手「脚本执行」内主动导入并启用；不由助手自动下载。"
     },
     {
       "id": "itemhl",

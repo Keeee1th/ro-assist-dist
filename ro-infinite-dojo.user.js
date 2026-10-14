@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         仙境传说 · 脚本入口（独立版）
 // @namespace    dsh.ro-plugin
-// @version      1.0.13
+// @version      1.0.14
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-infinite-dojo.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-infinite-dojo.user.js
 // @description  无限挑战（独立脚本）：到报名点报名，服务器确认本轮出怪后才代打；无怪不猜结算，付费选项需手动确认；需要先启用 RO 助手。
@@ -57,17 +57,17 @@
 //    只有本机 8971、站内网址含 /ro/api 的页面、以及手机版入口（网址含 r=mn）才启动；
 //    站点首页、登录页、公告页等一律不启动（不建面板、不挂定时器、不碰页面）。
 // ---------------- V1.0.3 ----------------
-// 打开游戏不再自动弹出面板，改为点「无限道场」按钮手动打开。
+// 打开游戏不再自动弹出面板；由助手「脚本执行」统一打开设置。
 // ---------------- V1.0.4 ----------------
-// 1. 修启动按钮点一下就跳到左边并卡住；现在点一下位置不动，并且会跟着悬浮球走。
+// 1. 修面板拖动与单击位置保持，入口由助手统一管理。
 // ---------------- V1.0.5 ----------------
 // 用户可见名称统一为「无限挑战（独立脚本）」，内部标识不变（下载地址 / 存储键 / 元素 id 照旧，老用户的设置与自动更新都不受影响）。
 // ---------------- V1.0.12 ----------------
 // 1. 去掉自建常驻悬浮按钮：按钮元素、容器、样式表、跟随助手悬浮球的定位与位置记录整层删除，
-//    入口只保留「助手功能菜单 → 无限挑战（独立脚本）」这一条；面板照旧不自动弹出。
+//    入口由助手「脚本执行」统一打开设置；内部浮窗注册保留，面板照旧不自动弹出。
 // 2. 可见名称统一为「无限挑战（独立脚本）」：@name、助手浮窗标题、自建面板标题与助手通知文案一律用新名，不再保留旧名。
 
-(function () {
+(function dojoMain() {
   'use strict';
 
   /* ==================== 页面闸门（必须最先执行） ====================
@@ -109,9 +109,17 @@
   try { PAGE_OK = pageAllowed() === true; } catch (e) { PAGE_OK = false; }
   if (!PAGE_OK) return;
 
+  // 控制自治：同源码重入直接返回；更新源码先销毁旧实例再启动。
+  var instanceWindow = pageWindow(), instanceKey = "__DSH_RO_DOJO_INSTANCE__";
+  var previous = instanceWindow[instanceKey];
+  if (previous && previous.source === String(dojoMain)) return;
+  if (previous && isFn(previous.dispose)) previous.dispose();
+  var lifecycle = { source: String(dojoMain), timer: null, listeners: [], cleanups: [], styles: [], dispose: dispose };
+  instanceWindow[instanceKey] = lifecycle;
+
   /* ==================== 常量 ==================== */
 
-  var VERSION        = "1.0.13";
+  var VERSION        = "1.0.14";
   var API_PROTOCOL   = 1;
   var OWNER          = "ro-infinite-dojo";      // 控制权属主，全程一致
   var SCOPES         = ["dojo", "battle", "movement", "dialog", "fly"];
@@ -128,7 +136,7 @@
   var LEVEL_WORDS    = { basic: ["初级"], middle: ["中级"], advanced: ["高级"] };
   var REQUIRED_METHODS = [
     "snapshot", "acquire", "release", "contactNpc", "walkTo", "chooseMenu", "assistCombat",
-    "setBattleTarget", "clearBattleTarget", "requestFly", "prepareCombat", "requestPickup", "teleport"
+    "setBattleTarget", "clearBattleTarget", "requestFly", "prepareCombat", "requestPickup", "teleport", "bindDialog", "nextDialog"
   ];
 
   /* ==================== 配置 ==================== */
@@ -202,6 +210,7 @@
     // 旧档迁移（仅对已知的旧默认错名生效）：旧默认值「荣耀管理员」不是本图 NPC 的名字，一律改回正确名；
     // 用户自己配的名字（如「别的管理员」）原样保留，不被本行覆盖
     if (c.npcName === "荣耀管理员") c.npcName = DEFAULTS.npcName;
+    if (src.npcName && !Object.prototype.hasOwnProperty.call(src, "entryNpcAliases")) c.entryNpcAliases = [c.npcName];
     if (!/^(basic|middle|advanced)$/.test(String(c.difficulty))) c.difficulty = DEFAULTS.difficulty;
     return c;
   }
@@ -221,7 +230,7 @@
     lastFly: 0,
     noMobSince: 0, noMobWarned: false,
     settleUntil: 0, settleSeen: false, cycleEnd: false,
-    startedAt: 0, log: []
+    identity: "", scene: null, startedAt: 0, log: []
   };
   var mode = "none";                     // none / window / standalone
   var root = null, holder = null, wrap = null;
@@ -388,7 +397,7 @@
   }
   function statusText() {
     var s = "阶段：" + (run.phase || "未开始") +
-      " · 轮次：" + (run.round || 0) + (run.remaining == null ? "" : " / 剩余 " + run.remaining) +
+      " · 轮次：" + (run.round > 0 ? run.round : "未知") + (run.remaining == null ? "" : " / 剩余 " + run.remaining) +
       " · 距离：" + (run.dist == null ? "—" : run.dist) +
       (run.step ? " · " + run.step : "");
     run.statusLine = s;
@@ -457,129 +466,62 @@
 
   /* ==================== 对话窗口（下一步） ==================== */
 
-  function requireClient(name) {
-    try {
-      var req = pageWindow().require;
-      if (!isFn(req)) return null;
-      if (isFn(req.defined) && !req.defined(name)) return null;
-      if (isFn(req.specified) && !req.specified(name)) return null;
-      return req(name);
-    } catch (e) { return null; }
-  }
-  function clientUIManager() {
-    var names = ["UI/Components/StatusIcons/StatusIcons", "UI/Components/SkillList/SkillList"];
-    for (var i = 0; i < names.length; i++) {
-      var m = requireClient(names[i]);
-      if (m && m.manager) return m.manager;
+  function dialogOpen(s) { return !!(s && (s.dialog ? s.dialog.open : s.dialogOpen)); }
+  function bindVisibleDialog(a, s, v) {
+    var expected = run.stage === "entry" ? run.entry && run.entry.gid : 0;
+    if (run.stage !== "entry") {
+      var candidates = dojoNpcList(s);
+      for (var i = 0; i < candidates.length; i++) if (candidates[i].gid === v.naid) expected = v.naid;
     }
-    return null;
-  }
-  // 组件可达性：优先直接取模块，拿不到再经管理器取回（线上该模块可能在白名单外）
-  function npcBox() {
-    var b = requireClient("UI/Components/NpcBox/NpcBox");
-    if (b && isFn(b.next)) return b;
-    var UM = clientUIManager();
-    if (UM && isFn(UM.getComponent)) {
-      try {
-        var c = UM.getComponent("NpcBox");
-        if (c && isFn(c.next)) return c;
-      } catch (e) {}
+    if (!v.naid || !expected || v.naid !== expected) {
+      doStop("对话来自其他 NPC 或归属未确认（NAID " + (v.naid || "?") + "），已停手", "foreign-npc");
+      return false;
     }
-    return null;
+    var r = call(a, "bindDialog", [OWNER, { naid: v.naid, fingerprint: v.fingerprint }]);
+    if (!r || r.ok !== true) { doStop("现场对话绑定被拒绝（" + ((r && r.error) || "unknown") + "）", "dialog-bind-failed"); return false; }
+    return true;
   }
-  function jqText(j) {
-    try { if (j && isFn(j.text)) return String(j.text() == null ? "" : j.text()); } catch (e) {}
-    try { if (j && j[0]) return String(j[0].textContent == null ? "" : j[0].textContent); } catch (e2) {}
-    return "";
+  function chooseBoundMenu(a, m, idx) {
+    var s = call(a, "snapshot", [OWNER]);
+    if (!s || !bindVisibleDialog(a, s, m)) return { ok: false, error: "dialog-bind-failed" };
+    return call(a, "chooseMenu", [OWNER, { naid: m.naid, index: idx, fingerprint: m.fingerprint }]);
   }
-  function jqVisible(j) {
-    if (!j) return false;
-    try { if (isFn(j.is)) return !!j.is(":visible"); } catch (e) {}
-    try {
-      if (isFn(j.css)) {
-        var d = j.css("display");
-        if (d !== undefined && d !== null && d !== "") return String(d) !== "none";
-      }
-    } catch (e2) {}
-    try { if (j[0] && j[0].style && j[0].style.display === "none") return false; return !!(j[0]); } catch (e3) {}
-    return false;
-  }
-  // 返回 {box, visible, text, ownerID}；组件不可达时返回 null（调用方必须明确报错，不许空转）
-  function npcBoxButton() {
-    var box = npcBox();
-    if (!box) return null;
-    var el = null;
-    try { if (box.ui && isFn(box.ui.find)) el = box.ui.find(".next"); } catch (e) { el = null; }
-    if (!el && isFn(box.getRoot)) {
-      try {
-        var rt = box.getRoot();
-        var n = rt && isFn(rt.querySelector) ? rt.querySelector(".next") : null;
-        if (n) el = { 0: n, length: 1 };
-      } catch (e2) {}
-    }
-    if (!el) return null;
-    var vis = jqVisible(el);
-    var text = "";
-    try { if (box.ui && isFn(box.ui.find)) text = jqText(box.ui.find(".content")); } catch (e3) {}
-    if (!text && isFn(box.getRoot)) {
-      try {
-        var rt2 = box.getRoot();
-        var c = rt2 && isFn(rt2.querySelector) ? rt2.querySelector(".content") : null;
-        if (c) text = String(c.textContent == null ? "" : c.textContent);
-      } catch (e4) {}
-    }
-    var owner = null;
-    try { if (box.ownerID != null) owner = Number(box.ownerID) || 0; } catch (e5) {}
-    return { box: box, visible: vis, text: norm(text), ownerID: owner };
-  }
-  // 只点一次同一句话；组件不可达时明确报错
+  // 下一页仅消费助手当前可见对话；本脚本不读取游戏组件。
   function pressNext(a, s, now, tag) {
-    var e = run.entry;
-    var inEntry = run.stage === "entry";
-    var stage = inEntry ? ("entry:" + (e ? e.expect : "")) : ("stage:" + run.stage);
-    var nb = npcBoxButton();
-    if (!nb) {
-      if (e) {
-        if (!e.boxMissAt) e.boxMissAt = now;
-        if (now - e.boxMissAt >= 5000) return doStop("取不到对话窗口的「下一步」按钮（npc-box-unreachable），请更新助手或手动点一下", "npc-box-unreachable");
-      }
-      setPhase("等待对话窗口（" + (tag || "对话") + "）", "");
-      return null;
-    }
-    e && (e.boxMissAt = 0);
-    if (!nb.visible) {
+    var e = run.stage === "entry" ? run.entry : null;
+    var d = s && s.dialog;
+    if (!d || !d.open || !d.fingerprint || !d.naid) {
       if (!run.noNextSince) run.noNextSince = now;
-      else if (now - run.noNextSince >= cfg.dialogStuckMs) {
-        return doStop("对话停在没有「下一步」的一层（dialog-stuck），请手动点一下", "dialog-stuck");
-      }
-      setPhase(nb.text && /报名成功|报名完成/.test(nb.text) ? "已报名，等待传送" : "对话文字层已结束", "");
-      return null;
+      if (now - run.noNextSince >= cfg.dialogStuckMs) return doStop("助手未提供当前可见对话（dialog-snapshot-missing），请手动确认", "dialog-snapshot-missing");
+      setPhase("等待对话内容（" + (tag || "对话") + "）", "");
+      return;
+    }
+    if (!bindVisibleDialog(a, s, d)) return;
+    if (!d.nextAvailable) {
+      if (!run.noNextSince) run.noNextSince = now;
+      else if (now - run.noNextSince >= cfg.dialogStuckMs) return doStop("对话停在没有「下一步」的一层（dialog-stuck），请手动点一下", "dialog-stuck");
+      setPhase(/报名成功|报名完成/.test(d.text || "") ? "已报名，等待传送" : "对话文字层已结束", "");
+      return;
     }
     run.noNextSince = 0;
-    if (!nb.box) return null;
-    // NAID 校验（只对报名阶段）：对话属于别的 NPC 时一律不碰
-    if (inEntry && nb.ownerID && e && e.gid && nb.ownerID !== e.gid) {
-      return doStop("对话来自其他 NPC（NAID " + nb.ownerID + "），已停手", "foreign-npc");
-    }
-    var fp = stage + "|" + (nb.ownerID || 0) + "|" + nb.text;
+    var fp = d.naid + "|" + d.fingerprint;
     if (fp === run.lastNextFp) {
       if (e) {
         if (!e.stuckSince) e.stuckSince = now;
         else if (now - e.stuckSince >= cfg.dialogStuckMs) return doStop("同一句对话停住不动了（dialog-stuck），请手动点一下", "dialog-stuck");
       }
       setPhase("「下一步」已点过，等对话推进", "");
-      return null;
+      return;
     }
+    var r = call(a, "nextDialog", [OWNER, { naid: d.naid, fingerprint: d.fingerprint }]);
+    if (!r || r.ok !== true) return doStop("下一页被拒绝（" + ((r && r.error) || "unknown") + "）", "dialog-next-failed");
     if (e) e.stuckSince = 0;
-    try { nb.box.next(); }
-    catch (err) { logLine("点「下一步」失败：" + msgOf(err), "warn"); return null; }
     run.lastNextFp = fp;
-    logLine("点「下一步」" + (nb.text ? "（" + nb.text.slice(0, 28) + "）" : ""));
-    if (inEntry && e && /报名成功|报名完成/.test(nb.text)) {
+    logLine("点「下一步」" + (d.text ? "（" + norm(d.text).slice(0, 28) + "）" : ""));
+    if (e && /报名成功|报名完成/.test(d.text || "")) {
       e.signedUp = true; e.expect = "goto"; e.gotoAt = now;
       logLine("报名成功，等待传送到道场");
     }
-    return null;
   }
 
   /* ==================== 启动 / 停止 ==================== */
@@ -603,12 +545,84 @@
       out.ready = ar.ready === true;
       out.blocked = ar.blocked === true;
     }
-    out.text = "助手换箭预检：enabled=" + (out.enabled ? "true" : "false") +
+    function field(k) { return ar && Object.prototype.hasOwnProperty.call(ar, k) ? JSON.stringify(ar[k]) : "字段未提供"; }
+    out.text = "助手换箭预检：enabled=" + (ar ? String(out.enabled) : "字段未提供") +
+      " masterEnabled=" + field("masterEnabled") + " selectEnabled=" + field("selectEnabled") +
+      " configuredByElem=" + field("configuredByElem") + " configuredByMid=" + field("configuredByMid") +
+      " profileKey=" + field("profileKey") + " profileTrusted=" + field("profileTrusted") +
+      " identity=" + (s && s.identity ? JSON.stringify(s.identity) : "字段未提供") +
+      " evaluated=" + field("evaluated") +
       " 默认箭=" + (out.defaultArrow == null ? "未设" : out.defaultArrow) +
       " 当前箭=" + (out.currentArrow == null ? "未装备" : out.currentArrow) +
-      " ready=" + (out.ready ? "true" : "false") +
-      " blocked=" + (out.blocked ? "true" : "false");
+      " ready=" + (out.ready ? "true" : "false") + " blocked=" + (out.blocked ? "true" : "false") +
+      (ar && !ar.target ? "（无目标，不作换箭成败判定）" : "");
     return out;
+  }
+  function identityKey(s) {
+    var id = s && s.identity;
+    return id && id.oneId != null && String(id.oneId) !== "" && String(id.oneId) !== "0" && id.epoch != null ? JSON.stringify([String(id.oneId), id.epoch]) : "";
+  }
+  function dojoEvidence(s) {
+    var id = identityKey(s), d = s && s.dojo, m = s && s.menu;
+    if (!id || !mapKey(s.map)) return null;
+    if (d && d.confirmed === true && sameMap(d.map, s.map)) return d;
+    var ownedMenu = dialogOpen(s) && m && m.naid && m.fingerprint && Array.isArray(m.items) &&
+      dojoNpcList(s).some(function (n) { return n.gid === m.naid; });
+    var kind = ownedMenu ? classifyMenu(m.items) : "unknown";
+    if (kind === "settle" || kind === "continue") return { confirmed: true, map: s.map, phase: "settle", round: null, remaining: null, source: "visible-dojo-npc-menu" };
+    var old = run.scene;
+    if (old && old.identity === id && sameMap(old.map, s.map)) {
+      return { confirmed: true, map: s.map, phase: old.phase === "active" && (s.mobs || []).some(function (x) { return x && !x.dead && x.mid && x.gid; }) ? "active" : "idle", round: old.round, remaining: old.remaining, source: "same-identity-map-observation" };
+    }
+    return null;
+  }
+  // 仅本轮已受理入场可换代；同图重登与未知落图不得借同角色放宽。
+  function acceptEntryEpoch(a, s) {
+    var e = run.stage === "entry" && run.entry, old = run.identity && JSON.parse(run.identity);
+    if (!e || !old || String(s.identity.oneId) !== old[0] || s.identity.epoch !== old[1] + 1 || sameMap(e.map, s.map)) return false;
+    var landed = !e.signedUp && e.tpAt && sameMap(s.map, cfg.entryMap);
+    var scene = dojoEvidence(s);
+    var entered = e.signedUp && e.gid && !sameMap(s.map, cfg.entryMap) && scene && /^(active|idle|settle)$/.test(scene.phase);
+    if (!landed && !entered) return false;
+    var released = call(a, "release", [OWNER]);
+    var acquired = released && released.ok === true && call(a, "acquire", [OWNER, SCOPES.slice()]);
+    if (!acquired || acquired.ok !== true) return false;
+    run.identity = identityKey(s);
+    run.scene = null; run.lastMenuFp = ""; run.lastNextFp = ""; run.noNextSince = 0;
+    e.map = s.map; e.gid = 0; e.tpAt = 0; e.tpCount = 0;
+    prepareCombat(a);
+    logLine("本轮入场换图已确认，旧现场与对话绑定已清理");
+    return true;
+  }
+  function rememberScene(s, d) {
+    run.scene = { identity: identityKey(s), map: s.map, phase: d.phase, round: d.round == null ? null : d.round, remaining: d.remaining == null ? null : d.remaining, source: d.source };
+  }
+  function applyDojoScene(a, s, d, now) {
+    if (!d) return;
+    var round = d.round == null ? null : Number(d.round);
+    if (round != null && isFinite(round) && round > 0) run.round = round;
+    if (d.remaining != null && isFinite(Number(d.remaining))) run.remaining = Number(d.remaining);
+    if (d.phase === "active" && (round == null || round > run.lastCompletedRound)) {
+      if (!run.roundActive) call(a, "requestPickup", [OWNER, { on: true, types: [4, 5, 6] }]);
+      run.roundActive = true;
+    } else if (d.phase === "idle" || d.phase === "settle") {
+      if (run.combatOn) call(a, "assistCombat", [OWNER, false]);
+      if (run.roundActive) call(a, "requestPickup", [OWNER, { on: false }]);
+      run.roundActive = false; run.combatOn = false;
+      if (d.phase === "settle" && run.stage === "battle" && !run.settleSeen) {
+        run.cycleEnd = !!(cfg.stop100 && run.round >= cfg.maxRound);
+        beginSettle(now, "当前现场已确认结算");
+      }
+    }
+    rememberScene(s, d);
+  }
+  function prepareCombat(a) {
+    var prep = call(a, "prepareCombat", [OWNER, { clearLocks: true, allMobs: true }]);
+    if (!prep || prep.ok !== true) {
+      logLine("战斗准备未完成（" + ((prep && prep.error) || "unknown") + "），仍继续运行", "warn");
+    } else {
+      logLine("战斗准备完成：清空锁定名单 " + prep.cleared + " 条，改为攻击全部怪（原值 " + (prep.allMobsRestore ? "开" : "关") + "）");
+    }
   }
   function doStart() {
     if (run.on) return;
@@ -621,6 +635,12 @@
     try { s = a.snapshot(OWNER); } catch (e) { s = null; }
     if (!s) return doStop("拿到控制权却读不到游戏状态（snapshot-missing），请重开页面再试", "snapshot-missing");
     if (!s.ready) return doStop("游戏未就绪（可能还在登录或已掉线），请进游戏后再点开始", "client-not-ready");
+    var identity = identityKey(s);
+    if (!identity || !mapKey(s.map)) return doStop("当前角色或地图身份未确认，不传送也不接续", "identity-map-missing");
+    if (run.scene && (run.scene.identity !== identity || !sameMap(run.scene.map, s.map))) run.scene = null;
+    var scene = dojoEvidence(s);
+    if (!sameMap(s.map, cfg.entryMap) && !scene && (s.inDojoMap || dojoNpcList(s).length)) return doStop("当前现场无法确证为本角色道场，不报名或开战", "dojo-unconfirmed");
+    run.identity = identity;
     run.on = true;
     run.generation++;
     run.startedAt = nowMs();
@@ -629,14 +649,15 @@
     var pf = arrowPreflight(s);
     run.preflight = pf;
     logLine(pf.text);
-    // V1.0.2：拿到控制权后只做一次战斗准备（幂等；每轮 entry 不再重复调用）
-    var prep = call(a, "prepareCombat", [OWNER, { clearLocks: true, allMobs: true }]);
-    if (!prep || prep.ok !== true) {
-      logLine("战斗准备未完成（" + ((prep && prep.error) || "unknown") + "），仍继续运行", "warn");
-    } else {
-      logLine("战斗准备完成：清空锁定名单 " + prep.cleared + " 条，改为攻击全部怪（原值 " + (prep.allMobsRestore ? "开" : "关") + "）");
-    }
-    beginEntry(1);
+    // 拿到新租约后准备战斗；每轮 entry 不重复调用。
+    prepareCombat(a);
+    if (scene && !sameMap(s.map, cfg.entryMap)) {
+      resetCycle(1);
+      beginBattle(s, nowMs());
+      applyDojoScene(a, s, scene, nowMs());
+      if (/^(active|idle|settle)$/.test(scene.phase)) logLine("已从当前道场现场接续（" + scene.phase + "，来源 " + (scene.source || "助手当前现场") + "）");
+      else logLine("当前场内地图已确认，但阶段未知；保持现场等待，不宣称战斗或结算已恢复", "warn");
+    } else beginEntry(1);
     run.timer = setInterval(function () { tick(run.generation); }, TICK_MS);
     render();
     tick(run.generation);
@@ -655,6 +676,8 @@
       call(a, "release", [OWNER]);
     }
     run.stage = "stopped";
+    run.entry = null; run.roundActive = false; run.combatOn = false;
+    run.lastMenuFp = ""; run.lastNextFp = ""; run.noNextSince = 0;
     run.npc = null;
     run.dojoNpc = null;
     run.settleUntil = 0;
@@ -680,14 +703,22 @@
     if (!s) return doStop("控制权已不在本脚本手里（lease-lost），请重新点开始", "lease-lost");
     if (!s.ready) return doStop("游戏未就绪（可能掉线或还在登录）", "client-not-ready");
     var now = nowMs();
+    var identity = identityKey(s);
+    if (!identity || !mapKey(s.map) || (identity !== run.identity && !acceptEntryEpoch(a, s))) { run.scene = null; return doStop("角色或地图身份已变化，不沿用旧现场", "identity-changed"); }
+    if (run.stage === "battle" || run.stage === "settle") {
+      if (!sameMap(s.map, run.challengeMap) && !run.rewardChosen) { run.scene = null; return doStop("已离开确证的道场地图，不沿用旧现场", "dojo-map-changed"); }
+      var d = s.dojo;
+      if (d && d.confirmed === true && sameMap(d.map, s.map)) applyDojoScene(a, s, d, now);
+    }
     if (run.stage === "battle") return battleTick(a, s, now);
     if (run.stage === "settle") return settleTick(a, s, now);
     return entryTick(a, s, now);
   }
 
-  function beginEntry(cycle) {
+  function resetCycle(cycle) {
     run.cycle = cycle;
-    run.stage = "entry";
+    run.entry = null;
+    run.scene = null;
     run.round = 0;
     run.remaining = null;
     run.challengeMap = "";
@@ -707,11 +738,15 @@
     run.noNextSince = 0;
     run.npc = null;
     run.dojoNpc = null;
+  }
+  function beginEntry(cycle) {
+    resetCycle(cycle);
+    run.stage = "entry";
     run.entry = {
-      startedAt: nowMs(), expect: "next-intro", picks: 0, signedUp: false, gotoAt: 0, gotoRetries: 0, tpAt: 0, tpCount: 0, tpErr: "",
+      map: "", startedAt: nowMs(), expect: "next-intro", picks: 0, signedUp: false, gotoAt: 0, gotoRetries: 0, tpAt: 0, tpCount: 0, tpErr: "",
       gid: 0, walkAt: 0, walkTries: 0, walkTarget: null, walkIssuedAt: 0, walkWarned: false,
       arrivedLogged: false, contactAt: 0, firstContactAt: 0, contactErr: "", failStreak: 0,
-      dialogSeenAt: 0, stuckSince: 0, boxMissAt: 0, menuWaitAt: 0
+      dialogSeenAt: 0, stuckSince: 0, menuWaitAt: 0
     };
     setPhase("准备报名（第 " + cycle + " 轮循环）", "走向报名点");
     logLine("===== 第 " + cycle + " 轮循环：开始自动报名 =====");
@@ -722,14 +757,22 @@
   function entryTick(a, s, now) {
     var e = run.entry;
     if (!e) { beginEntry(run.cycle + 1); e = run.entry; }
+    if (!e.map) e.map = s.map;
 
     // 已报名 → 等地图变化进道场
     if (e.signedUp) {
-      if (s.map && !sameMap(s.map, cfg.entryMap)) return beginBattle(s, now);
+      if (s.map && !sameMap(s.map, cfg.entryMap)) {
+        var scene = dojoEvidence(s);
+        if (!scene) { run.scene = null; return doStop("报名后落图尚无当前道场确证，不猜地图或轮次", "dojo-unconfirmed"); }
+        beginBattle(s, now);
+        applyDojoScene(a, s, scene, now);
+        return;
+      }
+      if (dialogOpen(s)) pressNext(a, s, now, "报名确认");
+      if (!run.on) return;
       if (now - (e.gotoAt || now) > 15000) {
         e.gotoRetries++;
         if (e.gotoRetries > 3) return doStop("报名后一直没有进入道场（goto-timeout），请手动进一次道场", "goto-timeout");
-        run.lastNextFp = "";
         e.gotoAt = now;
         logLine("报名后还没进道场，重新点一次「下一步」（第 " + e.gotoRetries + " 次）", "warn");
       }
@@ -737,9 +780,9 @@
       return;
     }
 
-    // B2：进入报名阶段先无条件传送到报名点（不看当前地图与坐标）
-    var atEntry = sameMap(s.map, cfg.entryMap) && cheb(s.player && s.player.position, [cfg.entryX, cfg.entryY]) <= 2;
-    if (!e.tpAt) {
+    // 同报名地图直接识别实际 NPC；仅跨图使用原合法传送与重试。
+    var atEntry = sameMap(s.map, cfg.entryMap);
+    if (!atEntry && !e.tpAt) {
       var t0 = doTeleport(a, cfg.entryMap, cfg.entryX, cfg.entryY);
       if (!t0.ok) e.tpErr = t0.error;
       if (!t0.ok && t0.error === "teleport-missing") {
@@ -774,7 +817,7 @@
 
     // 找入口 NPC：先按别名表匹配；全不命中才走报名点邻近兜底
     e.npcNameText = entryNpcNameText();
-    var npc = findNpc(s, cfg.npcName, e);
+    var npc = findNpc(s, null, e);
     if (!npc) {
       npc = findEntryNpcNear(s, cfg.entryX, cfg.entryY);
       if (npc) logLine("按报名点邻近兜底选中了 " + norm(npc.name) + "（12 格内只有这一个「管理员」）", "warn");
@@ -794,6 +837,7 @@
       e.gid = npc.gid; e.walkAt = 0; e.walkTries = 0; e.walkTarget = null;
       e.contactAt = 0; e.firstContactAt = 0; e.arrivedLogged = false; e.walkWarned = false;
     }
+    if (dialogOpen(s)) return dialogTick(a, s, now);
     var d = cheb(p, npc.position);
     run.dist = isFinite(d) ? d : null;
 
@@ -843,7 +887,7 @@
         e.failStreak = 0;
       }
     }
-    if (s.dialogOpen) {
+    if (dialogOpen(s)) {
       e.contactErr = "";
       e.failStreak = 0;
       return dialogTick(a, s, now);
@@ -867,15 +911,6 @@
         return;
       }
       return chooseEntryMenu(a, m, now);
-    }
-    if (!m && !npcBox()) {
-      // 没有菜单又取不到对话窗口：只在超时后明确报错
-      if (!e.menuWaitAt) e.menuWaitAt = now;
-      if (now - e.menuWaitAt > cfg.dialogStuckMs) {
-        return doStop("对话里既没有选项也取不到「下一步」按钮（npc-box-unreachable）", "npc-box-unreachable");
-      }
-      setPhase("等待对话内容", "");
-      return;
     }
     e.menuWaitAt = 0;
     pressNext(a, s, now, "报名");
@@ -919,7 +954,7 @@
     } else {
       return doStop("菜单里没有「" + plan.label + "」可用项（invalid-menu）：" + items.join(" / "), "invalid-menu");
     }
-    var r = call(a, "chooseMenu", [OWNER, { naid: m.naid, index: idx, fingerprint: m.fingerprint }]);
+    var r = chooseBoundMenu(a, m, idx);
     if (!r || r.ok !== true) {
       if (r && r.error === "menu-already-used") { run.lastMenuFp = m.fingerprint; return; }
       logLine("选择被拒绝：" + ((r && r.error) || "unknown"), "warn");
@@ -945,6 +980,7 @@
     run.noMobSince = 0;
   }
   function beginBattle(s, now) {
+    run.entry = null;
     run.challengeMap = String((s && s.map) || ""); // 报名后实际进入的地图为准，不猜地图名关键词
     run.roundActive = false; run.combatOn = false; // 入图不等于出怪；只有服务器本轮开始提示才允许打
     enterBattleStage();
@@ -954,7 +990,6 @@
     run.dojoNpc = null;
     run.npc = null;
     run.noNextSince = 0;
-    run.entry && (run.entry.boxMissAt = 0);
     setPhase("已进入无限挑战", "等待本轮出怪公告");
     logLine("已进入无限挑战（地图 " + ((s && s.map) || "?") + "），等待出怪公告后再战斗");
   }
@@ -962,9 +997,9 @@
   /* ==================== 战斗循环 ==================== */
 
   function battleTick(a, s, now) {
-    var m = (s.dialogOpen && s.menu && Array.isArray(s.menu.items) && s.menu.items.length) ? s.menu : null;
+    var m = (dialogOpen(s) && s.menu && Array.isArray(s.menu.items) && s.menu.items.length) ? s.menu : null;
     if (m) return dojoMenuTick(a, s, m, now);
-    if (s.dialogOpen) return pressNext(a, s, now, "副本内对话");
+    if (dialogOpen(s)) return pressNext(a, s, now, "副本内对话");
     if (run.rewardChosen) {
       if (s.map && !sameMap(s.map, run.challengeMap)) return doStop("已领取阶段奖励并离开挑战地图，请手动确认后再入场", "reward-exit");
       setPhase("已提交阶段领奖", "等待服务器确认离开副本");
@@ -1010,7 +1045,7 @@
       run.noMobSince = now;
       logLine("本图暂时没有怪");
     }
-    if (cfg.fly && s.inDojoMap && run.remaining > 0 && now - run.lastFly > 3000) {
+    if (cfg.fly && sameMap(s.map, run.challengeMap) && run.remaining > 0 && now - run.lastFly > 3000) {
       run.lastFly = now;
       call(a, "requestFly", [OWNER, { reason: "道场无怪且仍有剩余" }]);
       logLine("无怪且仍有剩余，已请求飞行");
@@ -1055,7 +1090,7 @@
         var cr0 = call(a, "contactNpc", [OWNER, npc.gid]);
         if (!cr0 || cr0.ok !== true) logLine("接触副本内 NPC 失败：" + ((cr0 && cr0.error) || "unknown"), "warn");
       }
-      if (!s.dialogOpen && now - n.first >= cfg.contactTimeoutMs) {
+      if (!dialogOpen(s) && now - n.first >= cfg.contactTimeoutMs) {
         logLine("本图识别到的 NPC：" + npcDigest(s.npcs), "warn");
         return doStop("读不到副本内 NPC「" + nm + "」的坐标，也点不开对话（contact-failed）", "contact-failed");
       }
@@ -1090,7 +1125,7 @@
         logLine("接触副本内 NPC「" + nm + "」失败：" + ((cr && cr.error) || "unknown") + "（连续 " + n.failStreak + " 次）", "warn");
       } else n.failStreak = 0;
     }
-    if (!s.dialogOpen && now - n.first >= cfg.contactTimeoutMs) {
+    if (!dialogOpen(s) && now - n.first >= cfg.contactTimeoutMs) {
       logLine("本图识别到的 NPC：" + npcDigest(s.npcs), "warn");
       return doStop("点不开副本内 NPC「" + nm + "」的对话（contact-failed）", "contact-failed");
     }
@@ -1118,7 +1153,7 @@
     else if (hits.length > 1) return doStop("「" + plan.label + "」命中多项，已停手，请手动选择（invalid-menu）：" + items.join(" / "), "invalid-menu");
     else if (plan.index >= 1 && plan.index <= items.length) { idx = plan.index - 1; via = "序号 " + plan.index; }
     else return doStop("菜单里没有「" + plan.label + "」可用项（invalid-menu）：" + items.join(" / "), "invalid-menu");
-    var r = call(a, "chooseMenu", [OWNER, { naid: m.naid, index: idx, fingerprint: m.fingerprint }]);
+    var r = chooseBoundMenu(a, m, idx);
     run.lastMenuFp = m.fingerprint;
     if (!r || r.ok !== true) {
       if (r && r.error === "menu-already-used") return;
@@ -1139,8 +1174,8 @@
     run.settleUntil = now + cfg.settleWaitMs;
     run.settleSeen = false;
     run.lastMenuFp = "";
-    setPhase("等待结算菜单（" + why + "）", "轮次 " + (run.round || 0));
-    logLine("进入结算：" + why + "（轮次 " + (run.round || 0) + "）");
+    setPhase("等待结算菜单（" + why + "）", "轮次 " + (run.round > 0 ? run.round : "未知"));
+    logLine("进入结算：" + why + "（轮次 " + (run.round > 0 ? run.round : "未知") + "）");
   }
 
   function settlePick(a, items, m, now) {
@@ -1150,7 +1185,7 @@
     var idx = -1, why = "";
     var due = run.cycleEnd || (run.round > 0 && cfg.settleEvery > 0 && run.round % cfg.settleEvery === 0);
     if (!due) {
-      if (run.round < 1) return doStop("轮次尚未确认，不自动领奖或付费继续", "round-unconfirmed");
+      if (run.round < 1) { setPhase("轮次尚未确认，等待助手当前轮次", "不自动领奖或继续，可随时停止"); return; }
       if (hc.length !== 1) return doStop("本轮未到结算点，继续挑战菜单不唯一或缺失", "invalid-menu");
       if (!/免费|无需(?:费用|付费)|不(?:消耗|扣费)/.test(items[hc[0]]) || /付费|花费|消耗|金币|zeny|zen|钻石|点券|积分|C点/i.test(items[hc[0]])) return doStop("继续挑战未明确免费，请手动确认", "payment-required");
       idx = hc[0]; why = "免费继续挑战";
@@ -1163,7 +1198,7 @@
     else if (hc.length > 1) return doStop("结算菜单「继续挑战」命中多项，请手动选择（invalid-menu）：" + items.join(" / "), "invalid-menu");
     else if (hl.length === 1) { idx = hl[0]; why = "难度"; }
     else return doStop("结算菜单里没有可用的领奖或继续项，请手动选择（invalid-menu）：" + items.join(" / "), "invalid-menu");
-    var r = call(a, "chooseMenu", [OWNER, { naid: m.naid, index: idx, fingerprint: m.fingerprint }]);
+    var r = chooseBoundMenu(a, m, idx);
     run.lastMenuFp = m.fingerprint;
     if (!r || r.ok !== true) {
       if (r && r.error === "menu-already-used") return;
@@ -1178,7 +1213,7 @@
   }
 
   function settleTick(a, s, now) {
-    var m = (s.dialogOpen && s.menu && Array.isArray(s.menu.items) && s.menu.items.length) ? s.menu : null;
+    var m = (dialogOpen(s) && s.menu && Array.isArray(s.menu.items) && s.menu.items.length) ? s.menu : null;
     if (m) {
       if (m.fingerprint && m.fingerprint === run.lastMenuFp) {
         setPhase("结算菜单已选过，等服务器回应", "");
@@ -1186,7 +1221,7 @@
       }
       return settlePick(a, m.items.slice(), m, now);
     }
-    if (s.dialogOpen) return pressNext(a, s, now, "结算");
+    if (dialogOpen(s)) return pressNext(a, s, now, "结算");
     if (now < run.settleUntil) {
       setPhase(run.settleSeen ? "结算完成，等下一层" : "等待结算菜单", "");
       return;
@@ -1229,7 +1264,9 @@
   /* ==================== 公告（轮次 / 剩余） ==================== */
 
   function onNotice(raw) {
-    if (!run.on) return;
+    if (!run.on || (run.stage !== "battle" && run.stage !== "settle")) return;
+    var current = call(api(), "snapshot", [OWNER]);
+    if (!current || identityKey(current) !== run.identity || !sameMap(current.map, run.challengeMap)) return;
     var s = norm(raw), now = nowMs();
     if (!s) return;
     if (s === run.lastNotice && now - run.lastNoticeAt < 2500) return;
@@ -1237,6 +1274,7 @@
     run.lastNoticeAt = now;
     logLine("提示：" + s.slice(0, 80));
     parseNotice(s, now);
+    rememberScene(current, { phase: run.roundActive ? "active" : run.stage === "settle" ? "settle" : "idle", round: run.round || null, remaining: run.remaining, source: "current-map-notice" });
     render();
   }
   function parseNotice(s, now) {
@@ -1361,8 +1399,8 @@
     statusEl = el("div", { cls: "st", id: "ro-dojo-status", text: statusText() });
     logEl = el("div", { cls: "log", id: "ro-dojo-log" });
     var tip = el("div", { cls: "tip" }, [
-      el("div", { text: "用法：先启用 RO 助手并进入游戏，再点「开始」；难度与开关可随时改，点「停止」立即停手。" }),
-      el("div", { text: "限制：战斗由助手精灵代打；到报名点会消耗 1 个传送卷轴；只自动拾取卡片与装备；副本内的对话请站到 NPC 旁边。" }),
+      el("div", { text: "用法：先启用 RO 助手并进入游戏，从「脚本执行」打开设置再点「开始」；难度与开关可随时改，点「停止」立即停手。" }),
+      el("div", { text: "限制：战斗由助手精灵代打；跨图到报名点会消耗 1 个传送卷轴，同图只走近；只自动拾取卡片与装备；场内须有当前角色的确证，付费继续请手动确认。" }),
       el("div", { text: FILE_HINT }),
       el("div", {}, [el("span", { text: "脚本仓库：" }), el("a", { href: REPO_URL, target: "_blank", text: REPO_URL })])
     ]);
@@ -1394,6 +1432,7 @@
     try {
       var st = document.createElement("style");
       st.textContent = text;
+      lifecycle.styles.push(st);
       (document.head || document.documentElement).appendChild(st);
     } catch (e) {}
   }
@@ -1444,6 +1483,7 @@
         window.addEventListener("blur", onUp);
         window.addEventListener("pagehide", onUp);
       });
+      lifecycle.cleanups.push(onUp);
       function onMove(ev) {
         if (!dragging) return;
         if ((typeof ev.buttons === "number" && !(ev.buttons & 1)) || document.hidden || !node.parentNode) { onUp(); return; }
@@ -1480,7 +1520,7 @@
     } catch (e) {}
   }
   // 优先复用助手浮窗；不可用时退回自建面板。
-  // 这里只注册，不替用户打开；功能菜单那行只负责打开，收起沿用窗口关闭按钮。
+  // 这里只注册，不替用户打开；助手脚本执行负责打开设置，收起沿用窗口关闭按钮。
   function registerWindowMode() {
     var a = api();
     if (!a || !isFn(a.registerWindow) || !isFn(a.openWindow)) return false;
@@ -1565,13 +1605,22 @@
 
   /* ==================== 启动 ==================== */
 
+  function listen(type, fn) { window.addEventListener(type, fn); lifecycle.listeners.push([type, fn]); }
+  function dispose() {
+    if (run && run.on) doStop("脚本源码更新，旧实例已停止", "replaced");
+    if (lifecycle.timer) clearInterval(lifecycle.timer);
+    lifecycle.cleanups.forEach(function (fn) { fn(); });
+    lifecycle.listeners.forEach(function (row) { window.removeEventListener(row[0], row[1]); });
+    [root, holder, wrap].concat(lifecycle.styles).forEach(function (n) { if (n && n.parentNode) n.parentNode.removeChild(n); });
+  }
+
   function boot() {
     buildPanel();
     holder = el("div", { id: "ro-dojo-holder", style: "display:none" }, [root]);
     try { document.body.appendChild(holder); } catch (e) { try { document.documentElement.appendChild(holder); } catch (e2) {} }
     // 助手可用只注册浮窗，不替用户打开；不可用退回自带面板，同样先隐藏 —— 任何路径都不得让面板可见
     if (!registerWindowMode()) mountStandalone();
-    logLine("脚本已就绪（" + VERSION + "）；请从助手功能菜单打开「无限挑战（独立脚本）」");
+    logLine("脚本已就绪（" + VERSION + "）；请从助手「脚本执行」打开无限挑战设置");
     render();
 
     var tries = 0;
@@ -1585,6 +1634,7 @@
         clearInterval(t);
       }
     }, 3000);
+    lifecycle.timer = t;
 
     loadFileCfg(function (j) {
       if (!j) return;
@@ -1595,17 +1645,17 @@
     });
 
     try {
-      window.addEventListener("dsh-ro-assist-notice", function (ev) {
+      listen("dsh-ro-assist-notice", function (ev) {
         try { onNotice(ev && ev.detail && (ev.detail.text || ev.detail.message)); } catch (e) {}
       });
-      window.addEventListener("dsh-ro-assist-ready", function () {
+      listen("dsh-ro-assist-ready", function () {
         if (mode !== "window" && api() && registerWindowMode()) {
           detachStandalone();
           logLine("已切换到助手浮窗显示");
           if (panelOpen) openAssistantWindow();    // 用户先前已手动打开才跟着打开，不替用户打开
         }
       });
-      window.addEventListener("pagehide", function () {
+      listen("pagehide", function () {
         clearInterval(t);
         if (run.on) doStop("页面离开", "pagehide");
       });
@@ -1628,7 +1678,7 @@
         battleTick: battleTick, dojoNpcTick: dojoNpcTick, dojoMenuTick: dojoMenuTick,
         beginSettle: beginSettle, settleTick: settleTick, settlePick: settlePick,
         finishSettle: finishSettle, endCycle: endCycle, beginEntry: beginEntry, beginBattle: beginBattle,
-        pressNext: pressNext, npcBoxButton: npcBoxButton, npcBox: npcBox, doTeleport: doTeleport, arrowPreflight: arrowPreflight,
+        pressNext: pressNext, doTeleport: doTeleport, arrowPreflight: arrowPreflight,
         statusText: statusText, logLines: function () { return run.log.slice(); }, root: function () { return root; },
         mode: function () { return mode; }, applyCfg: applyCfg,
         togglePanel: togglePanel, panelShown: panelShown, wrap: function () { return wrap; },

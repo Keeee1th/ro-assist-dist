@@ -1,10 +1,14 @@
 // ==UserScript==
 // @name         仙境传说 · 原站插件模式（游戏助手 · 实验版）
 // @namespace    dsh.ro-plugin
-// @version      2.38.77.8
+  // CLEANUP-RELEASE-BEGIN version-header ORIGINAL:Ly8gQHZlcnNpb24gICAgICAyLjM4Ljc3Ljk=
+// @version      2.38.77.12
+  // CLEANUP-RELEASE-END version-header
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
-// @description  本地新UI实验版（不发布）。在 post.lastro.cn / game.lastro.cn 原站以插件模式启动《仙境的传说》ROBrowser 客户端并连接原服务器；数据自动走本地镜像（127.0.0.1:8973）避免加载卡死，支持自动登录。PC 版直接打开 https://post.lastro.cn/ro/api.html 或备用线路 https://game.lastro.cn/ro/api.html?69.8；手机版打开 https://post.lastro.cn/?r=mn/index（登录页可选择平台与线路）。 新增私有本机客户端入口匹配（环回主机 127.0.0.1 / localhost，端口以页面自身 origin 为准、不写死）。
+  // CLEANUP-RELEASE-BEGIN description ORIGINAL:Ly8gQGRlc2NyaXB0aW9uICDmnKzlnLDmlrBVSeWunumqjOeJiO+8iOS4jeWPkeW4g++8ieOAguWcqCBwb3N0Lmxhc3Ryby5jbiAvIGdhbWUubGFzdHJvLmNuIOWOn+ermeS7peaPkuS7tuaooeW8j+WQr+WKqOOAiuS7meWig+eahOS8oOivtOOAi1JPQnJvd3NlciDlrqLmiLfnq6/lubbov57mjqXljp/mnI3liqHlmajvvJvmlbDmja7oh6rliqjotbDmnKzlnLDplZzlg4/vvIgxMjcuMC4wLjE6ODk3M++8iemBv+WFjeWKoOi9veWNoeatu++8jOaUr+aMgeiHquWKqOeZu+W9leOAglBDIOeJiOebtOaOpeaJk+W8gCBodHRwczovL3Bvc3QubGFzdHJvLmNuL3JvL2FwaS5odG1sIOaIluWkh+eUqOe6v+i3ryBodHRwczovL2dhbWUubGFzdHJvLmNuL3JvL2FwaS5odG1sPzY5LjjvvJvmiYvmnLrniYjmiZPlvIAgaHR0cHM6Ly9wb3N0Lmxhc3Ryby5jbi8/cj1tbi9pbmRleO+8iOeZu+W9lemhteWPr+mAieaLqeW5s+WPsOS4jue6v+i3r++8ieOAgiDmlrDlop7np4HmnInmnKzmnLrlrqLmiLfnq6/lhaXlj6PljLnphY3vvIjnjq/lm57kuLvmnLogMTI3LjAuMC4xIC8gbG9jYWxob3N077yM56uv5Y+j5Lul6aG16Z2i6Ieq6LqrIG9yaWdpbiDkuLrlh4bjgIHkuI3lhpnmrbvvvInjgII=
+// @description  玩家实验版：提供原站与本机 RO 客户端助手、监控与花瓣导航；支持 JSON 流程及可信用户脚本导入运行，兼容手机版。
+  // CLEANUP-RELEASE-END description
 // @author       DSH
 // @match        http://post.lastro.cn/*
 // @match        https://post.lastro.cn/*
@@ -659,7 +663,9 @@
   //   放行三类：① 本机私有客户端（环回主机 127.0.0.0/8 · localhost · ::1，端口以页面自身 origin 为准、不写死 8971）
   //             且路径为 /client/api.html 或 /client/api-old.html
   //             （V2.38.47 补路径判定：只判 host+port 时 127.0.0.1:8971/ 的登录页也会起助手，用户实报「注入到登录页而不是游戏页」）；
-  //             ② lastro.cn 域名下 URL 含 /ro/api（api.html / api-old.html）；③ 手机版客户端 URL 含 r=mn（用户未否决，保留放行并修好不抛）。
+  // CLEANUP-R2-BEGIN mobile-scope-comment ORIGINAL:ICAvLyAgICAgICAgICAgICDikaEgbGFzdHJvLmNuIOWfn+WQjeS4iyBVUkwg5ZCrIC9yby9hcGnvvIhhcGkuaHRtbCAvIGFwaS1vbGQuaHRtbO+8ie+8m+KRoiDmiYvmnLrniYjlrqLmiLfnq68gVVJMIOWQqyByPW1u77yI55So5oi35pyq5ZCm5Yaz77yM5L+d55WZ5pS+6KGM5bm25L+u5aW95LiN5oqb77yJ44CC
+  //             ② lastro.cn 域名下 URL 含 /ro/api（api.html / api-old.html）；③ query 参数 r=mn 的官方或真实本机游戏宿主页。
+  // CLEANUP-R2-END mobile-scope-comment
   // UNIFIED-PROBE-BEGIN local-gate-helper ORIGINAL:ICBmdW5jdGlvbiByb0Fzc2lzdFBhZ2VBbGxvd2VkKCkgew==
   // V2.38.78：本机客户端判定 —— 页面闸门与 IS_LOCAL_HOST 共用同一套判据，避免两处口径漂移。
   function roAssistIsLocalClientPage(loc) {
@@ -680,19 +686,18 @@
     try {
       var d = document;
       if (!d || !d.querySelector) return false;
-      // 按「目录」判，而不是按具体文件名 —— 以后重做皮肤/改文件名也不用再改这里。
-      if (d.querySelector('link[href*="launcher/"]')) return true;                      // 启动器 / 皮肤资源目录
-      if (d.querySelector('link[rel="icon"][href*="assets/ui/"]')) return true;        // 客户端图标目录
-      if (d.querySelector('script[src*="client/Config"]')) return true;                  // 客户端配置
-      if (d.querySelector('script[src*="client/Online"]')) return true;                  // 客户端引擎
-      if (d.querySelector('link[href*="client/Online"]')) return true;
-      if (window.ROConfig || window.ROConfigBase) return true;                            // 客户端预置配置
-      return roAssistTitleLooksLikeClient(d);                                             // 最后一道：页面标题自证
+  // CLEANUP-RELEASE-BEGIN gate-evidence ORIGINAL:ICAgICAgLy8g5oyJ44CM55uu5b2V44CN5Yik77yM6ICM5LiN5piv5oyJ5YW35L2T5paH5Lu25ZCNIOKAlOKAlCDku6XlkI7ph43lgZrnmq7ogqQv5pS55paH5Lu25ZCN5Lmf5LiN55So5YaN5pS56L+Z6YeM44CCDQogICAgICBpZiAoZC5xdWVyeVNlbGVjdG9yKCdsaW5rW2hyZWYqPSJsYXVuY2hlci8iXScpKSByZXR1cm4gdHJ1ZTsgICAgICAgICAgICAgICAgICAgICAgLy8g5ZCv5Yqo5ZmoIC8g55qu6IKk6LWE5rqQ55uu5b2VDQogICAgICBpZiAoZC5xdWVyeVNlbGVjdG9yKCdsaW5rW3JlbD0iaWNvbiJdW2hyZWYqPSJhc3NldHMvdWkvIl0nKSkgcmV0dXJuIHRydWU7ICAgICAgICAvLyDlrqLmiLfnq6/lm77moIfnm67lvZUNCiAgICAgIGlmIChkLnF1ZXJ5U2VsZWN0b3IoJ3NjcmlwdFtzcmMqPSJjbGllbnQvQ29uZmlnIl0nKSkgcmV0dXJuIHRydWU7ICAgICAgICAgICAgICAgICAgLy8g5a6i5oi356uv6YWN572uDQogICAgICBpZiAoZC5xdWVyeVNlbGVjdG9yKCdzY3JpcHRbc3JjKj0iY2xpZW50L09ubGluZSJdJykpIHJldHVybiB0cnVlOyAgICAgICAgICAgICAgICAgIC8vIOWuouaIt+err+W8leaTjg0KICAgICAgaWYgKGQucXVlcnlTZWxlY3RvcignbGlua1tocmVmKj0iY2xpZW50L09ubGluZSJdJykpIHJldHVybiB0cnVlOw0KICAgICAgaWYgKHdpbmRvdy5ST0NvbmZpZyB8fCB3aW5kb3cuUk9Db25maWdCYXNlKSByZXR1cm4gdHJ1ZTsgICAgICAgICAgICAgICAgICAgICAgICAgICAgLy8g5a6i5oi356uv6aKE572u6YWN572uDQogICAgICByZXR1cm4gcm9Bc3Npc3RUaXRsZUxvb2tzTGlrZUNsaWVudChkKTsgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAvLyDmnIDlkI7kuIDpgZPvvJrpobXpnaLmoIfpopjoh6ror4E=
+      // 仅真实客户端配置 / 引擎可自证；皮肤、favicon 和标题不是游戏证据。
+      if (d.querySelector('script[src*="client/Config"]')) return true;
+      if (d.querySelector('script[src*="client/Online"]')) return true;
+      if (window.ROConfig || window.ROConfigBase) return true;
+      return false;
+  // CLEANUP-RELEASE-END gate-evidence
     } catch (e) { return false; }
   }
-  function roAssistTitleLooksLikeClient(d) {
-    try { return /仙境传说|仙境の传说|客户端/.test(String((d && d.title) || "")); } catch (e) { return false; }
-  }
+  // CLEANUP-R1-BEGIN dead-title ORIGINAL:ICBmdW5jdGlvbiByb0Fzc2lzdFRpdGxlTG9va3NMaWtlQ2xpZW50KGQpIHsNCiAgICB0cnkgeyByZXR1cm4gL+S7meWig+S8oOivtHzku5nlooPjga7kvKDor7R85a6i5oi356uvLy50ZXN0KFN0cmluZygoZCAmJiBkLnRpdGxlKSB8fCAiIikpOyB9IGNhdGNoIChlKSB7IHJldHVybiBmYWxzZTsgfQ0KICB9
+
+  // CLEANUP-R1-END dead-title
   function roAssistPageAllowed() {
   // UNIFIED-PROBE-END local-gate-helper
     try {
@@ -703,13 +708,21 @@
       // ① 本机私有客户端：环回主机 + 本机客户端页面（游戏宿主页 / 根页自证）。
       //    V2.38.78：启动器打开的是 http://127.0.0.1:8971/（根页），旧判据只认 /client/api.html，本机入口必须绕官网才能起助手（用户实报）。
       //      现在：/client/api(-old).html · /ro/api(-old).html 直接认；其余路径（含根页 / 与 /index.html）必须页面自证
-      //      （launcher.css / client.ico / client/Config.js / client/Online.js / window.ROConfig*），避免注入到 127.0.0.1:3080/ 这类本机无关页面。
-      //      手机版（URL 含 r=mn）不并入本机入口，判据照旧。
+  // CLEANUP-R2-BEGIN local-evidence-comment ORIGINAL:ICAgICAgLy8gICAgICDvvIhsYXVuY2hlci5jc3MgLyBjbGllbnQuaWNvIC8gY2xpZW50L0NvbmZpZy5qcyAvIGNsaWVudC9PbmxpbmUuanMgLyB3aW5kb3cuUk9Db25maWcq77yJ77yM6YG/5YWN5rOo5YWl5YiwIDEyNy4wLjAuMTozMDgwLyDov5nnsbvmnKzmnLrml6DlhbPpobXpnaLjgIINCiAgICAgIC8vICAgICAg5omL5py654mI77yIVVJMIOWQqyByPW1u77yJ5LiN5bm25YWl5pys5py65YWl5Y+j77yM5Yik5o2u54Wn5pen44CC
+      //      （client/Config.js / client/Online.js / window.ROConfig*），皮肤、favicon 和标题不作游戏证据。
+      //      手机版启动复用无查询视图判断游戏宿主页，不改变原本机入口分类。
+  // CLEANUP-R2-END local-evidence-comment
       var isLoopback = /^(127(\.\d{1,3}){3}|localhost|\[::1\]|::1)$/.test(host);
       if (isLoopback && roAssistIsLocalClientPage(loc)) return true;
   // UNIFIED-PROBE-END local-gate-branch
       if (/(^|\.)lastro\.cn$/.test(host) && href.indexOf("/ro/api") >= 0) return true;
-      if (href.indexOf("r=mn") >= 0) return true;
+  // CLEANUP-R2-BEGIN mobile-page-gate ORIGINAL:ICAgICAgaWYgKGhyZWYuaW5kZXhPZigicj1tbiIpID49IDApIHJldHVybiB0cnVlOw==
+  // CLEANUP-MOBILE-BEGIN preserved-mobile-route ORIGINAL:ICAgICAgaWYgKC8oPzpeXD98JilyPW1uKD86JnwkKS8udGVzdChTdHJpbmcobG9jLnNlYXJjaCB8fCAiIikpICYm
+      if (/(?:^\?|&)r=mn(?:\/index|%2[Ff]index)?(?:&|$)/.test(String(loc.search || "")) &&
+  // CLEANUP-MOBILE-END preserved-mobile-route
+          (/(^|\.)lastro\.cn$/.test(host) || (isLoopback &&
+           roAssistIsLocalClientPage({hostname:loc.hostname, pathname:loc.pathname, href:""})))) return true;
+  // CLEANUP-R2-END mobile-page-gate
       return false;
     } catch (e) { return false; }
   }
@@ -749,7 +762,9 @@
   }
   var LS_KEY = "dsh_ro_plugin_v1";
   var VERSION_RE = /\?([0-9.]+)/;
-  var VER = "2.38.77.8"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
+  // CLEANUP-RELEASE-BEGIN version-runtime ORIGINAL:ICB2YXIgVkVSID0gIjIuMzguNzcuOSI7IC8vIOmdouadv+agh+mimC/liqDovb3mj5DnpLov5pel5b+X57uf5LiA54mI5pys5Y+377yIYnVtcCDml7bkuI4gQHZlcnNpb24g5ZCM5q2l5pS577yJ
+  var VER = "2.38.77.12"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
+  // CLEANUP-RELEASE-END version-runtime
   try { window.__dshCombinedActive = true; } catch (e) {} // V2.30.0 防双浮层让位旗标：独立版词条色脚本见旗标即让位
   // ==================== 统一采集器注册表（dsh-collect v1 · 内部命名空间，不新增 window 全局）====================
   // 五方法：register 注册 / sample 采集 / query 查询 / refresh 刷新 / release 释放
@@ -3233,7 +3248,9 @@ function createRoItemCapture(env) {
       '</div>' +
       // 子页7：物品（拾取 + 背包整理，V2.15.1 自拾取页搬入）
       '<div class="sub-page" data-subpage="ap-item">' +
-      '<div class="sec" style="display:flex;align-items:center;gap:6px"><span style="flex:1">物品 · 拾取与整理</span>' +
+  // CLEANUP-RELEASE-BEGIN pickup-title0 ORIGINAL:ICAgICAgJzxkaXYgY2xhc3M9InNlYyIgc3R5bGU9ImRpc3BsYXk6ZmxleDthbGlnbi1pdGVtczpjZW50ZXI7Z2FwOjZweCI+PHNwYW4gc3R5bGU9ImZsZXg6MSI+54mp5ZOBIMK3IOaLvuWPluS4juaVtOeQhjwvc3Bhbj4nICs=
+      '<div class="sec" style="display:flex;align-items:center;gap:6px"><span style="flex:1">物品 · 拾取</span>' +
+  // CLEANUP-RELEASE-END pickup-title0
       '<button class="ghost" id="dsh-fw-btn-item" data-fw="item" style="flex:0 0 auto;padding:0 8px;font-size:11px">浮窗</button></div>' +
       '<div id="dsh-fw-item">' +
 '<div class="sec">① 百分比拾取（直接联动内挂）</div>' +
@@ -3255,15 +3272,17 @@ function createRoItemCapture(env) {
       '<div class="row"><label class="switch"><input id="dsh-picken" type="checkbox" disabled>启用指定ID自动拾取（走路拾取）</label><span class="tag" id="dsh-pickoff" style="flex:0 0 auto">暂时下线</span><span class="st" id="dsh-pickstate" style="margin-left:auto"></span><span class="st" id="dsh-picklog"></span></div>' +
       '<div class="row"><label class="switch"><input id="dsh-pickwalk" type="checkbox" checked disabled>距离不足自动走过去捡</label></div>' +
       '<div class="row"><label class="switch"><input id="dsh-picksafe" type="checkbox" checked disabled>危险时不走过去捡（Boss/低血/低SP 在场）</label></div>' +
-      '<div class="log">走路拾取（指定ID自动拾取）已暂时下线：白名单里已选好的物品ID会保留，但脚本不会再去捡、也不会走过去捡。掉落树放在这里方便你查掉落、先把物品ID加进白名单，功能恢复后立即生效。白名单与下方「背包整理 / 丢弃黑名单」是两件事。</div>' +
+  // CLEANUP-RELEASE-BEGIN pickup-hint ORIGINAL:ICAgICAgJzxkaXYgY2xhc3M9ImxvZyI+6LWw6Lev5ou+5Y+W77yI5oyH5a6aSUToh6rliqjmi77lj5bvvInlt7LmmoLml7bkuIvnur/vvJrnmb3lkI3ljZXph4zlt7LpgInlpb3nmoTnianlk4FJROS8muS/neeVme+8jOS9huiEmuacrOS4jeS8muWGjeWOu+aNoeOAgeS5n+S4jeS8mui1sOi/h+WOu+aNoeOAguaOieiQveagkeaUvuWcqOi/memHjOaWueS+v+S9oOafpeaOieiQveOAgeWFiOaKiueJqeWTgUlE5Yqg6L+b55m95ZCN5Y2V77yM5Yqf6IO95oGi5aSN5ZCO56uL5Y2z55Sf5pWI44CC55m95ZCN5Y2V5LiO5LiL5pa544CM6IOM5YyF5pW055CGIC8g5Lii5byD6buR5ZCN5Y2V44CN5piv5Lik5Lu25LqL44CCPC9kaXY+JyAr
+      '<div class="log">走路拾取（指定ID自动拾取）已暂时下线：白名单里已选好的物品ID会保留，但脚本不会再去捡、也不会走过去捡。掉落树放在这里方便你查掉落、先把物品ID加进白名单，功能恢复后立即生效。</div>' +
+  // CLEANUP-RELEASE-END pickup-hint
       '<div class="row"><input id="dsh-mobsearch" type="text" placeholder="搜索怪物名/ID…（全量图鉴）">' +
       '<button class="ghost" id="dsh-mobsearchbtn" style="flex:0 0 auto">搜索</button>' +
       '<button class="ghost" id="dsh-mobsearchclr" style="flex:0 0 auto">清空</button></div>' +
       '<div id="dsh-drop-tree" style="font-size:12px">' +
       '<div class="st">怪物掉落树：点「本图怪物掉落」直接看当前地图怪 → 展开勾选物品加入白名单；也可搜索。</div></div>' +
-      '<div class="sec">背包整理（丢弃黑名单 · 类别规则）</div>' +
-      '<div class="row"><span class="st" style="font-size:12px">自动丢弃与丢弃名单已拆到独立浮窗（逐角色保存 · 默认关闭；改规则后需重新预览授权）。</span>' +
-      '<button class="ghost" id="dsh-fw-btn-bagclean" data-fw="bagclean" data-fwlabel="自动丢弃 · 丢弃名单" style="flex:0 0 auto;padding:0 8px;font-size:12px">自动丢弃 · 丢弃名单</button></div>' +
+  // CLEANUP-RELEASE-BEGIN pickup-retired-controls ORIGINAL:ICAgICAgJzxkaXYgY2xhc3M9InNlYyI+6IOM5YyF5pW055CG77yI5Lii5byD6buR5ZCN5Y2VIMK3IOexu+WIq+inhOWIme+8iTwvZGl2PicgKw0KICAgICAgJzxkaXYgY2xhc3M9InJvdyI+PHNwYW4gY2xhc3M9InN0IiBzdHlsZT0iZm9udC1zaXplOjEycHgiPuiHquWKqOS4ouW8g+S4juS4ouW8g+WQjeWNleW3suaLhuWIsOeLrOeri+a1rueql++8iOmAkOinkuiJsuS/neWtmCDCtyDpu5jorqTlhbPpl63vvJvmlLnop4TliJnlkI7pnIDph43mlrDpooTop4jmjojmnYPvvInjgII8L3NwYW4+JyArDQogICAgICAnPGJ1dHRvbiBjbGFzcz0iZ2hvc3QiIGlkPSJkc2gtZnctYnRuLWJhZ2NsZWFuIiBkYXRhLWZ3PSJiYWdjbGVhbiIgZGF0YS1md2xhYmVsPSLoh6rliqjkuKLlvIMgwrcg5Lii5byD5ZCN5Y2VIiBzdHlsZT0iZmxleDowIDAgYXV0bztwYWRkaW5nOjAgOHB4O2ZvbnQtc2l6ZToxMnB4Ij7oh6rliqjkuKLlvIMgwrcg5Lii5byD5ZCN5Y2VPC9idXR0b24+PC9kaXY+JyAr
+
+  // CLEANUP-RELEASE-END pickup-retired-controls
       '</div>' +
       '<div class="sec">目标锁定条 / 队伍面板</div>' +
       '<div class="row"><span class="st" style="font-size:11px">V2.29.0 起改为全透明悬浮层：直接在游戏画面上拖动，位置自动保存；在 功能菜单 勾选「目标状态 / 队伍血条」显示；队友色块点击即锁定。</span></div>' +
@@ -5199,7 +5218,9 @@ function createRoItemCapture(env) {
     fwReg("aid", "战斗辅助", function () { return document.getElementById("dsh-fw-aid"); });
     // MVP 计时是独立 custom 窗口，由 roModOpen/roModClose 直接管理，不进入标准浮窗登记。
     // V2.15.1 物品（拾取+背包整理）浮窗：标准浮窗（可拖动/透明/×收回）
-    fwReg("item", "物品 · 拾取+背包整理", function () { return document.getElementById("dsh-fw-item"); });
+  // CLEANUP-RELEASE-BEGIN pickup-reg-title0 ORIGINAL:ICAgIGZ3UmVnKCJpdGVtIiwgIueJqeWTgSDCtyDmi77lj5Yr6IOM5YyF5pW055CGIiwgZnVuY3Rpb24gKCkgeyByZXR1cm4gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoImRzaC1mdy1pdGVtIik7IH0pOw==
+    fwReg("item", "物品 · 拾取", function () { return document.getElementById("dsh-fw-item"); });
+  // CLEANUP-RELEASE-END pickup-reg-title0
     fwReg("perf", "画面性能", function () { return document.getElementById("dsh-fw-perf"); });    fwReg("memclean", "内存清理", function () { return document.getElementById("dsh-fw-memclean"); }); // V2.38.42
     // V2.29.0：目标锁定条/队伍面板改为独立透明悬浮层（renderTgt/renderParty 直管，功能菜单 roModOn 开关），不再走 fwReg
     fwReg("tpp", "传送点快捷条", function () { return document.getElementById("dsh-fw-tpp"); }); // V2.29.0
@@ -5224,15 +5245,18 @@ function createRoItemCapture(env) {
   // 后续阶段新增功能只需往 RO_MODULES 加一行，菜单/快捷键/开关会自动带上。
   var RO_MOD_KEY = "dsh_ro_modules_v1";
   var roModC = null;
+  // UNIFIED-PROBE-BEGIN resume-module-filter ORIGINAL:ICBmdW5jdGlvbiByb01vZHMoKSB7CiAgICBpZiAocm9Nb2RDKSByZXR1cm4gcm9Nb2RDOwogICAgcm9Nb2RDID0ge307CiAgICB0cnkgewogICAgICB2YXIgbyA9IEpTT04ucGFyc2UobG9jYWxTdG9yYWdlLmdldEl0ZW0oUk9fTU9EX0tFWSkgfHwgInt9Iik7CiAgICAgIGlmIChvICYmIHR5cGVvZiBvID09PSAib2JqZWN0Iikgcm9Nb2RDID0gbzsKICAgIH0gY2F0Y2ggKGUpIHt9CiAgICByZXR1cm4gcm9Nb2RDOwogIH0=
   function roMods() {
-    if (roModC) return roModC;
+    if (roModC) { delete roModC["ro-infinite-dojo"]; return roModC; }
     roModC = {};
     try {
       var o = JSON.parse(localStorage.getItem(RO_MOD_KEY) || "{}");
       if (o && typeof o === "object") roModC = o;
     } catch (e) {}
+    delete roModC["ro-infinite-dojo"];
     return roModC;
   }
+  // UNIFIED-PROBE-END resume-module-filter
   // V2.24.0：新增 defOff —— 表里标了 defOff 的功能（首领警报）默认关闭，其余默认开启。
   function roModOn(id) {
     var m = roMods();
@@ -5246,11 +5270,14 @@ function createRoItemCapture(env) {
     for (var i = 0; i < RO_MODULES.length; i++) { if (RO_MODULES[i].id === id) return RO_MODULES[i].page || null; }
     return null;
   }
+  // UNIFIED-PROBE-BEGIN resume-module-save ORIGINAL:ICBmdW5jdGlvbiByb01vZFNldChpZCwgb24pIHsKICAgIHJvTW9kcygpW2lkXSA9ICEhb247CiAgICB0cnkgeyBsb2NhbFN0b3JhZ2Uuc2V0SXRlbShST19NT0RfS0VZLCBKU09OLnN0cmluZ2lmeShyb01vZHMoKSkpOyB9IGNhdGNoIChlKSB7fQogICAgdHJ5IHsgcm9NZW51UmVuZGVyKCk7IH0gY2F0Y2ggKGUpIHt9CiAgfQ==
   function roModSet(id, on) {
+    if (id==="ro-infinite-dojo") return;
     roMods()[id] = !!on;
     try { localStorage.setItem(RO_MOD_KEY, JSON.stringify(roMods())); } catch (e) {}
     try { roMenuRender(); } catch (e) {}
   }
+  // UNIFIED-PROBE-END resume-module-save
   // V2.24.1：菜单里 5 个「设置页」行合并为一行「旧版设置界面」（id 沿用 panel）。
   //   点「打开」= 展开大面板，之后所有交互都在旧面板内进行（5 个页签 + 9 个子页签照旧）。
   //   kind 仍标 "page" 只是为了让渲染层不给它画「总开关」勾选框（面板没有开/关语义）。
@@ -5263,7 +5290,7 @@ function createRoItemCapture(env) {
     { id: "zhu",   name: "助手自动战斗",    kind: "act", noToggle: true, sec: "常用" },
     { id: "scr",   name: "脚本执行",        kind: "fw", sec: "常用" },
   // UNIFIED-PROBE-BEGIN mod-table-drop ORIGINAL:ICAgIHsgaWQ6ICJyby1pbmZpbml0ZS1kb2pvIiwgbmFtZTogIuiEmuacrOWFpeWPo++8iOeLrOeri+eJiO+8iSIsIGtpbmQ6ICJmdyIsIG5vU3dpdGNoOiB0cnVlLCBvcGVuT25seTogdHJ1ZSwgc2VjOiAi5bi455SoIiB9LA==
-    { id: "ro-infinite-dojo", name: "无限挑战（独立脚本）", kind: "fw", noSwitch: true, openOnly: true, sec: "常用" },
+    // 脚本窗口仅从「脚本执行」打开；握手与窗口 id 保留。
   // UNIFIED-PROBE-END mod-table-drop
     { id: "arrowrules", name: "换箭设置", kind: "fw", sec: "战斗功能" },
     { id: "mlock", name: "攻击名单",        kind: "fw", sec: "战斗功能" },
@@ -5276,7 +5303,9 @@ function createRoItemCapture(env) {
     { id:"deathlog", name:"死亡回放", kind:"fw", sec:"战斗辅助" },
     { id: "boss",  name: "首领警报",        kind: "fw", sec: "战斗辅助", defOff: true },
     { id: "askcombo", name: "一键补 buff（技能+物品）", kind: "action", noToggle: true, sec: "战斗辅助" },
-    { id: "item",  name: "物品 · 拾取与整理", kind: "fw", sec: "战斗辅助" },
+  // CLEANUP-RELEASE-BEGIN pickup-title1 ORIGINAL:ICAgIHsgaWQ6ICJpdGVtIiwgIG5hbWU6ICLnianlk4Egwrcg5ou+5Y+W5LiO5pW055CGIiwga2luZDogImZ3Iiwgc2VjOiAi5oiY5paX6L6F5YqpIiB9LA==
+    { id: "item",  name: "物品 · 拾取", kind: "fw", sec: "战斗辅助" },
+  // CLEANUP-RELEASE-END pickup-title1
     // V2.38.18：自动丢弃入口（kind=fw 走标准浮窗开关路径；noSwitch 只去掉勾选框——开关与授权在该浮窗内，勾选框会误导）
     { id: "bagclean", name: "自动丢弃 · 丢弃名单", kind: "fw", noSwitch: true, sec: "战斗辅助" },
     // 快捷加入丢弃名单：按住组合键 + 左键的手势键位（没有独立窗口、没有总开关，只有键位按钮；默认 Ctrl+Shift+D）
@@ -5323,11 +5352,7 @@ function createRoItemCapture(env) {
   function roModOpen(id) {
     roExpCloseOthers(id);
   // UNIFIED-PROBE-BEGIN mod-open-drop ORIGINAL:ICAgIGlmIChpZCA9PT0gInJvLWluZmluaXRlLWRvam8iKSB7CiAgICAgIHZhciBvcCA9IGFwaU9wZW5XaW5kb3coaWQpOwogICAgICBpZiAoIW9wLm9rKSBzZXRTdGF0dXMob3AuZXJyb3IgPT09ICJ1bmtub3duLXdpbmRvdyIgPyAi6ISa5pys5YWl5Y+j77ya54us56uL6ISa5pys5pyq5a6J6KOF5oiW5pyq5bCx57uq77yM6K+35ZCv55So54us56uL6ISa5pys5ZCO5YaN5omT5byA77yI5LiN5Lya6Ieq5Yqo6L+Q6KGM77yJIiA6ICLohJrmnKzlhaXlj6PvvJrorr7nva7mta7nqpfmmoLml7bmiZPkuI3lvIDvvIzor7fnqI3lkI7ph43or5XvvIjkuI3kvJroh6rliqjov5DooYzvvIkiLCAid2FybiIpOwogICAgICByZXR1cm47CiAgICB9
-    if (id === "ro-infinite-dojo") {
-      var op = apiOpenWindow(id);
-      if (!op.ok) setStatus(op.error === "unknown-window" ? "脚本入口：独立脚本未安装或未就绪，请启用独立脚本后再打开（不会自动运行）" : "脚本入口：设置浮窗暂时打不开，请稍后重试（不会自动运行）", "warn");
-      return;
-    }
+    // 已注册脚本窗口由脚本执行窗口打开。
   // UNIFIED-PROBE-END mod-open-drop
     /* V2.38.52：按用户要求删除「加入丢弃名单快捷操作」弹窗；提示改为自动丢弃浮窗内一行小字 */
     var pg = roModPage(id);
@@ -5370,7 +5395,7 @@ function createRoItemCapture(env) {
     var roModOpen0 = roModOpen, roModClose0 = roModClose;
     roModOpen = function (id) { var r = roModOpen0.apply(null, arguments); try { roExpMonSync(); } catch (eMO) {} return r; };
     roModClose = function (id) { var r = roModClose0.apply(null, arguments); try { roExpMonSync(); } catch (eMC) {} return r; };
-    function roModToggle(id) { if (id === "ro-infinite-dojo") return roModOpen(id); if (roModIsOpen(id)) roModClose(id); else roModOpen(id); }
+    function roModToggle(id) { if (roModIsOpen(id)) roModClose(id); else roModOpen(id); }
   // UNIFIED-PROBE-END mod-toggle-sync
 
   var roMenuEl = null;
@@ -6972,6 +6997,9 @@ function createRoItemCapture(env) {
       var cfg = hkLoad();
       var hit = null;
       for (var id in cfg) {
+  // UNIFIED-PROBE-BEGIN resume-retired-hotkey ORIGINAL:
+        if (id === "ro-infinite-dojo") continue; // 退役独立入口不抢占按键；脚本执行内 openWindow 保留。
+  // UNIFIED-PROBE-END resume-retired-hotkey INLINE
         var hh = cfg[id];
         if (!hh || !hh.key) continue;
         // V2.23.0：四个修饰键各自独立严格比对。旧版把 Ctrl 和 Win 混在一起比，
@@ -8018,7 +8046,10 @@ function createRoItemCapture(env) {
       return any;
     } catch (e) { return false; }
   }
+  // UNIFIED-PROBE-BEGIN resume-arrow-ui ORIGINAL:ICBmdW5jdGlvbiBhcHBseVByb2ZpbGVVSSgpIHs=
   function applyProfileUI() {
+    try{if(typeof arrowSyncProfile==="function")arrowSyncProfile();}catch(eArrow){}
+  // UNIFIED-PROBE-END resume-arrow-ui
     try {
       try { migrateZControlsAll(); } catch (em) {}
       // V2.32.1：重置回 HTML 默认值（checked/selected/value 属性），而非一刀切清空——修「防御瞬移总开关等默认勾选项被重置成关闭」
@@ -10111,12 +10142,15 @@ function createRoItemCapture(env) {
     } catch (e) { return { wt: -1, itid: null, why: "异常:" + (e && e.message ? e.message : e), seen: "" }; }
   }
   // V2.38.50：只有角色装备栏箭矢格能证明当前箭；背包只补读该格同序号的数据，绝不扫描穿戴标记兜底。
-  // 只有当前自身 Equipment 的正式 equip 更新能为 detached 根建立会话见证。
+  // 当前自身 Equipment 的正式更新与首次原生槽位读取建立角色绑定；换图不沿用旧数量。
   var arrowEquipOwners = new WeakMap(), arrowEquipHooked = new WeakSet();
+  function arrowEquipIdentityKey() {
+    try { var id=resolveSelfIdentity();return id&&id.known===true&&Number(id.charId)===selfCharId()?String(id.oneId||""):""; } catch(e) { return ""; }
+  }
   function arrowEquipRootOwned(EQ, ri) {
     try {
       var root=ri&&ri.el;
-      if(!EQ||EQ!==gearEquipmentComp()||!root||!CLIENT.SS||!CLIENT.SS.Entity||!clientReady())return false;
+      if(!EQ||EQ!==gearEquipmentComp()||!root||!CLIENT.SS||!CLIENT.SS.Entity)return false;
       var host=root.nodeType===11?root.host:root;
       if(!host||!/^Equipment(?:V[0-4]|_v[0-4])?$/.test(host.id||"")||gearDomExcluded(host))return false;
       if(ri.how==="getRoot")return typeof EQ.getRoot==="function"&&gearDomEl(EQ.getRoot())===root;
@@ -10125,22 +10159,39 @@ function createRoItemCapture(env) {
   }
   function arrowEquipOwnerCurrent(EQ, ri) {
     try {
-      var own=arrowEquipOwners.get(EQ),cid=selfCharId();
-      return !!(own&&cid>0&&own.cid===cid&&own.ent===CLIENT.SS.Entity&&own.epoch===identityEpoch&&own.root===ri.el&&arrowEquipRootOwned(EQ,ri));
+      var own=arrowEquipOwners.get(EQ),cid=selfCharId(),key=arrowEquipIdentityKey();
+      return !!(own&&cid>0&&key&&own.key===key&&own.cid===cid&&own.ent===CLIENT.SS.Entity&&own.epoch===identityEpoch&&own.root===ri.el&&arrowEquipRootOwned(EQ,ri));
     }catch(e){return false;}
   }
   function arrowEquipHook(EQ) {
     try {
-      if(!EQ||arrowEquipHooked.has(EQ)||typeof EQ.equip!=="function")return;
+      if(!EQ||typeof EQ.equip!=="function")return;
+      // Late attachment: select only the current native Equipment slot; inventory supplies that exact index, never wear flags.
+      if(!arrowEquipOwners.has(EQ)&&clientReady()){
+        var ri0=gearEqRootInfo(EQ),cid0=selfCharId(),key0=arrowEquipIdentityKey();
+        if(cid0>0&&key0&&arrowEquipRootOwned(EQ,ri0)){
+          var seed={cid:cid0,key:key0,ent:CLIENT.SS.Entity,epoch:identityEpoch,root:ri0.el,items:{}};
+          ["ammo","weapon"].forEach(function(cls){
+            var idx0=gearDomIdx(ri0.el,cls),it0=null;
+            if(!Number.isInteger(idx0)||idx0<1||idx0>65535)return;
+            try{if(typeof EQ.getItemByIndex==="function")it0=gearPickItem(EQ.getItemByIndex(idx0));}catch(eGet){}
+            if(!it0)it0=bagItemByIndex(idx0);
+            var id0=gearItid(it0);
+            if(it0&&Number(it0.index)===idx0&&id0!=null)seed.items[idx0]={id:id0,item:it0};
+          });
+          if(Object.keys(seed.items).length)arrowEquipOwners.set(EQ,seed);
+        }
+      }
+      if(arrowEquipHooked.has(EQ))return;
       var equip=EQ.equip,unEquip=EQ.unEquip,onRemove=EQ.onRemove;
       var wrapped=function(item){
-        var ent=null,cid=0,epoch=-1;
-        try {ent=CLIENT.SS&&CLIENT.SS.Entity;cid=selfCharId();epoch=identityEpoch;}catch(eBefore){}
+        var ent=null,cid=0,epoch=-1,key="";
+        try {ent=CLIENT.SS&&CLIENT.SS.Entity;cid=selfCharId();epoch=identityEpoch;key=arrowEquipIdentityKey();}catch(eBefore){}
         var result=equip.apply(this,arguments);
         try {
           var ri=gearEqRootInfo(EQ),idx=item&&Number(item.index),id=gearItid(item);
-          if(this===EQ&&cid>0&&ent&&ent===CLIENT.SS.Entity&&cid===selfCharId()&&epoch===identityEpoch&&Number.isInteger(idx)&&idx>0&&idx<=65535&&id!=null&&arrowEquipRootOwned(EQ,ri)&&ri.el.querySelector('.item[data-index="'+idx+'"]')) {
-            var own=arrowEquipOwnerCurrent(EQ,ri)?arrowEquipOwners.get(EQ):{cid:cid,ent:ent,epoch:epoch,root:ri.el,items:{}};
+          if(this===EQ&&cid>0&&key&&key===arrowEquipIdentityKey()&&ent&&ent===CLIENT.SS.Entity&&cid===selfCharId()&&epoch===identityEpoch&&Number.isInteger(idx)&&idx>0&&idx<=65535&&id!=null&&arrowEquipRootOwned(EQ,ri)&&ri.el.querySelector('.item[data-index="'+idx+'"]')) {
+            var own=arrowEquipOwnerCurrent(EQ,ri)?arrowEquipOwners.get(EQ):{cid:cid,key:key,ent:ent,epoch:epoch,root:ri.el,items:{}};
             own.items[idx]={id:id,item:item};arrowEquipOwners.set(EQ,own);
           }
         }catch(eWitness){}
@@ -10158,15 +10209,15 @@ function createRoItemCapture(env) {
   function gearAmmoRootTrusted(ri) {
     try {
       var root = ri && ri.el;
-      if (!root) return false;
+      if (!root || !clientReady()) return false;
       if (ri.how === "getRoot" || ri.how === "ui") {
         var EQ=gearEquipmentComp();
         if(!arrowEquipRootOwned(EQ,ri))return false;
+        if(arrowEquipOwners.has(EQ)&&!arrowEquipOwnerCurrent(EQ,ri))return false;
         return root.isConnected===true || arrowEquipOwnerCurrent(EQ,ri);
       }
       if(root.isConnected!==true)return false;
-      // 手机桥接取不到组件时，只认当前自身完整且唯一的 Equipment；Equipment_ 是他人装备克隆。
-      if ((ri.how !== "id" && ri.how !== "evidence") || root.id !== "Equipment" || !clientReady() || !CLIENT.SS || !CLIENT.SS.Entity || gearDomExcluded(root)) return false;
+      if ((ri.how !== "id" && ri.how !== "evidence") || root.id !== "Equipment" || !CLIENT.SS || !CLIENT.SS.Entity || gearDomExcluded(root)) return false;
       var roots = document.querySelectorAll('[id="Equipment"]');
       if (roots.length !== 1 || roots[0] !== root) return false;
       var probe = gearDomProbe(root);
@@ -10213,23 +10264,39 @@ function createRoItemCapture(env) {
     if (last && last.ent === (CLIENT.SS && CLIENT.SS.Entity) && last.key === activeProfileKey() && last.epoch === (typeof identityEpoch === "undefined" ? 0 : identityEpoch)) return last.itid;
     return null;
   }
+  function arrowAmmoReadResult(a, ri) {
+    try{
+      if(typeof UP!=="undefined"&&UP.on&&UP.battle){
+        var key=(a.known?"known:"+a.index+":"+a.itid:a.reason)+":"+identityEpoch+":"+activeProfileKey(),now=Date.now();
+        if(zArrow.slotDiagKey!==key||now-(zArrow.slotDiagAt||0)>=10000){
+          zArrow.slotDiagKey=key;zArrow.slotDiagAt=now;
+          upRecord("battle","battle-anomaly",{event:"arrow-slot-read",known:a.known===true,reason:a.reason||"known",index:a.index,itid:a.itid,count:a.count,rootSource:ri&&ri.how||"",connected:!!(ri&&ri.el&&ri.el.isConnected),result:a.known?"current equipment slot read":"not executed; equipment slot unconfirmed"});
+        }
+      }
+    }catch(eDiag){}
+    return a;
+  }
   function readEquippedAmmo() {
-    var failed = { index:null, count:null, itid:null, src:"读取失败", known:false, reason:"unreadable" };
+    var failed = { index:null, count:null, itid:null, src:"读取失败", known:false, reason:"unreadable" },ri=null;
+    function finish(a){return arrowAmmoReadResult(a,ri);}
+    function fail(reason){failed.reason=reason;return finish(failed);}
     try {
-      var EQ = gearEquipmentComp(), ri = gearEqRootInfo(EQ), root = ri.el;
-      if (!gearAmmoRootTrusted(ri)) return failed;
+      arrowEquipHookTick();
+      var EQ = gearEquipmentComp();ri=gearEqRootInfo(EQ);var root=ri.el;
+      if(!clientReady())return fail("not-ready");
+      if(!root)return fail("no-root");
+      if (!gearAmmoRootTrusted(ri)) return fail("untrusted-root");
       var box = root.querySelector(".ammo");
-      if (!box || typeof box.querySelectorAll !== "function") return failed;
+      if (!box || typeof box.querySelectorAll !== "function") return fail("missing-slot");
       var cells = box.querySelectorAll(".item[data-index]");
       if (cells.length !== 1) {
-        if (cells.length > 1) { failed.reason = "ambiguous"; return failed; }
-        return arrowAmmoSlotEmpty() ? { index:null, count:0, itid:null, src:"装备栏空槽", known:true } : failed;
+        if (cells.length > 1) return fail("ambiguous");
+        return arrowAmmoSlotEmpty() ? finish({ index:null, count:0, itid:null, src:"装备栏空槽", known:true }) : fail("empty-unconfirmed");
       }
       var idx = gearDomIdx(root, "ammo");
-      if (idx == null || idx < 1 || idx > 65535) return failed;
+      if (idx == null || idx < 1 || idx > 65535) return fail("bad-index");
       var eqIt = null, direct = null, bagIt = null;
       try { eqIt = gearEqItemByIndex(EQ, idx); } catch (e1) {}
-      // 直接槽位接口只能为装备栏已经确定的同序号补值；不得抢先选另一叠箭。
       try { if (EQ && typeof EQ.isInEquipList === "function") direct = gearPickItem(EQ.isInEquipList(32768)); } catch (e2) {}
       if (!direct || direct.index == null || Number(direct.index) !== idx) direct = null;
       try { bagIt = bagItemByIndex(idx); } catch (e3) {}
@@ -10239,16 +10306,15 @@ function createRoItemCapture(env) {
         if (!it || (it.index != null && (typeof it.index === "boolean" || Number(it.index) !== idx))) continue;
         var itemId = gearItid(it);
         if (itemId == null) continue;
-        if (id != null && Number(id) !== Number(itemId)) { failed.reason = "conflict"; return failed; }
+        if (id != null && Number(id) !== Number(itemId)) return fail("conflict");
         id = itemId;
         var a = arrowAmmoEvidence(it, i === 2 ? "装备栏箭矢格/同序号数量" : "装备栏箭矢格/装备组件", idx);
-        if (a && a.reason === "nonArrow") return a;
+        if (a && a.reason === "nonArrow") return finish(a);
         if (a && a.known === true) valid[i] = a;
       }
-      if (!gearAmmoRootTrusted(ri) || gearDomIdx(root, "ammo") !== idx) return failed;
-      // 同序号背包数量随消耗更新，优先补读；箭种/实例的选择始终来自装备栏格子。
-      return arrowRememberAmmo(valid[2] || valid[0] || valid[1] || failed);
-    } catch (e) { return failed; }
+      if (!gearAmmoRootTrusted(ri) || gearDomIdx(root, "ammo") !== idx) return fail("changed-slot");
+      return finish(arrowRememberAmmo(valid[2] || valid[0] || valid[1] || failed));
+    } catch (e) { return fail("exception"); }
   }
   function arrowAmmoWhy(a) {
     if (a && a.reason === "ambiguous") return "（装备栏箭矢格有多个物品，无法确认）";
@@ -10372,6 +10438,16 @@ function createRoItemCapture(env) {
   function arrowIdentityInvalidate(why){
     arrowSupply=null;arrowPending=null;arrowSelfPending=null;arrowQuiverAt=0;zArrow.lastAmmo=null;
     arrowStableKey="";arrowStableAt=0;arrowStickyBoss=null;
+    try{
+      var EQ=gearEquipmentComp(),ri=gearEqRootInfo(EQ),own=EQ&&arrowEquipOwners.get(EQ);
+      if(EQ&&why!=="master-off"){
+        if(why==="map-change"&&own&&own.cid===selfCharId()&&own.key&&own.key===arrowEquipIdentityKey()&&own.ent===CLIENT.SS.Entity&&own.root===ri.el&&own.epoch+1===identityEpoch&&arrowEquipRootOwned(EQ,ri)){
+          own.epoch=identityEpoch;
+          // The same native slot survives a map change; its old quantity does not.
+          Object.keys(own.items).forEach(function(idx){var row=own.items[idx];row.item={ITID:row.id,index:Number(idx),count:null};});
+        }else arrowEquipOwners.set(EQ,{cid:0,key:"",ent:null,epoch:-1,root:ri.el,items:{}});
+      }
+    }catch(eEquipReset){}
     try{arrowSupplyLog("会话/地图切换，箭矢状态已作废（"+why+"）");}catch(e){}
   }
   // Shared supply wait only; selection and the two switches remain independent.
@@ -14520,12 +14596,10 @@ function createRoItemCapture(env) {
   function ammoDiagText() {
     var a = null;
     try { a = readEquippedAmmo(); } catch (e) {}
-    // V2.38.37-arrow2：只读诊断四态 —— 读到 / 证明空槽 / 槽里有东西但不是箭矢（不动作）/ 读不到（不动作）；
-    //   后两种都必须写明「不动作」，否则玩家会以为那是「装备栏没箭」，跟「确认空槽」混为一谈
     if (!a || a.known !== true) {
       if (a && a.reason === "nonArrow") return "装备栏箭矢槽：非箭矢（不动作）";
-      if (a && a.reason === "ambiguous") return "装备栏箭矢槽：读取失败（背包里有多件同样带箭矢槽标记，无法判定；不动作）";
-      return "装备栏箭矢槽：读取失败（不动作）";
+      var why={"not-ready":"游戏尚未就绪","no-root":"装备栏尚未就绪","untrusted-root":"本角色装备栏尚未确认","missing-slot":"未找到箭矢格","ambiguous":"箭矢格有多件物品","empty-unconfirmed":"尚不能确认空槽","bad-index":"箭矢格序号尚未就绪","conflict":"装备栏与物品数据尚未同步","changed-slot":"装备栏正在更新","unreadable":"箭种或数量尚未读到","exception":"装备栏读取异常"};
+      return "装备栏箭矢槽：读取失败（"+(why[a&&a.reason]||"尚未取得当前箭矢")+"；不动作）";
     }
     if (a.itid == null) return "装备栏箭矢槽：空";
     return "装备栏箭矢槽：" + arrowItemName(a.itid) + " ×" + (a.count != null ? a.count : 0);
@@ -16789,16 +16863,41 @@ function createRoItemCapture(env) {
   }
   // 技能行统一序列化（对象 → textarea 行）：统一 6 段 skid:lv:cond:prob:uses:lock，行尾两空格+技能名做注释
   // prob：0-100（0=从不释放）；uses：本轮上限；lock：每次锁定上限；空段 cond 保留，与 parse 双向兼容
+  // 仅采用既有技能来源表与本服实测状态映射；中文状态名称表不是技能映射。
+  function skillBuffStatus(skid) {
+    if (skid === 34) return buffStId("BLESSING"); // SKILL_STATUS_SRC + MEASURED
+    if (skid === 361) return buffStId("ASSUMPTIO"); // SKILL_STATUS_SRC + MEASURED
+    return -1; // 未核实，不猜编号（261/401 为气球资源技能）
+  }
+  // 仅供已核实的自动关联：无实体读数/服务器记录不能当作状态缺失。
+  function skillBuffState(stId) {
+    try {
+      var ent = CLIENT.SS && CLIENT.SS.Entity, f = DSH_ENT_STATE[stId];
+      if (!ent) return null;
+      if (f) { var v = f(ent); if (v === true || v === 1) return true; if (v === false || v === 0) return false; }
+      var st = buffActive[stId];
+      if (!st) return null;
+      if (st.on === false) return false;
+      return st.on === true && st.endAt > Date.now() ? true : null;
+    } catch (e) { return null; }
+  }
+  function skillSpherePatch(cond, op, n) {
+    var parts = String(cond || "").split(/[,，]/).filter(function (c) { return c && !/^!?球(?:[<>]=?|=)?\d+$/.test(c.trim()); });
+    if (op) parts.push("球" + op + Math.max(0, parseInt(n, 10) || 0));
+    return parts.join(",");
+  }
   function skillEffectiveCond(skid, cond) {
     cond = String(cond || "").trim();
     // 蓄气/狂蓄气单独加入技能顺序且未设置条件时默认「球0」；玩家显式写的条件完全保留。
     if ((skid === 261 || skid === 401) && !cond) return "球0";
+    var buffId = skillBuffStatus(skid);
+    if (!cond && buffId >= 0) return "!" + buffId;
     if (typeof SKILL_REQ === "undefined" || !SKILL_REQ) return cond;
     var req = skillReq(skid), parts = [];
     if (req) { if (req[2] > 0) parts.push("球" + req[2]); if (req[3]) parts.push(statusNameToCond(req[3])); }
     var defaults = parts.join(",");
     if (!cond) return defaults;
-    if (/(?:^|[,，])\s*!?球\d+\s*(?:$|[,，])/.test(cond)) return cond;
+    if (/(?:^|[,，])\s*!?球(?:[<>]=?|=)?\d+\s*(?:$|[,，])/.test(cond)) return cond;
     var sphere = defaults.match(/(?:^|[,，])(球\d+)(?:$|[,，])/);
     return sphere ? cond + "," + sphere[1] : cond;
   }
@@ -16907,9 +17006,12 @@ function createRoItemCapture(env) {
       // V2.38.4：球源词不是释放门槛，也不能当状态名去查 —— 直接跳过，否则含 球源401 的技能会被永远卡死
       if (/^球源/.test(cc)) continue;
       var hit = false;
-      var ms = cc.match(/^球(\d+)$/);
+      var ms = cc.match(/^球(?:([<>]=?|=))?(\d+)$/);
       if (ms && st.spheres == null) return { ok: false, miss: "气弹数量未知" };
-      if (ms) { var wantBall = parseInt(ms[1], 10); hit = wantBall === 0 ? st.spheres === 0 : st.spheres >= wantBall; }
+      if (ms) {
+        var wantBall = parseInt(ms[2], 10), ballOp = ms[1];
+        hit = ballOp === "<" ? st.spheres < wantBall : ballOp === "<=" ? st.spheres <= wantBall : ballOp === ">" ? st.spheres > wantBall : ballOp === "=" ? st.spheres === wantBall : ballOp === ">=" ? st.spheres >= wantBall : wantBall === 0 ? st.spheres === 0 : st.spheres >= wantBall;
+      }
       else {
         var mh = cc.match(/^hp([><=])(\d+)$/);
         if (mh) {
@@ -16932,6 +17034,11 @@ function createRoItemCapture(env) {
       if (cc === "猎鹰") hit = st.falcon === 1;
       // V1.7.6 状态名判定通用化：英文（rAthena SC 名）与中文（含 debuff 别名）→ statusActive（实体字段 + 判活环兜底）
       if (!ms && !mh && !msp && cc !== "爆气" && cc !== "狂暴" && cc !== "灵魂" && cc !== "骑乘" && cc !== "猎鹰") hit = statusActive(cc);
+      // 新关联仅核实了赐福10、圣母之祈福473；未知不能经 ! 反转为可放。
+      if (cc === "10" || cc === "473") {
+        hit = skillBuffState(parseInt(cc, 10));
+        if (hit === null) return { ok: false, miss: "Buff状态未知" };
+      }
       if (neg) hit = !hit;
       if (!hit) return { ok: false, miss: c };
     }
@@ -17097,10 +17204,10 @@ function createRoItemCapture(env) {
       if (ms) {
         var op = ms[1] || ">=";
         var n = parseInt(ms[2], 10);
-        // 球N/球>=N：该技能至少需要N个气弹；球< N/球<=N：低于阈值时补到N个。
-        if (op === "<" || op === "<=") {
-          if (n > need.spheres) need.spheres = n;
-        } else if (n > need.spheres) need.spheres = n;
+        // 少于条件是补球技能自身的释放门槛，不是消耗技能的补球需求。
+        if (op === "<" || op === "<=") continue;
+        if (op === ">") n++;
+        if (n > need.spheres) need.spheres = n;
         continue;
       }
       // hp>/sp> 等阈值条件不参与自动补（由战斗逻辑等待）
@@ -17460,7 +17567,7 @@ function createRoItemCapture(env) {
       if (condStr) { // 手写/自动条件始终生效；开关只控制自动补状态和补球
         var ck = checkSkillCond(condStr);
         if (!ck.ok) {
-          if (ck.miss === "气弹数量未知" && o.skid === 261 && sphereProbeOnce(ent)) return true; // 球0 未知不假装为0，先用一次蓄气同步读数
+          if (ck.miss === "气弹数量未知" && o.skid === 261 && condStr === "球0" && sphereProbeOnce(ent)) return true; // 球0 未知不假装为0，先用一次蓄气同步读数
           if (!blocked) blocked = { o: o, condStr: condStr };
           continue;
         }
@@ -17479,8 +17586,9 @@ function createRoItemCapture(env) {
         continue;
       }
       var bits = skillTypeBits(o.skid);
-      var isSelf = o.skid === 261 || o.skid === 401 || (bits != null && (bits & 4) === 4); // 补球技能必须对自身施放
+      var isSelf = o.skid === 261 || o.skid === 401 || skillBuffStatus(o.skid) >= 0 || (bits != null && (bits & 4) === 4); // 补球技能必须对自身施放
       if (isSelf) {
+        if (!ent.GID) { dshCastSkip(o.skid, "自身GID未知"); continue; }
         try {
           var ps = new (czp("USE_SKILL"))();
           ps.SKID = o.skid;
@@ -17656,8 +17764,14 @@ function createRoItemCapture(env) {
       }
       // V2.34.0：顺序行内可直接改等级（上限=已学等级，读不到不设上限）与释放%
       var lvMax = 0; try { lvMax = learnedSkillLv(o.skid) || 0; } catch (e0) {}
+      var ball = String(o.cond || "").match(/(?:^|[,，])球([<>]=?|=)?(\d+)(?:$|[,，])/);
+      var ballOp = ball ? (ball[1] || (ball[2] === "0" ? "=" : ">=")) : "";
+      var ballOpts = [["", "自动/默认"], ["<", "少于"], [">=", "至少"], ["=", "等于（兼容球0）"], ["<=", "至多"], [">", "多于"]].map(function (p) { return '<option value="' + p[0] + '"' + (p[0] === ballOp ? " selected" : "") + ' >' + p[1] + '</option>'; }).join("");
+      var buffHint = skillBuffStatus(o.skid) >= 0 ? " · 已核实自身Buff" : (o.skid === 261 || o.skid === 401 ? " · 气球资源技能" : " · 状态映射未核实（不猜编号）");
       html += '<div class="prow drag-item" data-drag-i="' + i + '" draggable="true" title="拖动调整顺序"><span class="dh">⠿</span><span class="pidx">' + (i + 1) + '</span>' +
-        '<span class="pnm">' + nm + ' <span class="st">ID' + o.skid + (dispCond ? ' · 需' + dispCond : '') + '</span></span>' +
+        '<span class="pnm">' + nm + ' <span class="st">ID' + o.skid + (dispCond ? ' · 需' + dispCond.replace(/</g, '&lt;') : '') + buffHint + '</span></span>' +
+        '<select data-ball-op="' + o.skid + '" title="气球释放条件" style="flex:0 0 112px">' + ballOpts + '</select>' +
+        '<input data-ball-n="' + o.skid + '" type="number" min="0" value="' + (ball ? ball[2] : 5) + '" title="气球数量" style="flex:0 0 44px">' +
         '<span class="lb">Lv</span><input type="number" min="1"' + (lvMax > 0 ? ' max="' + lvMax + '"' : '') + ' value="' + o.lv + '" data-lv="' + o.skid + '" title="释放等级（直接写回技能顺序）" style="flex:0 0 44px;text-align:center">' +
         '<input type="number" min="0" max="100" value="' + (o.prob != null ? o.prob : 100) + '" data-prob="' + o.skid + '" title="释放百分比" style="flex:0 0 48px;text-align:center">' +
         '<span class="st">%</span>' +
@@ -17666,6 +17780,14 @@ function createRoItemCapture(env) {
     el.innerHTML = html;
     // V2.34.0：等级/释放% 改为 input 即时写回（去抖 300ms）+ blur 归一化。
     //   旧实现只在 change(失焦) 写回，未失焦时 1 秒定时器每 3 秒重建列表 → 输入被旧值弹回。
+    el.querySelectorAll("[data-ball-op], [data-ball-n]").forEach(function (inp) {
+      inp.addEventListener("change", function () {
+        var skid = parseInt(this.getAttribute("data-ball-op") || this.getAttribute("data-ball-n"), 10);
+        var op = el.querySelector('[data-ball-op="' + skid + '"]').value;
+        var n = el.querySelector('[data-ball-n="' + skid + '"]').value;
+        skPatch(skid, function (o) { o.cond = skillSpherePatch(o.cond, op, n); });
+      });
+    });
     el.querySelectorAll("[data-prob]").forEach(function (inp) {
       var skid = parseInt(inp.getAttribute("data-prob"), 10);
       inp.addEventListener("input", function () {
@@ -19627,11 +19749,11 @@ function createRoItemCapture(env) {
         });
         if (!target) throw new Error("附近没有NPC（先扫描并「走到选中」）");
       }
-      lastTalkNpc = {
-        GID: target.GID,
-        name: target.displayName || target.name || (target.display && target.display.name) || "",
-        pos: (target.position && target.position.length >= 2) ? [target.position[0], target.position[1]] : (selNpc && selNpc.pos ? [selNpc.pos[0], selNpc.pos[1]] : null)
-      };
+  // UNIFIED-PROBE-BEGIN resume-manual-contact ORIGINAL:ICAgICAgbGFzdFRhbGtOcGMgPSB7CiAgICAgICAgR0lEOiB0YXJnZXQuR0lELAogICAgICAgIG5hbWU6IHRhcmdldC5kaXNwbGF5TmFtZSB8fCB0YXJnZXQubmFtZSB8fCAodGFyZ2V0LmRpc3BsYXkgJiYgdGFyZ2V0LmRpc3BsYXkubmFtZSkgfHwgIiIsCiAgICAgICAgcG9zOiAodGFyZ2V0LnBvc2l0aW9uICYmIHRhcmdldC5wb3NpdGlvbi5sZW5ndGggPj0gMikgPyBbdGFyZ2V0LnBvc2l0aW9uWzBdLCB0YXJnZXQucG9zaXRpb25bMV1dIDogKHNlbE5wYyAmJiBzZWxOcGMucG9zID8gW3NlbE5wYy5wb3NbMF0sIHNlbE5wYy5wb3NbMV1dIDogbnVsbCkKICAgICAgfTs=
+      lastTalkNpc = npcObserved(target.GID);
+      var talkScene=npcIdentity();lastTalkNpc.oneId=talkScene.oneId;lastTalkNpc.epoch=talkScene.epoch;lastTalkNpc.map=talkScene.map;
+
+  // UNIFIED-PROBE-END resume-manual-contact
       var p = new (czp("CONTACTNPC"))();
       p.NAID = target.GID; p.type = 1;
       CLIENT.NM.sendPacket(p);
@@ -19664,7 +19786,15 @@ function createRoItemCapture(env) {
   });
 
   // ---------------- 菜单侦察（对话采集 · 阶段1） ----------------
+  // UNIFIED-PROBE-BEGIN resume-dialog-scene ORIGINAL:ICB2YXIgbWVudVJlY29uR2VuZXJhdGlvbiA9IDAsIG1lbnVSZWNvbiA9IHsgTkFJRDogMCwgbXNnOiAiIiwgaXRlbXM6IFtdLCBtYXA6ICIiLCBucGNOYW1lOiAiIiwgcG9zOiBudWxsLCB0aW1lOiAwLCBnZW5lcmF0aW9uOiAwIH07
   var menuReconGeneration = 0, menuRecon = { NAID: 0, msg: "", items: [], map: "", npcName: "", pos: null, time: 0, generation: 0 };
+  var npcDialogGeneration=0,npcDialog=null;
+  function npcIdentity(){var id=null;try{id=resolveSelfIdentity();}catch(e){}var s={oneId:id&&id.known===true?String(id.oneId||""):"",epoch:typeof identityEpoch==="number"?identityEpoch:null,map:String(getMapName()||"")};if(!s.oneId||!s.map.trim()||!Number.isFinite(s.epoch)){npcDialog=null;menuRecon={NAID:0,msg:"",items:[],map:"",npcName:"",pos:null,time:0,generation:menuReconGeneration};lastTalkNpc=null;apiDojoState=null;if(apiLease){apiLease.selectedNpc=0;apiLease.dialogScene=null;}}return s;}
+  function npcSameScene(row){var s=npcIdentity();return !!(row&&s.oneId&&s.map.trim()&&Number.isFinite(s.epoch)&&row.oneId===s.oneId&&row.epoch===s.epoch&&row.map===s.map);}
+  function npcObserved(naid){var found=null;try{var em=CLIENT.EM||requireDB("Renderer/EntityManager");if(em&&em.forEach)em.forEach(function(e){if(e&&(Number(e.GID)>>>0)===(Number(naid)>>>0)&&(Number(e.objecttype)===6||Number(e.objecttype)===12))found={GID:naid,name:e.displayName||e.name||(e.display&&e.display.name)||"",pos:e.position?[e.position[0],e.position[1]]:null};});}catch(e){}if(!found&&lastTalkNpc&&npcSameScene(lastTalkNpc)&&(Number(lastTalkNpc.GID)>>>0)===(Number(naid)>>>0))found=lastTalkNpc;return found||{GID:naid,name:"",pos:null};}
+  function npcTrack(naid,text){var s=npcIdentity();npcDialog={naid:naid,text:String(text||""),oneId:s.oneId,epoch:s.epoch,map:s.map,generation:++npcDialogGeneration};}
+  function npcNextScript(naid){var p=new (czp("REQ_NEXT_SCRIPT"))();p.NAID=naid;upTag(p,"assistant:manual-menu-next");CLIENT.NM.sendPacket(p);}
+  // UNIFIED-PROBE-END resume-dialog-scene
   var lastTalkNpc = null; // 点「点NPC对话」时记录的目标实体（真实 GID/name/pos，用于菜单反查）
   function decodeMenuMsg(bytes) {
     var end = bytes.length;
@@ -19750,39 +19880,23 @@ function createRoItemCapture(env) {
   }
   function onMenuList(bytes) {
     try {
-      if (!bytes || bytes.byteLength < 6) return;
+  // UNIFIED-PROBE-BEGIN resume-menu-frame ORIGINAL:ICAgICAgaWYgKCFieXRlcyB8fCBieXRlcy5ieXRlTGVuZ3RoIDwgNikgcmV0dXJuOwogICAgICB2YXIgZHYgPSBuZXcgRGF0YVZpZXcoYnl0ZXMpOwogICAgICBpZiAoZHYuZ2V0VWludDE2KDAsIHRydWUpICE9PSAxODMpIHJldHVybjsgLy8gWkMuTUVOVV9MSVNU77yI6I+c5Y2V77yJCiAgICAgIHZhciBOQUlEID0gZHYuZ2V0VWludDMyKDIsIHRydWUpOwogICAgICB2YXIgTkFJRHMgPSBOQUlEID4gMjE0NzQ4MzY0NyA/IE5BSUQgLSA0Mjk0OTY3Mjk2IDogTkFJRDsKICAgICAgdmFyIG1zZyA9IGRlY29kZU1lbnVNc2cobmV3IFVpbnQ4QXJyYXkoYnl0ZXMsIDYsIGJ5dGVzLmJ5dGVMZW5ndGggLSA2KSk7CiAgICAgIHZhciBucGNOYW1lID0gIiIsIHBvcyA9IG51bGw7CiAgICAgIHRyeSB7CiAgICAgICAgaWYgKGxhc3RUYWxrTnBjICYmIGxhc3RUYWxrTnBjLkdJRCAhPSBudWxsKSB7CiAgICAgICAgICBucGNOYW1lID0gbGFzdFRhbGtOcGMubmFtZSB8fCAiIjsKICAgICAgICAgIHBvcyA9IGxhc3RUYWxrTnBjLnBvczsKICAgICAgICAgIHZhciBnaWQgPSBsYXN0VGFsa05wYy5HSUQ7CiAgICAgICAgICB2YXIgZ2lkVSA9IGdpZCA8IDAgPyBnaWQgKyA0Mjk0OTY3Mjk2IDogZ2lkOwogICAgICAgICAgdmFyIGdpZFMgPSBnaWQgPiAyMTQ3NDgzNjQ3ID8gZ2lkIC0gNDI5NDk2NzI5NiA6IGdpZDsKICAgICAgICAgIHZhciBFTSA9IENMSUVOVC5FTSB8fCAocmVxdWlyZURCKCJSZW5kZXJlci9FbnRpdHlNYW5hZ2VyIikpOwogICAgICAgICAgaWYgKEVNICYmIEVNLmZvckVhY2gpIEVNLmZvckVhY2goZnVuY3Rpb24gKGUpIHsKICAgICAgICAgICAgaWYgKGUgJiYgKGUuR0lEID09PSBnaWQgfHwgZS5HSUQgPT09IGdpZFUgfHwgZS5HSUQgPT09IGdpZFMpKSB7CiAgICAgICAgICAgICAgbnBjTmFtZSA9IGUuZGlzcGxheU5hbWUgfHwgZS5uYW1lIHx8IChlLmRpc3BsYXkgJiYgZS5kaXNwbGF5Lm5hbWUpIHx8IG5wY05hbWU7CiAgICAgICAgICAgICAgaWYgKGUucG9zaXRpb24pIHBvcyA9IFtlLnBvc2l0aW9uWzBdLCBlLnBvc2l0aW9uWzFdXTsKICAgICAgICAgICAgfQogICAgICAgICAgfSk7CiAgICAgICAgfSBlbHNlIHsKICAgICAgICAgIHZhciBFTTIgPSBDTElFTlQuRU0gfHwgKHJlcXVpcmVEQigiUmVuZGVyZXIvRW50aXR5TWFuYWdlciIpKTsKICAgICAgICAgIGlmIChFTTIgJiYgRU0yLmZvckVhY2gpIEVNMi5mb3JFYWNoKGZ1bmN0aW9uIChlKSB7CiAgICAgICAgICAgIGlmIChlICYmIChlLkdJRCA9PSBOQUlEIHx8IGUuR0lEID09IE5BSURzKSkgeyBucGNOYW1lID0gZS5kaXNwbGF5TmFtZSB8fCBlLm5hbWUgfHwgKGUuZGlzcGxheSAmJiBlLmRpc3BsYXkubmFtZSkgfHwgIiI7IGlmIChlLnBvc2l0aW9uKSBwb3MgPSBbZS5wb3NpdGlvblswXSwgZS5wb3NpdGlvblsxXV07IH0KICAgICAgICAgIH0pOwogICAgICAgIH0KICAgICAgfSBjYXRjaCAoZTIpIHt9
+      if (!bytes || bytes.byteLength < 8) return;
       var dv = new DataView(bytes);
-      if (dv.getUint16(0, true) !== 183) return; // ZC.MENU_LIST（菜单）
-      var NAID = dv.getUint32(2, true);
-      var NAIDs = NAID > 2147483647 ? NAID - 4294967296 : NAID;
-      var msg = decodeMenuMsg(new Uint8Array(bytes, 6, bytes.byteLength - 6));
-      var npcName = "", pos = null;
-      try {
-        if (lastTalkNpc && lastTalkNpc.GID != null) {
-          npcName = lastTalkNpc.name || "";
-          pos = lastTalkNpc.pos;
-          var gid = lastTalkNpc.GID;
-          var gidU = gid < 0 ? gid + 4294967296 : gid;
-          var gidS = gid > 2147483647 ? gid - 4294967296 : gid;
-          var EM = CLIENT.EM || (requireDB("Renderer/EntityManager"));
-          if (EM && EM.forEach) EM.forEach(function (e) {
-            if (e && (e.GID === gid || e.GID === gidU || e.GID === gidS)) {
-              npcName = e.displayName || e.name || (e.display && e.display.name) || npcName;
-              if (e.position) pos = [e.position[0], e.position[1]];
-            }
-          });
-        } else {
-          var EM2 = CLIENT.EM || (requireDB("Renderer/EntityManager"));
-          if (EM2 && EM2.forEach) EM2.forEach(function (e) {
-            if (e && (e.GID == NAID || e.GID == NAIDs)) { npcName = e.displayName || e.name || (e.display && e.display.name) || ""; if (e.position) pos = [e.position[0], e.position[1]]; }
-          });
-        }
-      } catch (e2) {}
+      if (dv.getUint16(0,true)!==183||dv.getUint16(2,true)!==bytes.byteLength) return;
+      var NAID=dv.getUint32(4,true),msg=decodeMenuMsg(new Uint8Array(bytes,8)),seen=npcObserved(NAID);
+      var npcName=seen.name||"",pos=seen.pos;
+
+  // UNIFIED-PROBE-END resume-menu-frame
       var items = splitMenu(msg);
-      menuRecon = { NAID: NAID, msg: msg, items: items, map: getMapName(), npcName: npcName, pos: pos, time: Date.now(), generation: ++menuReconGeneration };
+  // UNIFIED-PROBE-BEGIN resume-menu-scene ORIGINAL:ICAgICAgbWVudVJlY29uID0geyBOQUlEOiBOQUlELCBtc2c6IG1zZywgaXRlbXM6IGl0ZW1zLCBtYXA6IGdldE1hcE5hbWUoKSwgbnBjTmFtZTogbnBjTmFtZSwgcG9zOiBwb3MsIHRpbWU6IERhdGUubm93KCksIGdlbmVyYXRpb246ICsrbWVudVJlY29uR2VuZXJhdGlvbiB9Ow==
+      var menuScene=npcIdentity();
+      menuRecon = { NAID: NAID, msg: msg, items: items, map: menuScene.map, oneId:menuScene.oneId, epoch:menuScene.epoch, npcName: npcName, pos: pos, time: Date.now(), generation: ++menuReconGeneration };
+      npcTrack(NAID,msg);menuRecon.dialogGeneration=npcDialog.generation;
+  // UNIFIED-PROBE-END resume-menu-scene
       renderMenuRecon();
   // UNIFIED-PROBE-BEGIN taskflow-menu ORIGINAL:ICAgICAgcHVzaFN0ZXAoIm1lbnUiLCBtc2csIGl0ZW1zLCBtZW51UmVjb24ubWFwLCBucGNOYW1lLCAobGFzdFRhbGtOcGMgJiYgbGFzdFRhbGtOcGMuR0lEICE9IG51bGwpID8gbGFzdFRhbGtOcGMuR0lEIDogTkFJRCwgcG9zKTs=
-      pushStep("menu", msg, items, menuRecon.map, npcName, (lastTalkNpc && lastTalkNpc.GID != null) ? lastTalkNpc.GID : NAID, pos);
+      pushStep("menu", msg, items, menuRecon.map, npcName, NAID, pos);
       try { if (typeof nftMenu === "function") nftMenu(NAID, msg, items, npcName, pos); } catch (eTF) {}
   // UNIFIED-PROBE-END taskflow-menu
     } catch (e) {}
@@ -19790,22 +19904,25 @@ function createRoItemCapture(env) {
   }
   function onSayDialog(bytes) {
     try {
-      if (!bytes || bytes.byteLength < 6) return;
-      var dv = new DataView(bytes);
-      if (dv.getUint16(0, true) !== 180) return; // ZC.SAY_DIALOG（对话正文，任务名/要求在这里）
-      var NAID = dv.getUint32(2, true);
-      var msg = decodeMenuMsg(new Uint8Array(bytes, 6, bytes.byteLength - 6));
+  // UNIFIED-PROBE-BEGIN resume-say-frame ORIGINAL:ICAgICAgaWYgKCFieXRlcyB8fCBieXRlcy5ieXRlTGVuZ3RoIDwgNikgcmV0dXJuOwogICAgICB2YXIgZHYgPSBuZXcgRGF0YVZpZXcoYnl0ZXMpOwogICAgICBpZiAoZHYuZ2V0VWludDE2KDAsIHRydWUpICE9PSAxODApIHJldHVybjsgLy8gWkMuU0FZX0RJQUxPR++8iOWvueivneato+aWh++8jOS7u+WKoeWQjS/opoHmsYLlnKjov5nph4zvvIkKICAgICAgdmFyIE5BSUQgPSBkdi5nZXRVaW50MzIoMiwgdHJ1ZSk7CiAgICAgIHZhciBtc2cgPSBkZWNvZGVNZW51TXNnKG5ldyBVaW50OEFycmF5KGJ5dGVzLCA2LCBieXRlcy5ieXRlTGVuZ3RoIC0gNikpOwogICAgICBpZiAoIW1zZykgcmV0dXJuOwogICAgICB2YXIgZ2lkID0gKGxhc3RUYWxrTnBjICYmIGxhc3RUYWxrTnBjLkdJRCAhPSBudWxsKSA/IGxhc3RUYWxrTnBjLkdJRCA6IE5BSUQ7CiAgICAgIHZhciBubSA9IChsYXN0VGFsa05wYyAmJiBsYXN0VGFsa05wYy5uYW1lKSB8fCAiIjsKICAgICAgdmFyIHBzID0gKGxhc3RUYWxrTnBjICYmIGxhc3RUYWxrTnBjLnBvcykgfHwgbnVsbDs=
+      if (!bytes || bytes.byteLength < 8) return;
+      var dv=new DataView(bytes);
+      if(dv.getUint16(0,true)!==180||dv.getUint16(2,true)!==bytes.byteLength)return;
+      var NAID=dv.getUint32(4,true),msg=decodeMenuMsg(new Uint8Array(bytes,8)),seen=npcObserved(NAID);
       if (!msg) return;
-      var gid = (lastTalkNpc && lastTalkNpc.GID != null) ? lastTalkNpc.GID : NAID;
-      var nm = (lastTalkNpc && lastTalkNpc.name) || "";
-      var ps = (lastTalkNpc && lastTalkNpc.pos) || null;
+      var gid=NAID,nm=seen.name||"",ps=seen.pos;
+      npcTrack(NAID,msg);
+
+  // UNIFIED-PROBE-END resume-say-frame
       // MVP 计时：对话正文含 MVP 日志时自动校准
       console.log('[MVP-DEBUG] onSayDialog called, msg length:', msg ? msg.length : 0);
       if (msg && /MVP.*日志/i.test(msg)) {
         console.log('[MVP-DEBUG] Found MVP log keyword, msg preview:', msg.substring(0, 200));
       }
       mvpReceive(msg);
-      var msgFull = decodeMenuMsgFull(new Uint8Array(bytes, 6, bytes.byteLength - 6)); // 2.15.2 完整多段（含算式段）
+  // UNIFIED-PROBE-BEGIN resume-say-full ORIGINAL:ICAgICAgdmFyIG1zZ0Z1bGwgPSBkZWNvZGVNZW51TXNnRnVsbChuZXcgVWludDhBcnJheShieXRlcywgNiwgYnl0ZXMuYnl0ZUxlbmd0aCAtIDYpKTsgLy8gMi4xNS4yIOWujOaVtOWkmuaute+8iOWQq+eul+W8j+aute+8iQ==
+      var msgFull = decodeMenuMsgFull(new Uint8Array(bytes, 8, bytes.byteLength - 8)); // 2.15.2 完整多段（含算式段）
+  // UNIFIED-PROBE-END resume-say-full
       try { capDiag(bytes, msgFull); } catch (e) {} // 2.15.1-diag 分段诊断
       try { capTrigger(msgFull); } catch (e) {} // V2.14.0 登录验证自动过
   // UNIFIED-PROBE-BEGIN taskflow-say ORIGINAL:ICAgICAgcHVzaFN0ZXAoImRpYWxvZyIsIG1zZywgbnVsbCwgZ2V0TWFwTmFtZSgpLCBubSwgZ2lkLCBwcyk7
@@ -20000,7 +20117,10 @@ function createRoItemCapture(env) {
     } catch (e) {}
   }
   //（onSayDialog 内调用 capTrigger）
+  // UNIFIED-PROBE-BEGIN resume-close-scene ORIGINAL:ICBmdW5jdGlvbiBvbkNsb3NlRGlhbG9nKCkgew==
   function onCloseDialog() {
+    npcDialog=null;menuRecon={NAID:0,msg:"",items:[],map:"",time:0,generation:++menuReconGeneration};
+  // UNIFIED-PROBE-END resume-close-scene
   // UNIFIED-PROBE-BEGIN taskflow-close ORIGINAL:ICAgIHRyeSB7IHB1c2hTdGVwKCJjbG9zZSIsICIiLCBudWxsLCBnZXRNYXBOYW1lKCksIChsYXN0VGFsa05wYyAmJiBsYXN0VGFsa05wYy5uYW1lKSB8fCAiIiwgKGxhc3RUYWxrTnBjICYmIGxhc3RUYWxrTnBjLkdJRCAhPSBudWxsKSA/IGxhc3RUYWxrTnBjLkdJRCA6IDAsIG51bGwpOyB9IGNhdGNoIChlKSB7fQ==
     try { pushStep("close", "", null, getMapName(), (lastTalkNpc && lastTalkNpc.name) || "", (lastTalkNpc && lastTalkNpc.GID != null) ? lastTalkNpc.GID : 0, null); } catch (e) {}
     try { if (typeof nftFlowEnd === "function") nftFlowEnd("收到关闭对话（ZC.CLOSE_DIALOG，opcode 182）"); } catch (eTF) {}
@@ -20684,11 +20804,11 @@ function createRoItemCapture(env) {
     try {
       if (!clientReady()) throw new Error("游戏画面还没准备好");
       if (!menuRecon.NAID) { $id("dsh-cleanlog").textContent = "先捕获菜单（点NPC对话）"; return; }
-      var p = new (czp("REQ_NEXT_SCRIPT"))();
+  // UNIFIED-PROBE-BEGIN resume-next-primitive ORIGINAL:ICAgICAgdmFyIHAgPSBuZXcgKGN6cCgiUkVRX05FWFRfU0NSSVBUIikpKCk7
+      // 下一页发包原语由手动按钮与门面共用。
+  // UNIFIED-PROBE-END resume-next-primitive
   // UNIFIED-PROBE-BEGIN manual-next-source ORIGINAL:ICAgICAgcC5OQUlEID0gbWVudVJlY29uLk5BSUQ7CiAgICAgIENMSUVOVC5OTS5zZW5kUGFja2V0KHApOw==
-      p.NAID = menuRecon.NAID;
-      upTag(p,"assistant:manual-menu-next");
-      CLIENT.NM.sendPacket(p);
+      npcNextScript(menuRecon.NAID);
   // UNIFIED-PROBE-END manual-next-source
       $id("dsh-cleanlog").textContent = "已发 REQ_NEXT_SCRIPT（下一段对话）";
     } catch (e) { $id("dsh-cleanlog").textContent = "下一段异常: " + e.message; }
@@ -23076,13 +23196,17 @@ function createRoItemCapture(env) {
       if (!box) return;
       box.innerHTML = "";
   // UNIFIED-PROBE-BEGIN scr-empty-hint ORIGINAL:ICAgICAgaWYgKCFsaXN0Lmxlbmd0aCkgeyBib3guaW5uZXJIVE1MID0gJzxzcGFuIGNsYXNzPSJzdCI+56m677yI57KY6LS0IEpTT04g4oaSIOeCueOAjOWvvOWFpeS4iumdoueahCBKU09O44CN77yb5oiW55So44CM5LuO5paH5Lu25a+85YWl4oCm44CN77yP44CM5a+85YWl6YGT6aaG6ISa5pys44CN77yJPC9zcGFuPic7IHJldHVybjsgfQ==
-      if (!list.length) { box.innerHTML = '<span class="st">空（粘贴 JSON → 点「导入上面的 JSON」；或用「从文件导入…」）</span>'; return; }
+  // CLEANUP-RELEASE-BEGIN shared-empty ORIGINAL:ICAgICAgaWYgKCFsaXN0Lmxlbmd0aCkgeyBib3guaW5uZXJIVE1MID0gJzxzcGFuIGNsYXNzPSJzdCI+56m677yI57KY6LS0IEpTT04g4oaSIOeCueOAjOWvvOWFpeS4iumdoueahCBKU09O44CN77yb5oiW55So44CM5LuO5paH5Lu25a+85YWl4oCm44CN77yJPC9zcGFuPic7IHJldHVybjsgfQ==
+      if (!list.length && !scrUsLoad().length) box.innerHTML = '<span class="st">空（选文件或粘贴 JSON / UserScript 源码后导入）</span>';
+  // CLEANUP-RELEASE-END shared-empty
   // UNIFIED-PROBE-END scr-empty-hint
       list.forEach(function (it, i) {
         var row = document.createElement("div");
         row.style.cssText = "display:flex;align-items:center;gap:6px;padding:3px 4px;border-bottom:1px solid #eef2f6";
         var nm = document.createElement("span");
-        nm.textContent = (i + 1) + ". " + (it.name || it.templateId || "未命名") + (it.type === "dojo" ? "[道馆]" : "") + " · " + (it.steps ? it.steps.length : 0) + "步" + (it.loop ? "·循环" + it.loop.mode : "") + "·P" + (it.priority != null ? it.priority : 0);
+  // CLEANUP-RELEASE-BEGIN json-type ORIGINAL:ICAgICAgICBubS50ZXh0Q29udGVudCA9IChpICsgMSkgKyAiLiAiICsgKGl0Lm5hbWUgfHwgaXQudGVtcGxhdGVJZCB8fCAi5pyq5ZG95ZCNIikgKyAoaXQudHlwZSA9PT0gImRvam8iID8gIlvpgZPppoZdIiA6ICIiKSArICIgwrcgIiArIChpdC5zdGVwcyA/IGl0LnN0ZXBzLmxlbmd0aCA6IDApICsgIuatpSIgKyAoaXQubG9vcCA/ICLCt+W+queOryIgKyBpdC5sb29wLm1vZGUgOiAiIikgKyAiwrdQIiArIChpdC5wcmlvcml0eSAhPSBudWxsID8gaXQucHJpb3JpdHkgOiAwKTs=
+        nm.textContent = "[JSON] " + (i + 1) + ". " + (it.name || it.templateId || "未命名") + (it.type === "dojo" ? "[道馆]" : "") + " · " + (it.steps ? it.steps.length : 0) + "步" + (it.loop ? "·循环" + it.loop.mode : "") + "·P" + (it.priority != null ? it.priority : 0);
+  // CLEANUP-RELEASE-END json-type
         nm.style.cssText = "flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
         row.appendChild(nm);
         var runB = document.createElement("button");
@@ -23107,11 +23231,14 @@ function createRoItemCapture(env) {
         });
         row.appendChild(expB);
         row.appendChild(delB);
+  // CLEANUP-RELEASE-BEGIN shared-list-refresh ORIGINAL:ICAgICAgICBib3guYXBwZW5kQ2hpbGQocm93KTsNCiAgICAgIH0pOw0KICAgIH0gY2F0Y2ggKGUpIHt9DQogIH0NCiAgLy8gVjIuMzYuNA==
         box.appendChild(row);
       });
+      scrUsRenderList(true);
     } catch (e) {}
   }
-  // V2.36.4：脚本设置弹窗——点「执行」先弹该脚本的设置表单（下拉/勾选/数字），确认后再入队执行
+  // V2.36.4
+  // CLEANUP-RELEASE-END shared-list-refresh：脚本设置弹窗——点「执行」先弹该脚本的设置表单（下拉/勾选/数字），确认后再入队执行
   function scrEditModal() {
     var m = $id("dsh-scr-modal");
     if (m) return m;
@@ -23579,7 +23706,9 @@ function createRoItemCapture(env) {
   function scrExplainImportError(raw, err) {
     var s = String(raw == null ? "" : raw).replace(/^\uFEFF/, "");
     if (s.indexOf("==UserScript==") >= 0) {
-      return "这是用户脚本源码（// ==UserScript==），不是 JSON 模板。脚本库只跑 JSON 模板（{templateId, steps[]}）；要在助手里运行用户脚本需要「用户脚本容器」能力，目前还没做；无限挑战请单独安装或等容器做好。";
+  // CLEANUP-RELEASE-BEGIN shared-import-error-hint ORIGINAL:ICAgICAgcmV0dXJuICLov5nmmK/nlKjmiLfohJrmnKzmupDnoIHvvIgvLyA9PVVzZXJTY3JpcHQ9Pe+8ie+8jOS4jeaYryBKU09OIOaooeadv+OAguiEmuacrOW6k+WPquWQgyBKU09OIOaooeadv++8iHt0ZW1wbGF0ZUlkLCBzdGVwc1tdfe+8ie+8m+eUqOaIt+iEmuacrOivt+eUqOacrOeql+WPo+S4i+aWueOAjOeUqOaIt+iEmuacrO+8iOiHquW3seWvvOWFpei/kOihjO+8ieOAjeWMuueahOOAjOWvvOWFpeeUqOaIt+iEmuacrOOAjeaMiemSru+8iOeymOi0tOWOn+aWh+aIlumAieaWh+S7tumDveihjO+8jOWvvOWFpeWQjum7mOiupOWBnOeUqO+8jOimgei3keWGjeeCueOAjOWQr+eUqOOAje+8ie+8m+aXoOmZkOaMkeaImOi/meexu+iEmuacrOWQjOagt+S7jui/memHjOWvvOWFpe+8jOS5n+WPr+S7peeFp+aXp+WNleeLrOWuieijheOAgiI7
+      return "这是 UserScript 源码，不是 JSON 模板；请使用上方共享导入区，并勾选用户脚本信任确认。";
+  // CLEANUP-RELEASE-END shared-import-error-hint
     }
     var head = s.replace(/^\s+/, ""), c = head.charAt(0), pos = "";
     if (err && err.message) { var m = String(err.message).match(/position\s+(\d+)/i); if (m) pos = "（引擎报第 " + m[1] + " 个字符附近）"; }
@@ -23594,11 +23723,18 @@ function createRoItemCapture(env) {
     return "既不是 JSON 模板也不是用户脚本：脚本库只吃 JSON 模板（{templateId, steps[]}）。" + pos;
   }
   function scrImportRaw(name, raw) {
-    var msg = $id("dsh-scr-msg");
-    if (!raw || !String(raw).trim()) { if (msg) msg.textContent = "请粘贴 JSON 模板"; return; }
+  // CLEANUP-RELEASE-BEGIN shared-import-detect ORIGINAL:ICAgIHZhciBtc2cgPSAkaWQoImRzaC1zY3ItbXNnIik7DQogICAgaWYgKCFyYXcgfHwgIVN0cmluZyhyYXcpLnRyaW0oKSkgeyBpZiAobXNnKSBtc2cudGV4dENvbnRlbnQgPSAi6K+357KY6LS0IEpTT04g5qih5p2/IjsgcmV0dXJuOyB9
+    var msg = $id("dsh-scr-msg"), text = String(raw == null ? "" : raw).replace(/^\uFEFF/, "").trim();
+  // CLEANUP-FINAL-BEGIN preserved-header-routing ORIGINAL:ICAgIGlmICgvXlwvXC9ccyo9PVVzZXJTY3JpcHQ9PS8udGVzdCh0ZXh0KSkgcmV0dXJuIHNjclVzSW1wb3J0KG5hbWUsIHJhdyk7
+    if (text.charAt(0) !== "{" && text.charAt(0) !== "[" && scrUsParseMeta(text).ok) return scrUsImport(name, raw);
+  // CLEANUP-FINAL-END preserved-header-routing
+    if (!text) { if (msg) msg.textContent = "请粘贴 JSON 模板或 UserScript 源码"; return false; }
+  // CLEANUP-RELEASE-END shared-import-detect
     var obj = null;
     // 解析失败就到此为止：不改任何已存脚本，也绝不把用户脚本源码当成模板存进脚本库。
-    try { obj = JSON.parse(raw); } catch (e) { if (msg) msg.textContent = scrExplainImportError(raw, e); return; }
+  // CLEANUP-R1-BEGIN json-normalized-parse ORIGINAL:ICAgIHRyeSB7IG9iaiA9IEpTT04ucGFyc2UocmF3KTsgfSBjYXRjaCAoZSkgeyBpZiAobXNnKSBtc2cudGV4dENvbnRlbnQgPSBzY3JFeHBsYWluSW1wb3J0RXJyb3IocmF3LCBlKTsgcmV0dXJuOyB9
+    try { obj = JSON.parse(text); } catch (e) { if (msg) msg.textContent = scrExplainImportError(raw, e); return; }
+  // CLEANUP-R1-END json-normalized-parse
     var items = Array.isArray(obj) ? obj : [obj], list = scrLoad(), ok = 0, err = "";
     items.forEach(function (src, n) {
       var v = scrValidate(src);
@@ -23609,7 +23745,12 @@ function createRoItemCapture(env) {
       ok++;
     });
     if (ok) { scrSave(list); scrRenderList(); }
-    if (msg) msg.textContent = ok ? ("已导入 " + ok + " 个，共 " + list.length + " 个脚本" + (err ? "；" + err : "")) : (err || "没有可导入的脚本");
+  // CLEANUP-RELEASE-BEGIN shared-import-result ORIGINAL:ICAgIGlmIChtc2cpIG1zZy50ZXh0Q29udGVudCA9IG9rID8gKCLlt7Llr7zlhaUgIiArIG9rICsgIiDkuKrvvIzlhbEgIiArIGxpc3QubGVuZ3RoICsgIiDkuKrohJrmnKwiICsgKGVyciA/ICLvvJsiICsgZXJyIDogIiIpKSA6IChlcnIgfHwgIuayoeacieWPr+WvvOWFpeeahOiEmuacrCIpOw==
+  // CLEANUP-R1-BEGIN json-import-result ORIGINAL:ICAgIGlmIChtc2cpIG1zZy50ZXh0Q29udGVudCA9IG9rID8gKCLlt7Llr7zlhaUgIiArIG9rICsgIiDkuKrvvIzlhbEgIiArIGxpc3QubGVuZ3RoICsgIiDkuKrohJrmnKwiICsgKGVyciA/ICLvvJsiICsgZXJyIDogIiIpKSA6IChlcnIgfHwgIuayoeacieWPr+WvvOWFpeeahOiEmuacrCIpOw==
+    if (msg) msg.textContent = ok ? ("已导入 " + ok + " 个 JSON 模板，共 " + list.length + " 个 JSON 模板" + (err ? "；" + err : "")) : (err || "没有可导入的 JSON 模板");
+  // CLEANUP-R1-END json-import-result
+    return ok > 0;
+  // CLEANUP-RELEASE-END shared-import-result
   }
   // UNIFIED-PROBE-END scr-import
   // V2.36.11：脚本只存在浏览器 localStorage，清缓存即丢——支持整表导出为 .json 备份
@@ -23617,7 +23758,9 @@ function createRoItemCapture(env) {
     var msg = $id("dsh-scr-msg");
     try {
       var list = scrLoad();
-      if (!list.length) { if (msg) msg.textContent = "没有可导出的脚本"; return; }
+  // CLEANUP-R1-BEGIN json-backup-empty ORIGINAL:ICAgICAgaWYgKCFsaXN0Lmxlbmd0aCkgeyBpZiAobXNnKSBtc2cudGV4dENvbnRlbnQgPSAi5rKh5pyJ5Y+v5a+85Ye655qE6ISa5pysIjsgcmV0dXJuOyB9
+      if (!list.length) { if (msg) msg.textContent = "没有可备份的 JSON 模板；用户脚本请在各自条目导出为 .user.js"; return; }
+  // CLEANUP-R1-END json-backup-empty
       var a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([JSON.stringify(list, null, 2)], { type: "application/json" }));
       a.download = "dsh-scripts-" + new Date().toISOString().slice(0, 10) + ".json";
@@ -23625,37 +23768,433 @@ function createRoItemCapture(env) {
       document.body.appendChild(a);
       a.click();
       setTimeout(function () { try { document.body.removeChild(a); URL.revokeObjectURL(a.href); } catch (e) {} }, 1500);
-      if (msg) msg.textContent = "已导出 " + list.length + " 个脚本：" + a.download;
+  // CLEANUP-R1-BEGIN json-backup-result ORIGINAL:ICAgICAgaWYgKG1zZykgbXNnLnRleHRDb250ZW50ID0gIuW3suWvvOWHuiAiICsgbGlzdC5sZW5ndGggKyAiIOS4quiEmuacrO+8miIgKyBhLmRvd25sb2FkOw==
+      if (msg) msg.textContent = "已备份 " + list.length + " 个 JSON 模板：" + a.download;
+  // CLEANUP-R1-END json-backup-result
     } catch (e) { if (msg) msg.textContent = "导出失败: " + e.message; }
   }
+  // UNIFIED-PROBE-BEGIN scr-us-fn ORIGINAL:ICBmdW5jdGlvbiBzY3JFbnN1cmVIb3N0KCkgew==
+  // ================= V2.38.77.8 用户脚本容器（自己导入运行）=================
+  // 安全口径（写死在这一层，不给开关）：只跑用户「显式导入 + 手动启用」的脚本；不内置任何脚本；
+  //   绝不自动下载（@require 一条都不取）；不 hook 客户端任何方法、不调用助手自己的游戏发包入口；
+  //   不拦改页面或游戏事件、不新增任何外发端点。脚本能不能做某件事仍由页面自身权限与它自己的
+  //   @match / 页面判据决定（容器不替它绕过页面闸门），也不做脚本之间的权限隔离。
+  // 能力替身（显式提供）：unsafeWindow = window（同页面上下文，本来就是这个 window，等价）；
+  //   GM_xmlhttpRequest / GM.xmlHttpRequest（基于 fetch）；GM_info / GM.info；
+  //   GM_getValue / GM_setValue / GM_deleteValue（含 GM.getValue 等点写法，存 localStorage、按脚本 id 隔离）；
+  //   GM_addStyle / GM.addStyle；GM_log / GM.log。其余接口一律按「不存在」处理（脚本自己会降级），
+  //   导入结果里把「支持的能力 / 不支持的能力」逐条列给用户看。
+  // 已知限制（如实写明，不粉饰）：GM_xmlhttpRequest 没有浏览器扩展特权 —— 没有跨域豁免（照常受 CORS 限制）、
+  //   读不了本机 file:// 文件（一律回 onerror，不假装成功）、cookie 只随同源请求发送，也不支持
+  //   onabort / onprogress / responseType。执行走 new Function（页面必须允许动态执行；被 CSP 挡住时
+  //   明确提示并保持停用），所以用户脚本顶层的 var 不会变成页面全局变量 —— 要挂全局请显式写 window.xxx。
+  var US_KEY = "dsh_userscripts_v1";
+  var US_VAL_PREFIX = "dsh_userval_v1:";
+  // 键名刻意不用 dsh_ro_ 前缀：助手的「导出配置」按该前缀整片收键，用户脚本源码绝不能跟着别人的配置
+  //   备份被带进本机（那等于绕过「每次导入都要勾选」的确认）；与既有脚本库键 dsh_scripts 同一种做法。
+  var US_CAPS = { none: 1, unsafeWindow: 1, GM_xmlhttpRequest: 1, "GM.xmlHttpRequest": 1, GM_info: 1, "GM.info": 1,
+    GM_getValue: 1, GM_setValue: 1, GM_deleteValue: 1, "GM.getValue": 1, "GM.setValue": 1, "GM.deleteValue": 1,
+    GM_addStyle: 1, "GM.addStyle": 1, GM_log: 1, "GM.log": 1 };
+  var US_UNSUPPORTED_NAMES = ["GM_registerMenuCommand", "GM_unregisterMenuCommand", "GM_notification", "GM_openInTab",
+    "GM_setClipboard", "GM_download", "GM_addElement", "GM_webRequest", "GM_cookie", "GM_getResourceText", "GM_getResourceURL"];
+  function scrUsLoad() { try { var a = JSON.parse(localStorage.getItem(US_KEY) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function scrUsSave(a) { try { localStorage.setItem(US_KEY, JSON.stringify(a)); return true; } catch (e) { return false; } }
+  function scrUsPad(n) { return (n < 10 ? "0" : "") + n; }
+  function scrUsTime(t) { var d = new Date(Number(t) || 0); return d.getFullYear() + "-" + scrUsPad(d.getMonth() + 1) + "-" + scrUsPad(d.getDate()) + " " + scrUsPad(d.getHours()) + ":" + scrUsPad(d.getMinutes()); }
+  function scrUsFileName(n) { return String(n == null ? "" : n).replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, " ").trim().slice(0, 80) || "userscript"; }
+  function scrUsSlug(n) { return (String(n == null ? "" : n).replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "userscript").slice(0, 60); }
+  // 只吃 // ==UserScript== 之后连续的行注释（结束标记 // ==/UserScript== 可有可无）；不猜、不联网。
+  function scrUsHeaderText(src) {
+    var s = String(src == null ? "" : src).replace(/^\uFEFF/, ""), at = s.indexOf("// ==UserScript=="), out = "", lines, i, t;
+    if (at < 0) return "";
+    lines = s.slice(at).split(/\r?\n/);
+    for (i = 0; i < lines.length && i < 200; i++) {
+      t = lines[i].replace(/^\s+/, "");
+      if (i > 0 && t.indexOf("//") !== 0) break;
+      out += lines[i] + "\n";
+      if (i > 0 && t.indexOf("// ==/UserScript==") === 0) break;
+    }
+    return out;
+  }
+  // 头缺失才算失败；@grant 不是 none 一律照收（能不能提供由 US_CAPS 决定，缺的按「不存在」处理）。
+  function scrUsParseMeta(src) {
+    var s = String(src == null ? "" : src).replace(/^\uFEFF/, "");
+    if (s.indexOf("==UserScript==") < 0) return { ok: false, why: "no-header" };
+    var head = scrUsHeaderText(s), meta = { name: "", namespace: "", version: "", description: "", match: [], grant: [], require: [], resource: [], runAt: "" };
+    head.split("\n").forEach(function (line) {
+      var k = line.match(/^\s*\/\/\s*@([A-Za-z][\w-]*)\s*(.*)$/);
+      if (!k) return;
+      var key = k[1], val = String(k[2] || "").trim();
+      if (!val) return;
+      if (key === "name") meta.name = val;
+      else if (key === "namespace") meta.namespace = val;
+      else if (key === "version") meta.version = val;
+      else if (key === "description") meta.description = val;
+      else if (key === "match" || key === "include") meta.match.push(val);
+      else if (key === "grant") meta.grant.push(val);
+      else if (key === "require") meta.require.push(val);
+      else if (key === "resource") meta.resource.push(val);
+      else if (key === "run-at") meta.runAt = val;
+    });
+    return { ok: true, meta: meta, header: head };
+  }
+  function scrUsCaps(it) {
+    var sup = [], unsup = [], declared = [], grants = (it && it.grant && it.grant.length) ? it.grant : ["none"], i, k;
+    for (i = 0; i < grants.length; i++) {
+      k = String(grants[i] == null ? "" : grants[i]).trim();
+      if (!k) continue;
+      if (US_CAPS[k]) { if (sup.indexOf(k) < 0) sup.push(k); }
+      else if (declared.indexOf(k) < 0) declared.push(k);
+    }
+    if (!sup.length) sup.push("none（脚本没声明 GM 接口，直接跑）");
+    sup.push("内置替身（没声明也照样可用）：unsafeWindow、GM_xmlhttpRequest / GM.xmlHttpRequest、GM_info、GM_getValue / GM_setValue / GM_deleteValue、GM_addStyle、GM_log");
+    for (i = 0; i < US_UNSUPPORTED_NAMES.length; i++) unsup.push(US_UNSUPPORTED_NAMES[i]);
+    // 本脚本明确声明、但容器不提供的接口要单独标出来（哪怕它已经在上面那张固定表里）。
+    for (i = 0; i < declared.length; i++) { var di = unsup.indexOf(declared[i]), mark = declared[i] + "（本脚本声明了，但容器不提供）"; if (di >= 0) unsup[di] = mark; else unsup.push(mark); }
+    if (it && it.require && it.require.length) unsup.push("@require 自动下载 " + it.require.length + " 条（容器绝不自动下载，脚本可能因此跑不起来）");
+    return { sup: sup, unsup: unsup };
+  }
+  function scrUsCapsText(it) {
+    var c = scrUsCaps(it);
+    return "支持：" + c.sup.join("；") + "。不支持（按「不存在」处理，脚本自己会降级）：" + c.unsup.join("、") + "。";
+  }
+  function scrUsAsk(question) {
+    try { return (typeof window !== "undefined" && window && typeof window.confirm === "function") ? window.confirm(question) === true : false; } catch (e) { return false; }
+  }
+  function scrUsExplainReject(why) {
+    if (why === "empty") return "请先粘贴用户脚本源码，或用「选择文件…」选一份 .user.js（要带 // ==UserScript== 头）。";
+    if (why === "consent") return "请先勾选上面那句确认（用户脚本会以当前页面权限运行、能联网；只导入你信任的脚本）。";
+    if (why === "no-header") return "这不是用户脚本：找不到 // ==UserScript== 头。用户脚本开头要有 // ==UserScript== … // @name … 的注释头；如果这是 JSON 模板，请放进上面的输入框。";
+    return "导入失败：" + String(why || "未知原因");
+  }
+  // CLEANUP-RELEASE-BEGIN us-list-shared-host ORIGINAL:ICBmdW5jdGlvbiBzY3JVc1JlbmRlckxpc3QoKSB7DQogICAgdmFyIGhvc3QgPSAkaWQoImRzaC11cy1saXN0IiksIGNudCA9ICRpZCgiZHNoLXVzLWNvdW50Iik7
+  function scrUsRenderList(append) {
+    if (!append) { scrRenderList(); return; }
+    var host = $id("dsh-scr-list"), cnt = $id("dsh-scr-count");
+  // CLEANUP-RELEASE-END us-list-shared-host
+    if (!host) return;
+    var list = scrUsLoad();
+  // CLEANUP-RELEASE-BEGIN us-list-append ORIGINAL:ICAgIGlmIChjbnQpIGNudC50ZXh0Q29udGVudCA9IFN0cmluZyhsaXN0Lmxlbmd0aCk7DQogICAgdHJ5IHsgaG9zdC5pbm5lckhUTUwgPSAiIjsgfSBjYXRjaCAoZSkge30NCiAgICBpZiAoIWxpc3QubGVuZ3RoKSB7DQogICAgICB2YXIgZW1wdHkgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KCJzcGFuIik7DQogICAgICBlbXB0eS5jbGFzc05hbWUgPSAic3QiOw0KICAgICAgZW1wdHkudGV4dENvbnRlbnQgPSAi56m677yI6YCJ5paH5Lu25oiW57KY6LS05rqQ56CBIOKGkiDngrnjgIzlr7zlhaXnlKjmiLfohJrmnKzjgI3vvJvlr7zlhaXlkI7pu5jorqTlgZznlKjvvIzopoHot5Hor7fngrnjgIzlkK/nlKjjgI3vvIkiOw0KICAgICAgaG9zdC5hcHBlbmRDaGlsZChlbXB0eSk7DQogICAgfQ0K
+    if (cnt) cnt.textContent = String(scrLoad().length + list.length);
+
+  // CLEANUP-RELEASE-END us-list-append INLINE
+    list.forEach(function (it, i) {
+      if (!it) return;
+      var row = document.createElement("div"), caps = scrUsCaps(it);
+      row.className = "row";
+      row.style.margin = "2px 0";
+      var info = document.createElement("span");
+      info.className = "st";
+      info.style.flex = "1 1 auto";
+      info.style.fontSize = "10px";
+  // CLEANUP-RELEASE-BEGIN us-type ORIGINAL:ICAgICAgaW5mby50ZXh0Q29udGVudCA9IGl0Lm5hbWUgKyAoaXQudmVyc2lvbiA/ICIgdiIgKyBpdC52ZXJzaW9uIDogIiIpICsgIiDCtyAiICsgc2NyVXNUaW1lKGl0LmltcG9ydGVkQXQpICsgIiDCtyAiICsgKGl0LmVuYWJsZWQgPT09IHRydWUgPyAi5bey5ZCv55SoIiA6ICLlgZznlKgiKTs=
+      info.textContent = "[UserScript] " + it.name + (it.version ? " v" + it.version : "") + " · " + scrUsTime(it.importedAt) + " · " + (it.enabled === true ? "已启用" : "停用");
+  // CLEANUP-RELEASE-END us-type
+      info.title = "支持：" + caps.sup.join("；") + "\n不支持：" + caps.unsup.join("、");
+      row.appendChild(info);
+      row.appendChild(scrUsBtn(it.enabled === true ? "停用" : "启用", function () { scrUsToggle(i); }));
+  // CLEANUP-RELEASE-BEGIN shared-msg-0 ORIGINAL:ICAgICAgT2JqZWN0LmtleXMoYXBpU2NyaXB0V2luZG93cykuZm9yRWFjaChmdW5jdGlvbihpZCl7dmFyIHdpbj1hcGlTY3JpcHRXaW5kb3dzW2lkXTtpZih3aW4uc291cmNlSWQ9PT1pdC5pZClyb3cuYXBwZW5kQ2hpbGQoc2NyVXNCdG4oIuaJk+W8gOiuvue9riDCtyAiK3dpbi50aXRsZSxmdW5jdGlvbigpe3ZhciByPWFwaU9wZW5XaW5kb3coaWQpLG1zZz0kaWQoImRzaC11cy1tc2ciKTtpZihtc2cpbXNnLnRleHRDb250ZW50PXIub2s/IuW3suaJk+W8gOOAjCIrd2luLnRpdGxlKyLjgI3orr7nva7vvIjkuI3kvJrph43lpI3miafooYzohJrmnKzvvIkiOiLmiZPlvIDorr7nva7lpLHotKXvvJoiK3IuZXJyb3I7fSkpO30pOw==
+      Object.keys(apiScriptWindows).forEach(function(id){var win=apiScriptWindows[id];if(win.sourceId===it.id)row.appendChild(scrUsBtn("打开设置 · "+win.title,function(){var r=apiOpenWindow(id),msg=$id("dsh-scr-msg");if(msg)msg.textContent=r.ok?"已打开「"+win.title+"」设置（不会重复执行脚本）":"打开设置失败："+r.error;}));});
+  // CLEANUP-RELEASE-END shared-msg-0
+      row.appendChild(scrUsBtn("删除", function () { scrUsDelete(i); }));
+      row.appendChild(scrUsBtn("导出为 .user.js", function () { scrUsExportOne(i); }));
+      row.appendChild(scrUsBtn("复制源码", function () { scrUsCopy(i); }));
+      host.appendChild(row);
+    });
+  // CLEANUP-RELEASE-BEGIN shared-msg-1 ORIGINAL:ICAgIE9iamVjdC5rZXlzKGFwaVNjcmlwdFdpbmRvd3MpLmZvckVhY2goZnVuY3Rpb24oaWQpe3ZhciB3aW49YXBpU2NyaXB0V2luZG93c1tpZF07aWYoIXdpbi5zb3VyY2VJZClob3N0LmFwcGVuZENoaWxkKHNjclVzQnRuKCLmiZPlvIDlt7Lms6jlhozorr7nva4gwrcgIit3aW4udGl0bGUsZnVuY3Rpb24oKXt2YXIgcj1hcGlPcGVuV2luZG93KGlkKSxtc2c9JGlkKCJkc2gtdXMtbXNnIik7aWYobXNnKW1zZy50ZXh0Q29udGVudD1yLm9rPyLlt7LmiZPlvIDjgIwiK3dpbi50aXRsZSsi44CN6K6+572uIjoi5omT5byA6K6+572u5aSx6LSl77yaIityLmVycm9yO30pKTt9KTs=
+    Object.keys(apiScriptWindows).forEach(function(id){var win=apiScriptWindows[id];if(!win.sourceId)host.appendChild(scrUsBtn("打开已注册设置 · "+win.title,function(){var r=apiOpenWindow(id),msg=$id("dsh-scr-msg");if(msg)msg.textContent=r.ok?"已打开「"+win.title+"」设置":"打开设置失败："+r.error;}));});
+  // CLEANUP-RELEASE-END shared-msg-1
+  }
+  function scrUsBtn(label, fn) {
+    var b = document.createElement("button");
+    b.className = "ghost";
+    b.style.flex = "0 0 auto";
+    b.textContent = label;
+    b.onclick = fn;
+    return b;
+  }
+  function scrUsValKey(it, key) { return US_VAL_PREFIX + String(it && it.id ? it.id : "unknown") + ":" + String(key); }
+  function scrUsGetValue(it) { return function (key, def) { try { var raw = localStorage.getItem(scrUsValKey(it, key)); return (raw === null) ? def : JSON.parse(raw); } catch (e) { return def; } }; }
+  function scrUsSetValue(it) { return function (key, val) { try { localStorage.setItem(scrUsValKey(it, key), JSON.stringify(val === undefined ? null : val)); return true; } catch (e) { return false; } }; }
+  function scrUsDelValue(it) { return function (key) { try { localStorage.removeItem(scrUsValKey(it, key)); } catch (e) {} }; }
+  function scrUsAddStyle(css) {
+    try {
+      var st = document.createElement("style");
+      st.setAttribute("data-dsh-userscript", "1");
+      st.textContent = String(css == null ? "" : css);
+      (document.head || document.documentElement || document.body).appendChild(st);
+      return st;
+    } catch (e) { return null; }
+  }
+  function scrUsLog(it) {
+    return function () {
+      try { console.log.apply(console, ["[用户脚本 " + ((it && it.name) || "") + "]"].concat(Array.prototype.slice.call(arguments))); } catch (e) {}
+    };
+  }
+  function scrUsInfo(it) {
+    return { script: { name: (it && it.name) || "", namespace: (it && it.namespace) || "", version: (it && it.version) || "",
+        description: (it && it.description) || "", matches: ((it && it.match) || []).slice(), grants: ((it && it.grant) || []).slice(), runAt: "document-idle" },
+      scriptHandler: "DSH RO 助手 · 用户脚本容器", version: (typeof VER === "string" ? VER : ""), scriptMetaStr: ((it && it.header) || "") };
+  }
+  function scrUsXhrBody(status, statusText, responseText, responseHeaders, error) {
+    var b = { readyState: 4, status: status, statusText: statusText, responseText: responseText, responseHeaders: responseHeaders, response: responseText };
+    if (error) b.error = error;
+    return b;
+  }
+  // GM_xmlhttpRequest：基于 fetch 的替身。file:// 一律 onerror（浏览器安全限制，如实回绝，不假装成功）。
+  function scrUsXhr(it) {
+    return function (details) {
+      var d = (details && typeof details === "object") ? details : {}, st = { done: false, ctrl: null, timer: null };
+      function fire(name, body) { var f = d[name]; if (typeof f !== "function") return; try { f(body); } catch (e) { try { console.error("[用户脚本 " + ((it && it.name) || "") + "] " + name + " 回调抛错：", e); } catch (e2) {} } }
+      function abort() { if (st.done) return; st.done = true; if (st.timer) { clearTimeout(st.timer); st.timer = null; } if (st.ctrl) { try { st.ctrl.abort(); } catch (e) {} } }
+      var url = String(d.url == null ? "" : d.url), method = String(d.method || "GET").toUpperCase();
+      if (!url) { setTimeout(function () { if (st.done) return; st.done = true; fire("onerror", scrUsXhrBody(0, "", "", "", "缺少 url")); }, 0); return { abort: abort }; }
+      if (/^\s*(file|filesystem):/i.test(url)) {
+        setTimeout(function () { if (st.done) return; st.done = true; fire("onerror", scrUsXhrBody(0, "", "", "", "浏览器安全限制：网页脚本不允许读取本机 file:// 文件，容器如实回绝，不假装成功")); }, 0);
+        return { abort: abort };
+      }
+      if (typeof fetch !== "function") { setTimeout(function () { if (st.done) return; st.done = true; fire("onerror", scrUsXhrBody(0, "", "", "", "本页没有 fetch，GM_xmlhttpRequest 不可用")); }, 0); return { abort: abort }; }
+      var opts = { method: method, headers: (d.headers && typeof d.headers === "object") ? d.headers : {} };
+      try { if (typeof AbortController === "function") { st.ctrl = new AbortController(); opts.signal = st.ctrl.signal; } } catch (eA) { st.ctrl = null; }
+      if (d.data != null && method !== "GET" && method !== "HEAD") opts.body = d.data;
+      var to = Number(d.timeout || 0);
+      if (to > 0) st.timer = setTimeout(function () { if (st.done) return; st.done = true; if (st.ctrl) { try { st.ctrl.abort(); } catch (e) {} } fire("ontimeout", scrUsXhrBody(0, "", "", "", "超时（" + to + " 毫秒）")); }, to);
+      fetch(url, opts).then(function (res) {
+        return res.text().then(function (text) {
+          if (st.done) return;
+          st.done = true; if (st.timer) { clearTimeout(st.timer); st.timer = null; }
+          var hs = "";
+          try { res.headers.forEach(function (v, k) { hs += k + ": " + v + "\r\n"; }); } catch (eH) {}
+          var body = scrUsXhrBody(res.status, res.statusText || "", text, hs, "");
+          if (res.url) body.finalUrl = res.url;
+          fire("onload", body);
+        });
+      }).catch(function (e) {
+        if (st.done) return;
+        st.done = true; if (st.timer) { clearTimeout(st.timer); st.timer = null; }
+        var m = (e && e.message) ? e.message : String(e);
+        fire("onerror", scrUsXhrBody(0, "", "", "", "请求失败：" + m + "（容器没有浏览器扩展特权：跨域照常受 CORS 限制，也读不了本机文件）"));
+      });
+      return { abort: abort };
+    };
+  }
+  // 执行前的动态执行探测：被 CSP 挡住时 new Function 直接抛，这里如实返回 false。
+  function scrUsCanEval() { try { return (new Function("return 1"))() === 1; } catch (e) { return false; } }
+  var scrUsExecuted=Object.create(null),scrUsExecutingId="",apiScriptWindows=Object.create(null);
+  function scrUsRun(it) {
+    var id=String(it&&it.id||""),previous=scrUsExecutingId;
+    if(!id)return {ok:false,error:"missing-script-id"};
+    if(scrUsExecuted[id])return {ok:true,refreshRequired:true};
+    try {
+      var src = String((it && it.source) || ""), w = (typeof window !== "undefined" ? window : null);
+      var names = ["unsafeWindow", "GM_xmlhttpRequest", "GM_info", "GM_getValue", "GM_setValue", "GM_deleteValue", "GM_addStyle", "GM_log"];
+      var f = new Function(names.join(","), src + "\n//# sourceURL=dsh-us-" + scrUsSlug(it && it.name) + ".user.js");
+      // call(w, …) 让脚本顶层 this === window（与页面上下文一致）；unsafeWindow 直接就是同一个 window。
+      scrUsExecuted[id]=true;scrUsExecutingId=id;
+      f.call(w, w, scrUsXhr(it), scrUsInfo(it), scrUsGetValue(it), scrUsSetValue(it), scrUsDelValue(it), scrUsAddStyle, scrUsLog(it));
+      return { ok: true };
+    } catch (e) { return { ok: false, error: (e && e.message) ? String(e.message) : String(e) }; }
+    finally {scrUsExecutingId=previous;}
+  }
+  function scrUsToggle(i) {
+  // CLEANUP-RELEASE-BEGIN shared-msg-20 ORIGINAL:ICAgIHZhciBtc2cgPSAkaWQoImRzaC11cy1tc2ciKSwgbGlzdCA9IHNjclVzTG9hZCgpLCBpdCA9IGxpc3RbaV07
+    var msg = $id("dsh-scr-msg"), list = scrUsLoad(), it = list[i];
+  // CLEANUP-RELEASE-END shared-msg-20
+    if (!it) return;
+    if (it.enabled === true) {
+      it.enabled = false;
+      if(!scrUsSave(list)){if(msg)msg.textContent="停用失败：本机存储未写入，已存启用状态未变；本页实例仍运行。";return;}scrUsRenderList();
+      if (msg) msg.textContent = "已停用「" + it.name + "」：刷新页面后不再自动运行。已经跑起来的脚本无法真正卸载（它注册的定时器 / 监听会留到刷新为止），停用只是让它下次不跑。";
+      return;
+    }
+    if (!scrUsCanEval()) {
+      if (msg) msg.textContent = "本页不支持内置运行（浏览器内容安全策略禁止动态执行），请单独安装这份脚本。已保持停用（没有改动它的启用状态）。";
+      return;
+    }
+    it.enabled = true;
+    if(!scrUsSave(list)){if(msg)msg.textContent="启用失败：本机存储未写入，没有运行，也不会安排刷新重跑。";return;}
+    var r = scrUsRun(it);scrUsRenderList();
+    if (msg) msg.textContent = r.refreshRequired ? ("已保存启用「"+it.name+"」；本页已经执行过该脚本，刷新页面才会重新启用（本页未重跑）。") : r.ok ? ("已启用「" + it.name + "」并在本页跑了一次；刷新页面后会自动再跑一次。") : ("已保存启用，但这次运行报错：" + r.error + "（刷新页面后会重试；本页不重复运行）");
+  }
+  function scrUsDelete(i) {
+  // CLEANUP-RELEASE-BEGIN shared-msg-20 ORIGINAL:ICAgIHZhciBtc2cgPSAkaWQoImRzaC11cy1tc2ciKSwgbGlzdCA9IHNjclVzTG9hZCgpLCBpdCA9IGxpc3RbaV07
+    var msg = $id("dsh-scr-msg"), list = scrUsLoad(), it = list[i];
+  // CLEANUP-RELEASE-END shared-msg-20
+    if (!it) return;
+    list.splice(i, 1);
+    if(!scrUsSave(list)){if(msg)msg.textContent="删除失败：本机存储未写入，已存脚本未删除。";return;}scrUsRenderList();
+    if (msg) msg.textContent = "已删除「" + it.name + "」。已经跑起来的脚本无法真正卸载，刷新页面才会停；它用 GM_setValue 存的值保留。";
+  }
+  function scrUsClearAll() {
+  // CLEANUP-RELEASE-BEGIN shared-msg-21 ORIGINAL:ICAgIHZhciBtc2cgPSAkaWQoImRzaC11cy1tc2ciKSwgbGlzdCA9IHNjclVzTG9hZCgpOw==
+    var msg = $id("dsh-scr-msg"), list = scrUsLoad();
+  // CLEANUP-RELEASE-END shared-msg-21
+    if (!list.length) { if (msg) msg.textContent = "没有可清空的用户脚本"; return; }
+    if (!scrUsAsk("确定清空全部 " + list.length + " 个用户脚本？\n\n已导出的 .user.js 文件不受影响；脚本自己用 GM_setValue 存的值会保留（不删）。\n已经跑起来的脚本无法真正卸载，刷新页面才会停。")) { if (msg) msg.textContent = "已取消（没有清空）"; return; }
+    if(!scrUsSave([])){if(msg)msg.textContent="清空失败：本机存储未写入，已存脚本未删除。";return;}scrUsRenderList();
+    if (msg) msg.textContent = "已清空全部用户脚本（" + list.length + " 个）";
+  }
+  function scrUsExportOne(i) {
+  // CLEANUP-RELEASE-BEGIN shared-msg-22 ORIGINAL:ICAgIHZhciBtc2cgPSAkaWQoImRzaC11cy1tc2ciKSwgaXQgPSBzY3JVc0xvYWQoKVtpXTs=
+    var msg = $id("dsh-scr-msg"), it = scrUsLoad()[i];
+  // CLEANUP-RELEASE-END shared-msg-22
+    if (!it) return;
+    try {
+      var name = scrUsFileName(it.name) + ".user.js";
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([String(it.source == null ? "" : it.source)], { type: "text/javascript" }));
+      a.download = name;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { try { document.body.removeChild(a); URL.revokeObjectURL(a.href); } catch (e) {} }, 1500);
+      if (msg) msg.textContent = "已导出 " + name + "（内容与导入的一字不差）";
+    } catch (e) { if (msg) msg.textContent = "导出失败: " + ((e && e.message) || e); }
+  }
+  function scrUsCopy(i) {
+  // CLEANUP-RELEASE-BEGIN shared-msg-22 ORIGINAL:ICAgIHZhciBtc2cgPSAkaWQoImRzaC11cy1tc2ciKSwgaXQgPSBzY3JVc0xvYWQoKVtpXTs=
+    var msg = $id("dsh-scr-msg"), it = scrUsLoad()[i];
+  // CLEANUP-RELEASE-END shared-msg-22
+    if (!it) return;
+    var src = String(it.source == null ? "" : it.source);
+    function fallback() {
+      try {
+        var ta = document.createElement("textarea");
+        ta.value = src;
+        ta.style.position = "fixed"; ta.style.left = "-9999px";
+        (document.body || document.documentElement).appendChild(ta);
+        ta.select();
+        var ok = false;
+        try { ok = document.execCommand("copy") === true; } catch (e1) { ok = false; }
+        try { (document.body || document.documentElement).removeChild(ta); } catch (e2) {}
+        if (msg) msg.textContent = ok ? ("已复制「" + it.name + "」的源码（" + src.length + " 字符）") : "复制失败：浏览器不允许自动复制，请点「导出为 .user.js」再打开文件";
+      } catch (e3) { if (msg) msg.textContent = "复制失败: " + ((e3 && e3.message) || e3); }
+    }
+    try {
+      if (typeof navigator !== "undefined" && navigator && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        navigator.clipboard.writeText(src).then(function () { if (msg) msg.textContent = "已复制「" + it.name + "」的源码（" + src.length + " 字符）"; }, fallback);
+        return;
+      }
+    } catch (e0) {}
+    fallback();
+  }
+  function scrUsImport(name, raw) {
+  // CLEANUP-RELEASE-BEGIN us-import-msg ORIGINAL:ICAgIHZhciBtc2cgPSAkaWQoImRzaC11cy1tc2ciKSwgc3JjID0gU3RyaW5nKHJhdyA9PSBudWxsID8gIiIgOiByYXcpOw==
+    var msg = $id("dsh-scr-msg"), src = String(raw == null ? "" : raw);
+  // CLEANUP-RELEASE-END us-import-msg
+    if (!src.trim()) { if (msg) msg.textContent = scrUsExplainReject("empty"); return false; }
+    var box = $id("dsh-us-confirm");
+    if (!box || box.checked !== true) { if (msg) msg.textContent = scrUsExplainReject("consent"); return false; }
+  // CLEANUP-RELEASE-BEGIN us-consent-consume ORIGINAL:ICAgIHZhciBwID0gc2NyVXNQYXJzZU1ldGEoc3JjKTs=
+    box.checked = false;
+    var p = scrUsParseMeta(src);
+  // CLEANUP-RELEASE-END us-consent-consume
+    if (!p.ok) { if (msg) msg.textContent = scrUsExplainReject(p.why); return false; }
+    var meta = p.meta;
+    var nm = String(meta.name || name || "").replace(/\.user\.js$/i, "").replace(/\.js$/i, "").trim() || "未命名用户脚本";
+    var ns = String(meta.namespace || ""), list = scrUsLoad(), dup = -1, i;
+    for (i = 0; i < list.length; i++) if (list[i] && list[i].name === nm && String(list[i].namespace || "") === ns) { dup = i; break; }
+    var now = Date.now();
+    var base = { name: nm, namespace: ns, version: String(meta.version || ""), description: String(meta.description || ""),
+      match: meta.match.slice(), grant: meta.grant.slice(), require: meta.require.slice(), header: p.header, source: src, importedAt: now };
+    var entry = null, how = "";
+    if (dup >= 0) {
+      if (scrUsAsk("已经有一个同名的用户脚本：\n\n" + nm + (ns ? "（" + ns + "）" : "（没有 @namespace，按空命名空间算）") + "\n\n确定 = 覆盖更新（用这份替换已存的那份，并保留它当前的启用 / 停用状态）\n取消 = 并存（两份都在，新这份名字后面加序号）")) {
+        entry = base; entry.id = list[dup].id || ("us" + now); entry.enabled = list[dup].enabled === true;
+        list[dup] = entry; how = "已覆盖更新";
+      } else {
+        var n = 2;
+        while (n < 1000) { var clash = false; for (i = 0; i < list.length; i++) if (list[i] && list[i].name === nm + " (" + n + ")") { clash = true; break; } if (!clash) break; n++; }
+        entry = base; entry.name = nm + " (" + n + ")"; entry.id = "us" + now + Math.floor(Math.random() * 1000000).toString(36); entry.enabled = false;
+        list.push(entry); how = "已并存（新那份叫「" + entry.name + "」）";
+      }
+    } else {
+      entry = base; entry.id = "us" + now + Math.floor(Math.random() * 1000000).toString(36); entry.enabled = false;
+      list.push(entry); how = "已导入";
+    }
+    if (!scrUsSave(list)) { if (msg) msg.textContent = "导入失败：本机存储写不进去（可能已满或被浏览器禁用），没有改动已存脚本。"; return false; }
+    scrUsRenderList();
+    var tail = "";
+    if (entry.enabled === true) tail="（保留启用状态；覆盖更新需刷新页面才生效，本页未重跑）";
+    if (msg) msg.textContent = how + "「" + entry.name + (entry.version ? " v" + entry.version : "") + "」（默认停用，点「启用」才会跑）" + tail + "。" + scrUsCapsText(entry);
+    return true;
+  }
+  function scrUsAutostart() {
+    var list = scrUsLoad(), i, on = 0, fail = 0;
+    for (i = 0; i < list.length; i++) if (list[i] && list[i].enabled === true) on++;
+    if (!on) return;
+    if (!scrUsCanEval()) {
+      try { console.warn("[用户脚本] 本页内容安全策略禁止动态执行，已启用的 " + on + " 个用户脚本本次没有运行（没有改动它们的启用状态）；请单独安装这些脚本。"); } catch (e0) {}
+      return;
+    }
+    for (i = 0; i < list.length; i++) {
+      if (!list[i] || list[i].enabled !== true) continue;
+      var r = scrUsRun(list[i]);
+      if (!r.ok) { fail++; try { console.warn("[用户脚本] 「" + list[i].name + "」运行失败：" + r.error); } catch (e1) {} }
+    }
+    try { console.log("[用户脚本] 刷新后自动运行 " + on + " 个已启用脚本，失败 " + fail + " 个。"); } catch (e2) {}
+  }
+  // 门面就绪之后才跑；DOM 还没解析完就等 DOMContentLoaded，避免脚本读到半个页面。
+  function scrUsBootAutostart() {
+    try {
+      if (typeof document !== "undefined" && document && document.readyState === "loading" && typeof document.addEventListener === "function") {
+        document.addEventListener("DOMContentLoaded", function () { setTimeout(function () { try { scrUsAutostart(); } catch (e) {} }, 0); }, { once: true });
+        return;
+      }
+    } catch (e0) {}
+    setTimeout(function () { try { scrUsAutostart(); } catch (e1) {} }, 0);
+  }
+  // CLEANUP-RELEASE-BEGIN us-wire-shared ORIGINAL:ICBmdW5jdGlvbiBzY3JVc1dpcmUoKSB7DQogICAgdmFyIGltcCA9ICRpZCgiZHNoLXVzLWltcCIpOw0KICAgIGlmIChpbXApIGltcC5vbmNsaWNrID0gZnVuY3Rpb24gKCkgeyB2YXIgdGEgPSAkaWQoImRzaC11cy1zcmMiKSwgdiA9IHRhID8gdGEudmFsdWUgOiAiIjsgaWYgKHNjclVzSW1wb3J0KCIiLCB2KSAmJiB0YSkgdGEudmFsdWUgPSAiIjsgfTsNCiAgICB2YXIgYnRuID0gJGlkKCJkc2gtdXMtZmlsZSIpOw0KICAgIGlmIChidG4pIGJ0bi5vbmNsaWNrID0gZnVuY3Rpb24gKCkgeyB2YXIgZiA9ICRpZCgiZHNoLXVzLWZpbGVpbnB1dCIpOyBpZiAoZikgZi5jbGljaygpOyB9Ow0KICAgIHZhciBmaSA9ICRpZCgiZHNoLXVzLWZpbGVpbnB1dCIpOw0KICAgIGlmIChmaSkgZmkub25jaGFuZ2UgPSBmdW5jdGlvbiAoKSB7DQogICAgICB2YXIgZiA9IHRoaXMuZmlsZXMgJiYgdGhpcy5maWxlc1swXSwgbXNnID0gJGlkKCJkc2gtdXMtbXNnIik7DQogICAgICBpZiAoIWYpIHJldHVybjsNCiAgICAgIHZhciByZCA9IG5ldyBGaWxlUmVhZGVyKCk7DQogICAgICByZC5vbmxvYWQgPSBmdW5jdGlvbiAoKSB7IGlmIChzY3JVc0ltcG9ydChTdHJpbmcoZi5uYW1lIHx8ICIiKSwgU3RyaW5nKHJkLnJlc3VsdCB8fCAiIikpKSB7IHZhciB0YSA9ICRpZCgiZHNoLXVzLXNyYyIpOyBpZiAodGEpIHRhLnZhbHVlID0gIiI7IH0gfTsNCiAgICAgIHJkLm9uZXJyb3IgPSBmdW5jdGlvbiAoKSB7IGlmIChtc2cpIG1zZy50ZXh0Q29udGVudCA9ICLmlofku7bor7vlj5blpLHotKUiOyB9Ow0KICAgICAgdHJ5IHsgcmQucmVhZEFzVGV4dChmLCAidXRmLTgiKTsgfSBjYXRjaCAoZSkgeyBpZiAobXNnKSBtc2cudGV4dENvbnRlbnQgPSAi5paH5Lu26K+75Y+W5aSx6LSlOiAiICsgKChlICYmIGUubWVzc2FnZSkgfHwgZSk7IH0NCiAgICAgIHRoaXMudmFsdWUgPSAiIjsNCiAgICB9Ow0KICAgIHZhciBjbCA9ICRpZCgiZHNoLXVzLWNsZWFyIik7DQogICAgaWYgKGNsKSBjbC5vbmNsaWNrID0gZnVuY3Rpb24gKCkgeyB2YXIgdGEgPSAkaWQoImRzaC11cy1zcmMiKTsgaWYgKHRhKSB0YS52YWx1ZSA9ICIiOyB9Ow0KICAgIHZhciBjYSA9ICRpZCgiZHNoLXVzLWNsZWFyYWxsIik7DQogICAgaWYgKGNhKSBjYS5vbmNsaWNrID0gZnVuY3Rpb24gKCkgeyBzY3JVc0NsZWFyQWxsKCk7IH07DQogICAgc2NyVXNSZW5kZXJMaXN0KCk7DQogIH0=
+  function scrUsWire() {
+    scrUsRenderList();
+  }
+  // CLEANUP-RELEASE-END us-wire-shared
+  // ================= 用户脚本容器 END（下面接着原有的 JSON 模板脚本执行）=================
   function scrEnsureHost() {
+  // UNIFIED-PROBE-END scr-us-fn
     var h = $id("dsh-fw-scr");
     if (h) { scrRenderList(); return h; }
     var dock = $id("dsh-scr-dock");
     if (!dock) { dock = document.createElement("div"); dock.id = "dsh-scr-dock"; dock.style.display = "none"; document.documentElement.appendChild(dock); }
     h = document.createElement("div"); h.id = "dsh-fw-scr";
-    h.innerHTML = '<div class="sec">脚本执行（导入 JSON 模板 · 串行按优先级）</div>'
+  // CLEANUP-RELEASE-BEGIN shared-import-ui ORIGINAL:ICAgIGguaW5uZXJIVE1MID0gJzxkaXYgY2xhc3M9InNlYyI+6ISa5pys5omn6KGM77yI5a+85YWlIEpTT04g5qih5p2/IMK3IOS4suihjOaMieS8mOWFiOe6p++8iTwvZGl2PicNCiAgICAgICsgJzxkaXYgY2xhc3M9InJvdyI+PHNwYW4gY2xhc3M9ImxiIiBzdHlsZT0ibWluLXdpZHRoOjQycHgiPuiEmuacrOWQjTwvc3Bhbj48aW5wdXQgaWQ9ImRzaC1zY3ItbmFtZSIgdHlwZT0idGV4dCIgcGxhY2Vob2xkZXI9IuWmgu+8muaXpeW4uOa1geeoiyIgc3R5bGU9ImZsZXg6MSAxIDkwcHgiPjwvZGl2PicNCiAgICAgICsgJzx0ZXh0YXJlYSBpZD0iZHNoLXNjci1qc29uIiByb3dzPSI0IiBwbGFjZWhvbGRlcj1cJ0pTT04g5qih5p2/77yaeyJ0ZW1wbGF0ZUlkIjoiZGFpbHkiLCJ2ZXJzaW9uIjoxLCJzdGVwcyI6W3siYWN0aW9uIjoid2FsayIsInBhcmFtcyI6eyJ4IjoxMDAsInkiOjgwfX1dfVwnPjwvdGV4dGFyZWE+Jw0KICAgICAgKyAnPGRpdiBjbGFzcz0icm93Ij48YnV0dG9uIGlkPSJkc2gtc2NyLWltcCI+5a+85YWl5LiK6Z2i55qEIEpTT048L2J1dHRvbj48YnV0dG9uIGNsYXNzPSJnaG9zdCIgaWQ9ImRzaC1zY3ItZmlsZSI+5LuO5paH5Lu25a+85YWl4oCmPC9idXR0b24+PHNwYW4gY2xhc3M9InN0IiBpZD0iZHNoLXNjci1tc2ciIHN0eWxlPSJmb250LXNpemU6MTBweCI+PC9zcGFuPjwvZGl2PicNCiAgICAgICsgJzxkaXYgY2xhc3M9InJvdyI+PGJ1dHRvbiBjbGFzcz0iZ2hvc3QiIGlkPSJkc2gtc2NyLWNsZWFyIj7muIXnqbrovpPlhaU8L2J1dHRvbj48YnV0dG9uIGNsYXNzPSJnaG9zdCIgaWQ9ImRzaC1zY3ItYmFja3VwIj7lpIfku73lhajpg6johJrmnKzliLDmlofku7Y8L2J1dHRvbj48L2Rpdj4nDQogIC8vIFVOSUZJRUQtUFJPQkUtQkVHSU4gc2NyLWFjY2VwdCBPUklHSU5BTDpJQ0FnSUNBZ0t5QW5QR2x1Y0hWMElHbGtQU0prYzJndGMyTnlMV1pwYkdWcGJuQjFkQ0lnZEhsd1pUMGlabWxzWlNJZ1lXTmpaWEIwUFNJdWFuTnZiaXhoY0hCc2FXTmhkR2x2Ymk5cWMyOXVMSFJsZUhRdmNHeGhhVzRpSUhOMGVXeGxQU0prYVhOd2JHRjVPbTV2Ym1VaVBpYz0NCiAgICAgICsgJzxpbnB1dCBpZD0iZHNoLXNjci1maWxlaW5wdXQiIHR5cGU9ImZpbGUiIGFjY2VwdD0iLmpzb24sLmpzLC51c2VyLmpzLC50eHQsYXBwbGljYXRpb24vanNvbix0ZXh0L2phdmFzY3JpcHQsYXBwbGljYXRpb24vamF2YXNjcmlwdCx0ZXh0L3BsYWluIiBzdHlsZT0iZGlzcGxheTpub25lIj4nDQogIC8vIFVOSUZJRUQtUFJPQkUtRU5EIHNjci1hY2NlcHQNCiAgICAgICsgJzxkaXYgY2xhc3M9ImJveCI+PGRpdiBjbGFzcz0iYi1oZCI+5bey5a+85YWl6ISa5pysIDxzcGFuIGNsYXNzPSJ0YWcgZ3JlZW4iIGlkPSJkc2gtc2NyLWNvdW50IiBzdHlsZT0iZmxvYXQ6cmlnaHQiPjA8L3NwYW4+PC9kaXY+Jw0KICAgICAgKyAnPGRpdiBpZD0iZHNoLXNjci1saXN0IiBzdHlsZT0iZm9udC1zaXplOjExcHg7bWF4LWhlaWdodDoxMzBweDtvdmVyZmxvdzphdXRvIj48c3BhbiBjbGFzcz0ic3QiPuepuu+8iOeymOi0tCBKU09OIOKGkiDngrnjgIzlr7zlhaXkuIrpnaLnmoQgSlNPTuOAje+8m+aIlueUqOOAjOS7juaWh+S7tuWvvOWFpeKApuOAje+8iTwvc3Bhbj48L2Rpdj48L2Rpdj4nDQogIC8vIFVOSUZJRUQtUFJPQkUtQkVHSU4gc2NyLXVzLXVpIE9SSUdJTkFMOklDQWdJQ0FnS3lBblBHUnBkaUJqYkdGemN6MGljbTkzSWo0OGMzQmhiaUJqYkdGemN6MGliR0lpSUhOMGVXeGxQU0p0YVc0dGQybGtkR2c2TkRKd2VDSSs2TCtRNktHTVBDOXpjR0Z1UGp4emNHRnVJR05zWVhOelBTSnpkQ0lnYVdROUltUnphQzF6WTNJdGMzUmhkR1VpSUhOMGVXeGxQU0ptYjI1MExYTnBlbVU2TVRGd2VDSSs1cHlxNkwrUTZLR01QQzl6Y0dGdVBqeGlkWFIwYjI0Z1kyeGhjM005SW1kb2IzTjBJaUJwWkQwaVpITm9MWE5qY2kxemRHOXdJaUJ6ZEhsc1pUMGlabXhsZURvd0lEQWdZWFYwYnp0amIyeHZjam9qWWpreFl6RmpPMkp2Y21SbGNpMWpiMnh2Y2pvalpUVmlNMkl6SWo3bGdaem1yYUk4TDJKMWRIUnZiajQ4TDJScGRqNG4NCiAgICAgICsgJzxkaXYgY2xhc3M9InNlYyI+55So5oi36ISa5pys77yI6Ieq5bex5a+85YWl6L+Q6KGM77yJPC9kaXY+Jw0KICAgICAgKyAnPGRpdiBjbGFzcz0icm93Ij48aW5wdXQgaWQ9ImRzaC11cy1jb25maXJtIiB0eXBlPSJjaGVja2JveCIgc3R5bGU9ImZsZXg6MCAwIGF1dG8iPjxzcGFuIGNsYXNzPSJzdCIgc3R5bGU9ImZvbnQtc2l6ZToxMHB4Ij7miJHnoa7orqTvvJrnlKjmiLfohJrmnKzkvJrku6XlvZPliY3pobXpnaLmnYPpmZDov5DooYzjgIHog73ogZTnvZHvvIzlj6rlr7zlhaXkvaDkv6Hku7vnmoTohJrmnKzvvIjmr4/mrKHlr7zlhaXpg73opoHlhYjli77pgInvvIk8L3NwYW4+PC9kaXY+Jw0KICAgICAgKyAnPGRpdiBjbGFzcz0icm93Ij48dGV4dGFyZWEgaWQ9ImRzaC11cy1zcmMiIHJvd3M9IjMiIHBsYWNlaG9sZGVyPSLnspjotLTnlKjmiLfohJrmnKzmupDnoIHvvJovLyA9PVVzZXJTY3JpcHQ9PSDlvIDlpLTvvIjlkKsgQG5hbWUgLyBAbmFtZXNwYWNlIC8gQHZlcnNpb24gLyBAZGVzY3JpcHRpb24gLyBAbWF0Y2ggLyBAZ3JhbnTvvIkiPjwvdGV4dGFyZWE+PC9kaXY+Jw0KICAgICAgKyAnPGRpdiBjbGFzcz0icm93Ij48YnV0dG9uIGlkPSJkc2gtdXMtaW1wIj7lr7zlhaXnlKjmiLfohJrmnKw8L2J1dHRvbj48YnV0dG9uIGNsYXNzPSJnaG9zdCIgaWQ9ImRzaC11cy1maWxlIj7pgInmi6nmlofku7bigKY8L2J1dHRvbj48aW5wdXQgaWQ9ImRzaC11cy1maWxlaW5wdXQiIHR5cGU9ImZpbGUiIGFjY2VwdD0iLmpzLC51c2VyLmpzLC50eHQsdGV4dC9qYXZhc2NyaXB0LGFwcGxpY2F0aW9uL2phdmFzY3JpcHQsdGV4dC9wbGFpbiIgc3R5bGU9ImRpc3BsYXk6bm9uZSI+PC9kaXY+Jw0KICAgICAgKyAnPGRpdiBjbGFzcz0icm93Ij48YnV0dG9uIGNsYXNzPSJnaG9zdCIgaWQ9ImRzaC11cy1jbGVhciI+5riF56m66L6T5YWlPC9idXR0b24+PGJ1dHRvbiBjbGFzcz0iZ2hvc3QiIGlkPSJkc2gtdXMtY2xlYXJhbGwiIHN0eWxlPSJmbGV4OjAgMCBhdXRvO2NvbG9yOiNiOTFjMWM7Ym9yZGVyLWNvbG9yOiNlNWIzYjMiPua4heepuuWFqOmDqDwvYnV0dG9uPjxzcGFuIGNsYXNzPSJzdCIgaWQ9ImRzaC11cy1tc2ciIHN0eWxlPSJmb250LXNpemU6MTBweCI+PC9zcGFuPjwvZGl2PicNCiAgICAgICsgJzxkaXYgY2xhc3M9ImJveCI+PGRpdiBjbGFzcz0iYi1oZCI+55So5oi36ISa5pysIDxzcGFuIGNsYXNzPSJ0YWcgZ3JlZW4iIGlkPSJkc2gtdXMtY291bnQiIHN0eWxlPSJmbG9hdDpyaWdodCI+MDwvc3Bhbj48L2Rpdj4nDQogICAgICArICc8ZGl2IGlkPSJkc2gtdXMtbGlzdCIgc3R5bGU9ImZvbnQtc2l6ZToxMXB4O21heC1oZWlnaHQ6MTcwcHg7b3ZlcmZsb3c6YXV0byI+PHNwYW4gY2xhc3M9InN0Ij7nqbrvvIjpgInmlofku7bmiJbnspjotLTmupDnoIEg4oaSIOeCueOAjOWvvOWFpeeUqOaIt+iEmuacrOOAje+8m+WvvOWFpeWQjum7mOiupOWBnOeUqO+8jOimgei3keivt+eCueOAjOWQr+eUqOOAje+8iTwvc3Bhbj48L2Rpdj48L2Rpdj4nDQogICAgICArICc8ZGl2IGNsYXNzPSJsb2ciIGlkPSJkc2gtdXMtaGludCIgc3R5bGU9ImZvbnQtc2l6ZToxMHB4O21heC1oZWlnaHQ6NzJweDtvdmVyZmxvdzphdXRvIj7lr7zlhaXlkI7pu5jorqTlgZznlKjvvIzngrnjgIzlkK/nlKjjgI3miY3kvJrlnKjlvZPliY3pobXpnaLot5HkuIDmrKHvvJvliLfmlrDpobXpnaLlkI7jgIzlt7LlkK/nlKjjgI3nmoTohJrmnKzkvJroh6rliqjlho3ot5HkuIDmrKHjgILog73lipvmm7/ouqvvvJp1bnNhZmVXaW5kb3fjgIFHTV94bWxodHRwUmVxdWVzdO+8iOWPlyBDT1JTIOmZkOWItuOAgeivu+S4jeS6huacrOacuiBmaWxlOi8vIOaWh+S7tu+8ieOAgUdNX2luZm/jgIFHTV9nZXRWYWx1ZSAvIEdNX3NldFZhbHVlIC8gR01fZGVsZXRlVmFsdWXvvIjmjInohJrmnKzpmpTnprvvvInjgIFHTV9hZGRTdHlsZeOAgUdNX2xvZ++8m+WFtuWug+aOpeWPo+aMieOAjOS4jeWtmOWcqOOAjeWkhOeQhuOAguS4jeWGhee9ruiEmuacrOOAgeS4jeiHquWKqOS4i+i9ve+8iEByZXF1aXJlIOS4gOadoemDveS4jeWPlu+8ieOAgeS4jeeisOa4uOaIj+WMheS4jua4uOaIj+S6i+S7tuOAguW3sue7j+i3kei1t+adpeeahOiEmuacrOaXoOazleecn+ato+WNuOi9ve+8jOWPquiDveWBnOeUqOOAgjwvZGl2PicNCiAgICAgICsgJzxkaXYgY2xhc3M9InJvdyI+PHNwYW4gY2xhc3M9ImxiIiBzdHlsZT0ibWluLXdpZHRoOjQycHgiPui/kOihjDwvc3Bhbj48c3BhbiBjbGFzcz0ic3QiIGlkPSJkc2gtc2NyLXN0YXRlIiBzdHlsZT0iZm9udC1zaXplOjExcHgiPuacqui/kOihjDwvc3Bhbj48YnV0dG9uIGNsYXNzPSJnaG9zdCIgaWQ9ImRzaC1zY3Itc3RvcCIgc3R5bGU9ImZsZXg6MCAwIGF1dG87Y29sb3I6I2I5MWMxYztib3JkZXItY29sb3I6I2U1YjNiMyI+5YGc5q2iPC9idXR0b24+PC9kaXY+Jw0KICAvLyBVTklGSUVELVBST0JFLUVORCBzY3ItdXMtdWkNCiAgICAgICsgJzxkaXYgY2xhc3M9InJvdyI+PGlucHV0IGlkPSJkc2gtc2NyLXBwdG9rZW4iIHR5cGU9InBhc3N3b3JkIiBwbGFjZWhvbGRlcj0icHVzaHBsdXMgdG9rZW7vvIgxMDDova7mmoLlgZzmjqjpgIHvvIkiIGF1dG9jb21wbGV0ZT0ib2ZmIiBzdHlsZT0iZmxleDoxIDEgOTBweCI+PGJ1dHRvbiBjbGFzcz0iZ3JlZW4iIGlkPSJkc2gtc2NyLXBwc2F2ZSIgc3R5bGU9ImZsZXg6MCAwIGF1dG8iPuS/neWtmOaOqOmAgTwvYnV0dG9uPjwvZGl2PicNCiAgICAgICsgJzxsYWJlbCBjbGFzcz0ic3dpdGNoIj48aW5wdXQgaWQ9ImRzaC1zY3ItcHBlbiIgdHlwZT0iY2hlY2tib3giPuWQr+eUqOaOqOmAgTwvbGFiZWw+Jw0KICAgICAgKyAnPGRpdiBjbGFzcz0ibG9nIiBpZD0iZHNoLXNjci1sb2ciIHN0eWxlPSJmb250LXNpemU6MTBweDttYXgtaGVpZ2h0OjcycHg7b3ZlcmZsb3c6YXV0byI+5Yqo5L2c77yadGVsZXBvcnQvd2Fsay9iYXR0bGVPbi9iYXR0bGVPZmYvdXNlSXRlbS9zdG9wTW92ZS9jaGVjay90YWxrL3N0b3JlL2xvb3AvaWZXZWlnaHTvvJvpobblsYLlj6/phY0gcHJpb3JpdHkvb3JkZXIvbG9vcChjb3VudHxkdXJhdGlvbnx1bnRpbCnvvJtIUCZsdDsyNSUg6Ieq5Yqo5YGc5omL44CC5a+85YWl77ya57KY6LS0IEpTT04g54K544CM5a+85YWl5LiK6Z2i55qEIEpTT07jgI3vvIzmiJbnlKjjgIzku47mlofku7blr7zlhaXigKbjgI3pgIkgLmpzb27vvIjmlK/mjIHkuIDmrKHlpJrmnaHvvInvvJvohJrmnKzlj6rlrZjlnKjmnKzmnLrmtY/op4jlmajvvIzmjaLnlLXohJHliY3lhYjngrnjgIzlpIfku73lhajpg6johJrmnKzliLDmlofku7bjgI3jgII8L2Rpdj4nOw==
+    h.innerHTML = '<div class="sec">脚本执行 · 导入 JSON / UserScript</div>'
       + '<div class="row"><span class="lb" style="min-width:42px">脚本名</span><input id="dsh-scr-name" type="text" placeholder="如：日常流程" style="flex:1 1 90px"></div>'
-      + '<textarea id="dsh-scr-json" rows="4" placeholder=\'JSON 模板：{"templateId":"daily","version":1,"steps":[{"action":"walk","params":{"x":100,"y":80}}]}\'></textarea>'
-      + '<div class="row"><button id="dsh-scr-imp">导入上面的 JSON</button><button class="ghost" id="dsh-scr-file">从文件导入…</button><span class="st" id="dsh-scr-msg" style="font-size:10px"></span></div>'
-      + '<div class="row"><button class="ghost" id="dsh-scr-clear">清空输入</button><button class="ghost" id="dsh-scr-backup">备份全部脚本到文件</button></div>'
+      + '<textarea id="dsh-scr-json" rows="4" placeholder="粘贴 JSON 模板（支持多条）或带 ==UserScript== 头的用户脚本源码"></textarea>'
+      + '<div class="row"><input id="dsh-us-confirm" type="checkbox" style="flex:0 0 auto"><span class="st" style="font-size:10px">我确认：用户脚本会以当前页面权限运行、能联网，只导入你信任的脚本（每次导入都要先勾选）</span></div>'
+      + '<div class="row"><button id="dsh-scr-imp">导入脚本</button><button class="ghost" id="dsh-scr-file">从文件导入…</button><span class="st" id="dsh-scr-msg" style="font-size:10px"></span></div>'
+  // CLEANUP-R1-BEGIN json-backup-button ORIGINAL:ICAgICAgKyAnPGRpdiBjbGFzcz0icm93Ij48YnV0dG9uIGNsYXNzPSJnaG9zdCIgaWQ9ImRzaC1zY3ItY2xlYXIiPua4heepuui+k+WFpTwvYnV0dG9uPjxidXR0b24gY2xhc3M9Imdob3N0IiBpZD0iZHNoLXNjci1iYWNrdXAiPuWkh+S7veWFqOmDqOiEmuacrOWIsOaWh+S7tjwvYnV0dG9uPjwvZGl2Pic=
+      + '<div class="row"><button class="ghost" id="dsh-scr-clear">清空输入</button><button class="ghost" id="dsh-scr-backup">备份 JSON 模板到文件</button></div>'
+  // CLEANUP-R1-END json-backup-button
   // UNIFIED-PROBE-BEGIN scr-accept ORIGINAL:ICAgICAgKyAnPGlucHV0IGlkPSJkc2gtc2NyLWZpbGVpbnB1dCIgdHlwZT0iZmlsZSIgYWNjZXB0PSIuanNvbixhcHBsaWNhdGlvbi9qc29uLHRleHQvcGxhaW4iIHN0eWxlPSJkaXNwbGF5Om5vbmUiPic=
       + '<input id="dsh-scr-fileinput" type="file" accept=".json,.js,.user.js,.txt,application/json,text/javascript,application/javascript,text/plain" style="display:none">'
   // UNIFIED-PROBE-END scr-accept
       + '<div class="box"><div class="b-hd">已导入脚本 <span class="tag green" id="dsh-scr-count" style="float:right">0</span></div>'
-      + '<div id="dsh-scr-list" style="font-size:11px;max-height:130px;overflow:auto"><span class="st">空（粘贴 JSON → 点「导入上面的 JSON」；或用「从文件导入…」）</span></div></div>'
+      + '<div id="dsh-scr-list" style="font-size:11px;max-height:130px;overflow:auto"><span class="st">空（选文件或粘贴源码 → 导入脚本）</span></div></div>'
+  // UNIFIED-PROBE-BEGIN scr-us-ui ORIGINAL:ICAgICAgKyAnPGRpdiBjbGFzcz0icm93Ij48c3BhbiBjbGFzcz0ibGIiIHN0eWxlPSJtaW4td2lkdGg6NDJweCI+6L+Q6KGMPC9zcGFuPjxzcGFuIGNsYXNzPSJzdCIgaWQ9ImRzaC1zY3Itc3RhdGUiIHN0eWxlPSJmb250LXNpemU6MTFweCI+5pyq6L+Q6KGMPC9zcGFuPjxidXR0b24gY2xhc3M9Imdob3N0IiBpZD0iZHNoLXNjci1zdG9wIiBzdHlsZT0iZmxleDowIDAgYXV0bztjb2xvcjojYjkxYzFjO2JvcmRlci1jb2xvcjojZTViM2IzIj7lgZzmraI8L2J1dHRvbj48L2Rpdj4n
+  // CLEANUP-R1-BEGIN player-hint ORIGINAL:ICAgICAgKyAnPGRpdiBjbGFzcz0ibG9nIiBpZD0iZHNoLXVzLWhpbnQiIHN0eWxlPSJmb250LXNpemU6MTBweDttYXgtaGVpZ2h0OjcycHg7b3ZlcmZsb3c6YXV0byI+5a+85YWl5ZCO6buY6K6k5YGc55So77yM54K544CM5ZCv55So44CN5omN5Lya5Zyo5b2T5YmN6aG16Z2i6LeR5LiA5qyh77yb5Yi35paw6aG16Z2i5ZCO44CM5bey5ZCv55So44CN55qE6ISa5pys5Lya6Ieq5Yqo5YaN6LeR5LiA5qyh44CC6IO95Yqb5pu/6Lqr77yadW5zYWZlV2luZG9344CBR01feG1saHR0cFJlcXVlc3TvvIjlj5cgQ09SUyDpmZDliLbjgIHor7vkuI3kuobmnKzmnLogZmlsZTovLyDmlofku7bvvInjgIFHTV9pbmZv44CBR01fZ2V0VmFsdWUgLyBHTV9zZXRWYWx1ZSAvIEdNX2RlbGV0ZVZhbHVl77yI5oyJ6ISa5pys6ZqU56a777yJ44CBR01fYWRkU3R5bGXjgIFHTV9sb2fvvJvlhbblroPmjqXlj6PmjInjgIzkuI3lrZjlnKjjgI3lpITnkIbjgILkuI3lhoXnva7ohJrmnKzjgIHkuI3oh6rliqjkuIvovb3vvIhAcmVxdWlyZSDkuIDmnaHpg73kuI3lj5bvvInjgIHkuI3norDmuLjmiI/ljIXkuI7muLjmiI/kuovku7bjgILlt7Lnu4/ot5HotbfmnaXnmoTohJrmnKzml6Dms5XnnJ/mraPljbjovb3vvIzlj6rog73lgZznlKjjgII8L2Rpdj4n
+      + '<div class="log" id="dsh-us-hint" style="font-size:10px;max-height:72px;overflow:auto">JSON 模板和用户脚本都在上方导入。JSON 点「执行」；用户脚本导入后默认停用，点「启用」运行，刷新后已启用脚本自动加载。用户脚本能联网，只导入可信源码，读不了本机 file:// 文件；能力详情见各条目信息。备份：JSON 用「备份 JSON 模板到文件」，用户脚本在各自条目「导出为 .user.js」。停用不能撤销已运行的脚本。</div>'
+  // CLEANUP-R1-END player-hint
       + '<div class="row"><span class="lb" style="min-width:42px">运行</span><span class="st" id="dsh-scr-state" style="font-size:11px">未运行</span><button class="ghost" id="dsh-scr-stop" style="flex:0 0 auto;color:#b91c1c;border-color:#e5b3b3">停止</button></div>'
+  // UNIFIED-PROBE-END scr-us-ui
       + '<div class="row"><input id="dsh-scr-pptoken" type="password" placeholder="pushplus token（100轮暂停推送）" autocomplete="off" style="flex:1 1 90px"><button class="green" id="dsh-scr-ppsave" style="flex:0 0 auto">保存推送</button></div>'
       + '<label class="switch"><input id="dsh-scr-ppen" type="checkbox">启用推送</label>'
-      + '<div class="log" id="dsh-scr-log" style="font-size:10px;max-height:72px;overflow:auto">动作：teleport/walk/battleOn/battleOff/useItem/stopMove/check/talk/store/loop/ifWeight；顶层可配 priority/order/loop(count|duration|until)；HP&lt;25% 自动停手。导入：粘贴 JSON 点「导入上面的 JSON」，或用「从文件导入…」选 .json（支持一次多条）；脚本只存在本机浏览器，换电脑前先点「备份全部脚本到文件」。</div>';
+  // CLEANUP-R1-BEGIN json-log-hint ORIGINAL:ICAgICAgKyAnPGRpdiBjbGFzcz0ibG9nIiBpZD0iZHNoLXNjci1sb2ciIHN0eWxlPSJmb250LXNpemU6MTBweDttYXgtaGVpZ2h0OjcycHg7b3ZlcmZsb3c6YXV0byI+5Yqo5L2c77yadGVsZXBvcnQvd2Fsay9iYXR0bGVPbi9iYXR0bGVPZmYvdXNlSXRlbS9zdG9wTW92ZS9jaGVjay90YWxrL3N0b3JlL2xvb3AvaWZXZWlnaHTvvJvpobblsYLlj6/phY0gcHJpb3JpdHkvb3JkZXIvbG9vcChjb3VudHxkdXJhdGlvbnx1bnRpbCnvvJtIUCZsdDsyNSUg6Ieq5Yqo5YGc5omL44CC5a+85YWl77ya57KY6LS0IEpTT04g54K544CM5a+85YWl6ISa5pys44CN77yM5oiW55So44CM5LuO5paH5Lu25a+85YWl4oCm44CN6YCJIC5qc29u77yI5pSv5oyB5LiA5qyh5aSa5p2h77yJ77yb6ISa5pys5Y+q5a2Y5Zyo5pys5py65rWP6KeI5Zmo77yM5o2i55S16ISR5YmN5YWI54K544CM5aSH5Lu95YWo6YOo6ISa5pys5Yiw5paH5Lu244CN44CCPC9kaXY+Jzs=
+      + '<div class="log" id="dsh-scr-log" style="font-size:10px;max-height:72px;overflow:auto">JSON 模板执行日志；HP&lt;25% 自动停手。</div>';
+  // CLEANUP-R1-END json-log-hint
+  // CLEANUP-RELEASE-END shared-import-ui
     dock.appendChild(h);
-    $id("dsh-scr-imp").onclick = function () { var v = $id("dsh-scr-json").value; scrImportRaw(($id("dsh-scr-name").value || "").trim(), v); if (v) $id("dsh-scr-json").value = ""; };
+  // CLEANUP-RELEASE-BEGIN shared-paste-handler ORIGINAL:ICAgICRpZCgiZHNoLXNjci1pbXAiKS5vbmNsaWNrID0gZnVuY3Rpb24gKCkgeyB2YXIgdiA9ICRpZCgiZHNoLXNjci1qc29uIikudmFsdWU7IHNjckltcG9ydFJhdygoJGlkKCJkc2gtc2NyLW5hbWUiKS52YWx1ZSB8fCAiIikudHJpbSgpLCB2KTsgaWYgKHYpICRpZCgiZHNoLXNjci1qc29uIikudmFsdWUgPSAiIjsgfTs=
+    $id("dsh-scr-imp").onclick = function () { var ta=$id("dsh-scr-json"); if (scrImportRaw(($id("dsh-scr-name").value || "").trim(), ta.value)) ta.value = ""; };
+  // CLEANUP-RELEASE-END shared-paste-handler
     $id("dsh-scr-file").onclick = function () { var f = $id("dsh-scr-fileinput"); if (f) f.click(); };
     $id("dsh-scr-fileinput").onchange = function () {
       var f = this.files && this.files[0], msg = $id("dsh-scr-msg");
       if (!f) return;
       var rd = new FileReader();
-      rd.onload = function () { scrImportRaw(String(f.name || "").replace(/\.json$/i, ""), String(rd.result || "")); };
+  // CLEANUP-RELEASE-BEGIN shared-file-handler ORIGINAL:ICAgICAgcmQub25sb2FkID0gZnVuY3Rpb24gKCkgeyBzY3JJbXBvcnRSYXcoU3RyaW5nKGYubmFtZSB8fCAiIikucmVwbGFjZSgvXC5qc29uJC9pLCAiIiksIFN0cmluZyhyZC5yZXN1bHQgfHwgIiIpKTsgfTs=
+      rd.onload = function () { if (scrImportRaw(String(f.name || "").replace(/\.json$/i, ""), String(rd.result || ""))) $id("dsh-scr-json").value = ""; };
+  // CLEANUP-RELEASE-END shared-file-handler
       rd.onerror = function () { if (msg) msg.textContent = "文件读取失败"; };
       try { rd.readAsText(f, "utf-8"); } catch (e) { if (msg) msg.textContent = "文件读取失败: " + e.message; }
       this.value = "";
@@ -23665,7 +24204,10 @@ function createRoItemCapture(env) {
     $id("dsh-scr-stop").onclick = function () { scrQueue = []; scrRun.stop = true; scrRun.running = false; if (scrRun.timer) { clearInterval(scrRun.timer); scrRun.timer = null; } try { stopWalkXY(); } catch (e) {} scrSetState("已停止", "warn"); scrLogLine("手动停止"); };
     $id("dsh-scr-pptoken").value = notifyLoadToken(); $id("dsh-scr-ppen").checked = notifyPushEnabled();
     $id("dsh-scr-ppsave").onclick = function () { notifySaveToken($id("dsh-scr-pptoken").value); $id("dsh-scr-pptoken").value = notifyLoadToken(); };
+  // UNIFIED-PROBE-BEGIN scr-us-wire ORIGINAL:ICAgICRpZCgiZHNoLXNjci1wcGVuIikub25jaGFuZ2UgPSBmdW5jdGlvbiAoKSB7IG5vdGlmeVNldFB1c2hFbmFibGVkKCRpZCgiZHNoLXNjci1wcGVuIikuY2hlY2tlZCk7IH07
+    scrUsWire();
     $id("dsh-scr-ppen").onchange = function () { notifySetPushEnabled($id("dsh-scr-ppen").checked); };
+  // UNIFIED-PROBE-END scr-us-wire
     scrRenderList();
     return h;
   }
@@ -23805,9 +24347,17 @@ function createRoItemCapture(env) {
   // V2.36.13：属性箭的元素顺序（元素码 = 下标）。arrowLoad 在 IIFE 初始化时就要用，必须声明在它前面。
   var ARROW_ELEM_ORDER=["火","水","风","地","毒","圣","暗","念","不死","无"];
   function arrowDefaults(){return {enabled:false,defaultItid:null,byMid:{},byElem:{}};}
-  function arrowLoad(){var d=arrowDefaults(),r=null,raw=null;try{if(typeof saved!=="undefined"&&saved&&saved.arrowRules&&typeof saved.arrowRules==="object")r=saved.arrowRules;}catch(e){}if(!r){try{raw=localStorage.getItem(ARROW_RULES_KEY);r=JSON.parse(raw||"null");}catch(e){}}if(!r&&raw==null){try{var oldc=JSON.parse(localStorage.getItem(CHALLENGE_KEY)||"null");if(oldc&&typeof oldc==="object"){r={enabled:oldc.arrowOn===true,defaultItid:oldc.neutralItid,byMid:oldc.bossByMid};localStorage.setItem(ARROW_RULES_KEY,JSON.stringify(r));}}catch(e2){}}if(!r||typeof r!=="object")return d;d.enabled=r.enabled===true;d.byElem={};if(r.byElem&&typeof r.byElem==="object")Object.keys(r.byElem).forEach(function(k){var eit=arrowPos(r.byElem[k]);if(ARROW_ELEM_ORDER.indexOf(String(k))>=0&&eit)d.byElem[String(k)]=eit;});d.defaultItid=arrowPos(r.defaultItid)||arrowPos(r.neutralItid);var legacy=r.byMid&&typeof r.byMid==="object"?r.byMid:(r.bossByMid&&typeof r.bossByMid==="object"?r.bossByMid:null);if(legacy)Object.keys(legacy).forEach(function(k){var mid=arrowPos(k),v=legacy[k],itid=arrowPos(v&&v.itid!=null?v.itid:v);if(mid&&itid)d.byMid[mid]=itid;});return d;}
+  // UNIFIED-PROBE-BEGIN resume-arrow-load ORIGINAL:ICBmdW5jdGlvbiBhcnJvd0xvYWQoKXt2YXIgZD1hcnJvd0RlZmF1bHRzKCkscj1udWxsLHJhdz1udWxsO3RyeXtpZih0eXBlb2Ygc2F2ZWQhPT0idW5kZWZpbmVkIiYmc2F2ZWQmJnNhdmVkLmFycm93UnVsZXMmJnR5cGVvZiBzYXZlZC5hcnJvd1J1bGVzPT09Im9iamVjdCIpcj1zYXZlZC5hcnJvd1J1bGVzO31jYXRjaChlKXt9aWYoIXIpe3RyeXtyYXc9bG9jYWxTdG9yYWdlLmdldEl0ZW0oQVJST1dfUlVMRVNfS0VZKTtyPUpTT04ucGFyc2UocmF3fHwibnVsbCIpO31jYXRjaChlKXt9fWlmKCFyJiZyYXc9PW51bGwpe3RyeXt2YXIgb2xkYz1KU09OLnBhcnNlKGxvY2FsU3RvcmFnZS5nZXRJdGVtKENIQUxMRU5HRV9LRVkpfHwibnVsbCIpO2lmKG9sZGMmJnR5cGVvZiBvbGRjPT09Im9iamVjdCIpe3I9e2VuYWJsZWQ6b2xkYy5hcnJvd09uPT09dHJ1ZSxkZWZhdWx0SXRpZDpvbGRjLm5ldXRyYWxJdGlkLGJ5TWlkOm9sZGMuYm9zc0J5TWlkfTtsb2NhbFN0b3JhZ2Uuc2V0SXRlbShBUlJPV19SVUxFU19LRVksSlNPTi5zdHJpbmdpZnkocikpO319Y2F0Y2goZTIpe319aWYoIXJ8fHR5cGVvZiByIT09Im9iamVjdCIpcmV0dXJuIGQ7ZC5lbmFibGVkPXIuZW5hYmxlZD09PXRydWU7ZC5ieUVsZW09e307aWYoci5ieUVsZW0mJnR5cGVvZiByLmJ5RWxlbT09PSJvYmplY3QiKU9iamVjdC5rZXlzKHIuYnlFbGVtKS5mb3JFYWNoKGZ1bmN0aW9uKGspe3ZhciBlaXQ9YXJyb3dQb3Moci5ieUVsZW1ba10pO2lmKEFSUk9XX0VMRU1fT1JERVIuaW5kZXhPZihTdHJpbmcoaykpPj0wJiZlaXQpZC5ieUVsZW1bU3RyaW5nKGspXT1laXQ7fSk7ZC5kZWZhdWx0SXRpZD1hcnJvd1BvcyhyLmRlZmF1bHRJdGlkKXx8YXJyb3dQb3Moci5uZXV0cmFsSXRpZCk7dmFyIGxlZ2FjeT1yLmJ5TWlkJiZ0eXBlb2Ygci5ieU1pZD09PSJvYmplY3QiP3IuYnlNaWQ6KHIuYm9zc0J5TWlkJiZ0eXBlb2Ygci5ib3NzQnlNaWQ9PT0ib2JqZWN0Ij9yLmJvc3NCeU1pZDpudWxsKTtpZihsZWdhY3kpT2JqZWN0LmtleXMobGVnYWN5KS5mb3JFYWNoKGZ1bmN0aW9uKGspe3ZhciBtaWQ9YXJyb3dQb3Moayksdj1sZWdhY3lba10saXRpZD1hcnJvd1Bvcyh2JiZ2Lml0aWQhPW51bGw/di5pdGlkOnYpO2lmKG1pZCYmaXRpZClkLmJ5TWlkW21pZF09aXRpZDt9KTtyZXR1cm4gZDt9
+  function arrowLoad(){var d=arrowDefaults(),r=null;try{var id=resolveSelfIdentity(),key=activeProfileKey();if(id&&id.known===true&&key===id.oneId&&profileTrusted(key)&&saved&&saved.arrowRules&&typeof saved.arrowRules==="object")r=saved.arrowRules;}catch(e){}if(!r||typeof r!=="object")return d;d.enabled=r.enabled===true;d.byElem={};if(r.byElem&&typeof r.byElem==="object")Object.keys(r.byElem).forEach(function(k){var eit=arrowPos(r.byElem[k]);if(ARROW_ELEM_ORDER.indexOf(String(k))>=0&&eit)d.byElem[String(k)]=eit;});d.defaultItid=arrowPos(r.defaultItid)||arrowPos(r.neutralItid);var legacy=r.byMid&&typeof r.byMid==="object"?r.byMid:(r.bossByMid&&typeof r.bossByMid==="object"?r.bossByMid:null);if(legacy)Object.keys(legacy).forEach(function(k){var mid=arrowPos(k),v=legacy[k],itid=arrowPos(v&&v.itid!=null?v.itid:v);if(mid&&itid)d.byMid[mid]=itid;});return d;}
+  // UNIFIED-PROBE-END resume-arrow-load
+  // UNIFIED-PROBE-BEGIN resume-arrow-sync ORIGINAL:ICB2YXIgYXJyb3dSdWxlcz1hcnJvd0xvYWQoKSxhcnJvd1RhcmdldD1udWxsLGFycm93UGVuZGluZz1udWxsLGFycm93U3RhdHVzPSLmnKrlkK/nlKgiLGFycm93QmxvY2tlZD1mYWxzZSxhcnJvd1JlYWR5PWZhbHNlOw==
   var arrowRules=arrowLoad(),arrowTarget=null,arrowPending=null,arrowStatus="未启用",arrowBlocked=false,arrowReady=false;
-  function arrowSave(){try{if(typeof saved==="undefined"||!saved||typeof saveSaved!=="function"||typeof activeProfileKey!=="function"||typeof loadProfiles!=="function")return false;var raw=JSON.stringify(arrowRules),key=activeProfileKey();if(!raw||!key)return false;saved.arrowRules=JSON.parse(raw);saveSaved(saved);var disk=loadProfiles(),p=disk&&disk[key],stored=p&&p.saved&&p.saved.arrowRules;if(JSON.stringify(stored)!==raw)return false;try{localStorage.setItem(ARROW_RULES_KEY,raw);}catch(e0){}return true;}catch(e){return false;}}
+  var arrowProfileStamp="",arrowProfileSaved=null,arrowProfileKey=null,arrowProfileTrusted=false;
+  function arrowSyncProfile(){var id=null,key="",trusted=false,raw="";try{id=resolveSelfIdentity();key=activeProfileKey();trusted=!!(id&&id.known===true&&id.oneId===key&&profileTrusted(key));raw=trusted?JSON.stringify(saved&&saved.arrowRules||null):"";}catch(e){}var stamp=key+"|"+trusted+"|"+raw;if(stamp===arrowProfileStamp&&saved===arrowProfileSaved)return;arrowProfileStamp=stamp;arrowProfileSaved=saved;arrowProfileKey=trusted?key:null;arrowProfileTrusted=trusted;arrowRules=arrowLoad();arrowTarget=null;arrowPending=null;arrowSelfPending=null;arrowSupply=null;arrowReady=false;arrowBlocked=false;try{var en=$id("dsh-arrow-rules-enabled");if(en)en.checked=arrowRules.enabled;var def=$id("dsh-arrow-rules-item");if(def){arrowFill(def);def.value=arrowRules.defaultItid?String(arrowRules.defaultItid):"";}var master=$id("dsh-arrowen");if(master)master.checked=trusted&&arrowManageSaved();arrowRenderCfg();}catch(e2){}}
+  // UNIFIED-PROBE-END resume-arrow-sync
+  // UNIFIED-PROBE-BEGIN resume-arrow-save ORIGINAL:ICBmdW5jdGlvbiBhcnJvd1NhdmUoKXt0cnl7aWYodHlwZW9mIHNhdmVkPT09InVuZGVmaW5lZCJ8fCFzYXZlZHx8dHlwZW9mIHNhdmVTYXZlZCE9PSJmdW5jdGlvbiJ8fHR5cGVvZiBhY3RpdmVQcm9maWxlS2V5IT09ImZ1bmN0aW9uInx8dHlwZW9mIGxvYWRQcm9maWxlcyE9PSJmdW5jdGlvbiIpcmV0dXJuIGZhbHNlO3ZhciByYXc9SlNPTi5zdHJpbmdpZnkoYXJyb3dSdWxlcyksa2V5PWFjdGl2ZVByb2ZpbGVLZXkoKTtpZighcmF3fHwha2V5KXJldHVybiBmYWxzZTtzYXZlZC5hcnJvd1J1bGVzPUpTT04ucGFyc2UocmF3KTtzYXZlU2F2ZWQoc2F2ZWQpO3ZhciBkaXNrPWxvYWRQcm9maWxlcygpLHA9ZGlzayYmZGlza1trZXldLHN0b3JlZD1wJiZwLnNhdmVkJiZwLnNhdmVkLmFycm93UnVsZXM7aWYoSlNPTi5zdHJpbmdpZnkoc3RvcmVkKSE9PXJhdylyZXR1cm4gZmFsc2U7dHJ5e2xvY2FsU3RvcmFnZS5zZXRJdGVtKEFSUk9XX1JVTEVTX0tFWSxyYXcpO31jYXRjaChlMCl7fXJldHVybiB0cnVlO31jYXRjaChlKXtyZXR1cm4gZmFsc2U7fX0=
+  function arrowSave(){try{if(typeof saved==="undefined"||!saved||typeof saveSaved!=="function"||typeof activeProfileKey!=="function"||typeof loadProfiles!=="function")return false;var raw=JSON.stringify(arrowRules),key=activeProfileKey();var id=resolveSelfIdentity();if(!raw||!key||!id||id.known!==true||id.oneId!==key||!profileTrusted(key))return false;saved.arrowRules=JSON.parse(raw);saveSaved(saved);var disk=loadProfiles(),p=disk&&disk[key],stored=p&&p.saved&&p.saved.arrowRules;if(JSON.stringify(stored)!==raw)return false;arrowProfileStamp=key+"|true|"+raw;return true;}catch(e){return false;}}
+  // UNIFIED-PROBE-END resume-arrow-save
    function arrowPersistSay(ok,s){arrowSay(ok?s:"保存失败：当前角色档案未确认写入；本次运行仍保留设置。");}
   // V2.38.37-arrow5 配置合并迁移（只做一次，绝不改变用户现有实际行为）：
   //   总开关 = 原「补箭/续箭」开关（#dsh-arrowen 的存档值 saved.ui["dsh-arrowen"]，缺省=开；兼容旧扁平键 saved.arrowEn）
@@ -23892,7 +24442,9 @@ function createRoItemCapture(env) {
   function arrowUseQuiver(itid){var q=arrowQuiverFor(itid);if(!q)return null;var now=Date.now();if(now-(arrowQuiverAt||0)<3000)return {q:q,used:false};var ok=false;try{ok=useItemById(q.itid);}catch(e){ok=false;}if(ok)arrowQuiverAt=now;return {q:q,used:ok};}
   // V2.36.12 按当前攻击目标换箭：目标 = 助手锁定优先 → 客户端锁定的怪（内挂/手动普攻）→ 最近被我打伤的怪（技能也算）
   function arrowSelfWanted(){try{if(!arrowRules.enabled)return false;var mid=arrowCurrentMid();if(!mid)return false;var list=arrowCandidates(mid,arrowRules),ammo=readEquippedAmmo(),bag=readBagArrows();for(var i=0;i<list.length;i++){if(ammo&&Number(ammo.itid)===list[i].itid&&Number(ammo.count)>0)return true;for(var j=0;j<bag.length;j++){if(Number(bag[j].itid)===list[i].itid)return true;}}return false;}catch(e){return false;}}
-  function arrowSelfTick(now){try{
+  // UNIFIED-PROBE-BEGIN resume-arrow-self ORIGINAL:ICBmdW5jdGlvbiBhcnJvd1NlbGZUaWNrKG5vdyl7dHJ5ew==
+  function arrowSelfTick(now){try{arrowSyncProfile();
+  // UNIFIED-PROBE-END resume-arrow-self
     if(!arrowRules.enabled||arrowTarget||externalAutomationOwns("arrow")||!clientReady())return;
     // V2.38.37-arrow2：与 tickArrow() 同口径 —— readEquippedAmmo() 没给出 known===true（读不到、也证不出空槽）时，
     //   本拍什么都不做：不发 REQ_WEAR_EQUIP、不使用任何箭矢筒/魔法箭矢筒，只写一条中文提示后 return。
@@ -23980,7 +24532,9 @@ function createRoItemCapture(env) {
     arrowSay(arrowStatus);return h;}
   // V2.38.38：开战判据与「补箭触发线」解耦。能开打 = 当前装备的箭矢可读（known===true）且 count>0（能射）；
   //   ARROW_LOW_AMMO(50) 只是「要不要启动补给」的触发线，不再决定能不能开打；总开关只决定动不动手换箭/开袋/用道具。
-  function arrowTargetTick(now){var arrowFightOk=function(a){return !!(a&&a.known===true&&Number(a.count)>0);};var arrowFightSay=function(a,s){arrowReady=arrowFightOk(a);arrowBlocked=!arrowReady;if(s)arrowSay(s);return !arrowReady;};arrowReady=false;arrowBlocked=!!arrowTarget;if(!arrowTarget||!arrowRules.enabled){arrowBlocked=!!arrowTarget&&arrowRules.enabled;return arrowBlocked;}var ammo=readEquippedAmmo();if(!ammo||ammo.known!==true){arrowSay("读不到装备栏当前箭矢，先不动作");return true;}if(typeof apiGuard==="function"&&apiGuard(arrowTarget.owner,"arrow")){arrowSay("阻塞：箭矢租约失效");return true;}if(!arrowManageOn()){arrowSupply=null;arrowPending=null;return arrowFightSay(ammo,Number(ammo.count)>0?("箭矢管理总开关已关闭：当前箭矢 ×"+Number(ammo.count)+"，照常开战（不换箭、不开袋、不用道具）"):"箭矢管理总开关已关闭：当前箭矢 ×0 射不了，且不换箭不补给，先不开战");}var supplyKey="t"+arrowTarget.mid+"@"+arrowTarget.gid;var specific=arrowRules.byMid?arrowRules.byMid[arrowTarget.mid]:null,specificItid=arrowPos(specific&&specific.itid!=null?specific.itid:specific);if(!mobElemName(arrowTarget.mid)&&!specificItid){arrowPending=null;arrowSupply=null;arrowStableKey="";return arrowFightSay(ammo,"读不到目标属性，保持当前箭，不切箭");}var bagT=readBagArrows();if(bagT&&bagT.known===false){arrowSay("读不到背包箭矢，先不动作");return true;}if(arrowSupplyAdvance(now,ammo,bagT,supplyKey)){if(arrowSupply&&arrowSupply.phase==="hold"){arrowBlocked=false;arrowReady=true;return false;}return arrowFightSay(ammo,arrowFightOk(ammo)?("补给进行中：当前箭矢 ×"+Number(ammo.count)+" 仍可射，照常开战"):null);}var eff=arrowEffectiveMid(arrowTarget.mid,arrowTarget.gid,now),midUse=eff.mid||arrowTarget.mid;if(!arrowStableGate("t"+midUse+"@"+arrowTarget.gid,now)){arrowBlocked=true;return true;}var list=arrowCandidates(midUse,arrowRules),bag=readBagArrows(),pick=null,i=0,j=0;for(i=0;i<list.length;i++){if(ammo&&Number(ammo.itid)===list[i].itid&&Number(ammo.count)>0){pick=list[i];break;}for(j=0;j<bag.length;j++){if(Number(bag[j].itid)===list[i].itid){pick={kind:list[i].kind,itid:list[i].itid,index:bag[j].index};break;}}if(pick)break;}if(!list.length){arrowPending=null;arrowBlocked=false;arrowReady=true;arrowSay("未配置箭矢，保持当前箭");return false;}if(ammo&&pick&&Number(ammo.itid)===pick.itid&&Number(ammo.count)>=ARROW_LOW_AMMO){arrowPending=null;arrowBlocked=false;arrowReady=true;arrowSay("已装备"+arrowKindName(pick.kind)+" #"+pick.itid);return false;}
+  // UNIFIED-PROBE-BEGIN resume-arrow-target ORIGINAL:ICBmdW5jdGlvbiBhcnJvd1RhcmdldFRpY2sobm93KXt2YXIgYXJyb3dGaWdodE9rPWZ1bmN0aW9uKGEpe3JldHVybiAhIShhJiZhLmtub3duPT09dHJ1ZSYmTnVtYmVyKGEuY291bnQpPjApO307dmFyIGFycm93RmlnaHRTYXk9ZnVuY3Rpb24oYSxzKXthcnJvd1JlYWR5PWFycm93RmlnaHRPayhhKTthcnJvd0Jsb2NrZWQ9IWFycm93UmVhZHk7aWYocylhcnJvd1NheShzKTtyZXR1cm4gIWFycm93UmVhZHk7fTthcnJvd1JlYWR5PWZhbHNlO2Fycm93QmxvY2tlZD0hIWFycm93VGFyZ2V0O2lmKCFhcnJvd1RhcmdldHx8IWFycm93UnVsZXMuZW5hYmxlZCl7YXJyb3dCbG9ja2VkPSEhYXJyb3dUYXJnZXQmJmFycm93UnVsZXMuZW5hYmxlZDtyZXR1cm4gYXJyb3dCbG9ja2VkO312YXIgYW1tbz1yZWFkRXF1aXBwZWRBbW1vKCk7aWYoIWFtbW98fGFtbW8ua25vd24hPT10cnVlKXthcnJvd1NheSgi6K+75LiN5Yiw6KOF5aSH5qCP5b2T5YmN566t55+i77yM5YWI5LiN5Yqo5L2cIik7cmV0dXJuIHRydWU7fWlmKHR5cGVvZiBhcGlHdWFyZD09PSJmdW5jdGlvbiImJmFwaUd1YXJkKGFycm93VGFyZ2V0Lm93bmVyLCJhcnJvdyIpKXthcnJvd1NheSgi6Zi75aGe77ya566t55+i56ef57qm5aSx5pWIIik7cmV0dXJuIHRydWU7fWlmKCFhcnJvd01hbmFnZU9uKCkpe2Fycm93U3VwcGx5PW51bGw7YXJyb3dQZW5kaW5nPW51bGw7cmV0dXJuIGFycm93RmlnaHRTYXkoYW1tbyxOdW1iZXIoYW1tby5jb3VudCk+MD8oIueureefoueuoeeQhuaAu+W8gOWFs+W3suWFs+mXre+8muW9k+WJjeeureefoiDDlyIrTnVtYmVyKGFtbW8uY291bnQpKyLvvIznhafluLjlvIDmiJjvvIjkuI3mjaLnrq3jgIHkuI3lvIDooovjgIHkuI3nlKjpgZPlhbfvvIkiKToi566t55+i566h55CG5oC75byA5YWz5bey5YWz6Zet77ya5b2T5YmN566t55+iIMOXMCDlsITkuI3kuobvvIzkuJTkuI3mjaLnrq3kuI3ooaXnu5nvvIzlhYjkuI3lvIDmiJgiKTt9dmFyIHN1cHBseUtleT0idCIrYXJyb3dUYXJnZXQubWlkKyJAIithcnJvd1RhcmdldC5naWQ7dmFyIHNwZWNpZmljPWFycm93UnVsZXMuYnlNaWQ/YXJyb3dSdWxlcy5ieU1pZFthcnJvd1RhcmdldC5taWRdOm51bGwsc3BlY2lmaWNJdGlkPWFycm93UG9zKHNwZWNpZmljJiZzcGVjaWZpYy5pdGlkIT1udWxsP3NwZWNpZmljLml0aWQ6c3BlY2lmaWMpO2lmKCFtb2JFbGVtTmFtZShhcnJvd1RhcmdldC5taWQpJiYhc3BlY2lmaWNJdGlkKXthcnJvd1BlbmRpbmc9bnVsbDthcnJvd1N1cHBseT1udWxsO2Fycm93U3RhYmxlS2V5PSIiO3JldHVybiBhcnJvd0ZpZ2h0U2F5KGFtbW8sIuivu+S4jeWIsOebruagh+WxnuaAp++8jOS/neaMgeW9k+WJjeeure+8jOS4jeWIh+eurSIpO312YXIgYmFnVD1yZWFkQmFnQXJyb3dzKCk7aWYoYmFnVCYmYmFnVC5rbm93bj09PWZhbHNlKXthcnJvd1NheSgi6K+75LiN5Yiw6IOM5YyF566t55+i77yM5YWI5LiN5Yqo5L2cIik7cmV0dXJuIHRydWU7fWlmKGFycm93U3VwcGx5QWR2YW5jZShub3csYW1tbyxiYWdULHN1cHBseUtleSkpe2lmKGFycm93U3VwcGx5JiZhcnJvd1N1cHBseS5waGFzZT09PSJob2xkIil7YXJyb3dCbG9ja2VkPWZhbHNlO2Fycm93UmVhZHk9dHJ1ZTtyZXR1cm4gZmFsc2U7fXJldHVybiBhcnJvd0ZpZ2h0U2F5KGFtbW8sYXJyb3dGaWdodE9rKGFtbW8pPygi6KGl57uZ6L+b6KGM5Lit77ya5b2T5YmN566t55+iIMOXIitOdW1iZXIoYW1tby5jb3VudCkrIiDku43lj6/lsITvvIznhafluLjlvIDmiJgiKTpudWxsKTt9dmFyIGVmZj1hcnJvd0VmZmVjdGl2ZU1pZChhcnJvd1RhcmdldC5taWQsYXJyb3dUYXJnZXQuZ2lkLG5vdyksbWlkVXNlPWVmZi5taWR8fGFycm93VGFyZ2V0Lm1pZDtpZighYXJyb3dTdGFibGVHYXRlKCJ0IittaWRVc2UrIkAiK2Fycm93VGFyZ2V0LmdpZCxub3cpKXthcnJvd0Jsb2NrZWQ9dHJ1ZTtyZXR1cm4gdHJ1ZTt9dmFyIGxpc3Q9YXJyb3dDYW5kaWRhdGVzKG1pZFVzZSxhcnJvd1J1bGVzKSxiYWc9cmVhZEJhZ0Fycm93cygpLHBpY2s9bnVsbCxpPTAsaj0wO2ZvcihpPTA7aTxsaXN0Lmxlbmd0aDtpKyspe2lmKGFtbW8mJk51bWJlcihhbW1vLml0aWQpPT09bGlzdFtpXS5pdGlkJiZOdW1iZXIoYW1tby5jb3VudCk+MCl7cGljaz1saXN0W2ldO2JyZWFrO31mb3Ioaj0wO2o8YmFnLmxlbmd0aDtqKyspe2lmKE51bWJlcihiYWdbal0uaXRpZCk9PT1saXN0W2ldLml0aWQpe3BpY2s9e2tpbmQ6bGlzdFtpXS5raW5kLGl0aWQ6bGlzdFtpXS5pdGlkLGluZGV4OmJhZ1tqXS5pbmRleH07YnJlYWs7fX1pZihwaWNrKWJyZWFrO31pZighbGlzdC5sZW5ndGgpe2Fycm93UGVuZGluZz1udWxsO2Fycm93QmxvY2tlZD1mYWxzZTthcnJvd1JlYWR5PXRydWU7YXJyb3dTYXkoIuacqumFjee9rueureefou+8jOS/neaMgeW9k+WJjeeurSIpO3JldHVybiBmYWxzZTt9aWYoYW1tbyYmcGljayYmTnVtYmVyKGFtbW8uaXRpZCk9PT1waWNrLml0aWQmJk51bWJlcihhbW1vLmNvdW50KT49QVJST1dfTE9XX0FNTU8pe2Fycm93UGVuZGluZz1udWxsO2Fycm93QmxvY2tlZD1mYWxzZTthcnJvd1JlYWR5PXRydWU7YXJyb3dTYXkoIuW3suijheWkhyIrYXJyb3dLaW5kTmFtZShwaWNrLmtpbmQpKyIgIyIrcGljay5pdGlkKTtyZXR1cm4gZmFsc2U7fQ==
+  function arrowTargetTick(now){arrowSyncProfile();var arrowFightOk=function(a){return !!(a&&a.known===true&&Number(a.count)>0);};var arrowFightSay=function(a,s){arrowReady=arrowFightOk(a);arrowBlocked=!arrowReady;if(s)arrowSay(s);return !arrowReady;};arrowReady=false;arrowBlocked=!!arrowTarget;if(!arrowTarget||!arrowRules.enabled){arrowBlocked=!!arrowTarget&&arrowRules.enabled;return arrowBlocked;}var ammo=readEquippedAmmo();if(!ammo||ammo.known!==true){arrowSay("读不到装备栏当前箭矢，先不动作");return true;}if(typeof apiGuard==="function"&&apiGuard(arrowTarget.owner,"arrow")){arrowSay("阻塞：箭矢租约失效");return true;}if(!arrowManageOn()){arrowSupply=null;arrowPending=null;return arrowFightSay(ammo,Number(ammo.count)>0?("箭矢管理总开关已关闭：当前箭矢 ×"+Number(ammo.count)+"，照常开战（不换箭、不开袋、不用道具）"):"箭矢管理总开关已关闭：当前箭矢 ×0 射不了，且不换箭不补给，先不开战");}var supplyKey="t"+arrowTarget.mid+"@"+arrowTarget.gid;var specific=arrowRules.byMid?arrowRules.byMid[arrowTarget.mid]:null,specificItid=arrowPos(specific&&specific.itid!=null?specific.itid:specific);if(!mobElemName(arrowTarget.mid)&&!specificItid){arrowPending=null;arrowSupply=null;arrowStableKey="";return arrowFightSay(ammo,"读不到目标属性，保持当前箭，不切箭");}var bagT=readBagArrows();if(bagT&&bagT.known===false){arrowSay("读不到背包箭矢，先不动作");return true;}if(arrowSupplyAdvance(now,ammo,bagT,supplyKey)){if(arrowSupply&&arrowSupply.phase==="hold"){arrowBlocked=false;arrowReady=true;return false;}return arrowFightSay(ammo,arrowFightOk(ammo)?("补给进行中：当前箭矢 ×"+Number(ammo.count)+" 仍可射，照常开战"):null);}var eff=arrowEffectiveMid(arrowTarget.mid,arrowTarget.gid,now),midUse=eff.mid||arrowTarget.mid;if(!arrowStableGate("t"+midUse+"@"+arrowTarget.gid,now)){arrowBlocked=true;return true;}var list=arrowCandidates(midUse,arrowRules),bag=readBagArrows(),pick=null,i=0,j=0;for(i=0;i<list.length;i++){if(ammo&&Number(ammo.itid)===list[i].itid&&Number(ammo.count)>0){pick=list[i];break;}for(j=0;j<bag.length;j++){if(Number(bag[j].itid)===list[i].itid){pick={kind:list[i].kind,itid:list[i].itid,index:bag[j].index};break;}}if(pick)break;}if(!list.length){arrowPending=null;arrowBlocked=false;arrowReady=true;arrowSay("未配置箭矢，保持当前箭");return false;}if(ammo&&pick&&Number(ammo.itid)===pick.itid&&Number(ammo.count)>=ARROW_LOW_AMMO){arrowPending=null;arrowBlocked=false;arrowReady=true;arrowSay("已装备"+arrowKindName(pick.kind)+" #"+pick.itid);return false;}
+  // UNIFIED-PROBE-END resume-arrow-target
 if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,ammo,bag,supplyKey);return arrowFightSay(ammo,arrowFightOk(ammo)?("同种箭低于 "+ARROW_LOW_AMMO+" 支（×"+Number(ammo.count)+"），已启动补给；当前箭仍可射，照常开战"):("同种箭 ×0，已启动补给（未确认成功）；补给期间不开战"));}if(!pick){arrowSupplyStart(list[0].itid,now,ammo,bag,supplyKey);return arrowFightSay(ammo,arrowFightOk(ammo)?("无可用同种箭（当前箭 ×"+Number(ammo.count)+" 仍可射），补给中（未确认成功）"):("当前箭 ×0 且无可用箭矢/箭袋，补给中（未确认成功）：补给不可达时不会静默空转"));}var p=arrowPending;if(p&&p.itid===pick.itid){if(now<p.confirmUntil)return true;if(!p.retryAt){p.retryAt=now+3000;arrowSay("确认超时，3秒后重试");return true;}if(now<p.retryAt)return true;}if(equipArrow(pick.index)){arrowPending={itid:pick.itid,confirmUntil:now+5000,retryAt:0};arrowSay("换箭中"+arrowKindName(pick.kind)+" #"+pick.itid);return true;}arrowSay("阻塞：装备失败");return true;}
   setInterval(function(){var t=Date.now();try{arrowTargetTick(t);}catch(e){}try{arrowSelfTick(t);}catch(e){}},250);
 
@@ -24032,13 +24586,32 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   function apiCurrent(owner,generation){return !!(apiLease&&apiLease.owner===owner&&apiLease.generation===generation);}
   function externalAutomationOwns(scope){return !!(apiLease&&(!scope||apiLease.scopes.indexOf(scope)>=0));}
   function apiEntities(){var out=[];try{var em=CLIENT.EM||(requireDB("Renderer/EntityManager"));if(em&&em.forEach)em.forEach(function(e){if(!e||!e.position)return;var type=Number(e.objecttype),mid=type===5?Number(e._job!=null?e._job:(e.job!=null?e.job:e.mobId)):null;var boss=false;try{var db=getMobDb(),mb=db&&db[mid];boss=!!(mb&&mb.MvpDropsNum>0);}catch(x){}out.push({gid:Number(e.GID),type:type,mid:Number.isFinite(mid)?mid:null,name:String(e.displayName||e.name||(e.display&&e.display.name)||""),position:[Number(e.position[0]),Number(e.position[1])],dead:!!(e.isDeath||e.remove_tick||(e.ACTION&&e.action===e.ACTION.DIE)),isBoss:boss});});}catch(e){}return out;}
-  function apiDialogOpen(){try{var b=requireDB("UI/Components/NpcBox/NpcBox"),m=requireDB("UI/Components/NpcMenu/NpcMenu");return !!((b&&b.ui&&b.ui.is(":visible"))||(m&&m.ui&&m.ui.is(":visible")));}catch(e){return false;}}
-  function apiMenu(){var items=(menuRecon.items||[]).slice(),naid=Number(menuRecon.NAID)||0,time=Number(menuRecon.time)||0,generation=Number(menuRecon.generation)||0;return {naid:naid,items:items,time:time,generation:generation,fingerprint:generation+"@"+time+"|"+naid+"|"+items.map(function(x){return String(x).replace(/\s+/g," ").trim();}).join("|")};}
+  // UNIFIED-PROBE-BEGIN resume-dialog-api ORIGINAL:ICBmdW5jdGlvbiBhcGlEaWFsb2dPcGVuKCl7dHJ5e3ZhciBiPXJlcXVpcmVEQigiVUkvQ29tcG9uZW50cy9OcGNCb3gvTnBjQm94IiksbT1yZXF1aXJlREIoIlVJL0NvbXBvbmVudHMvTnBjTWVudS9OcGNNZW51Iik7cmV0dXJuICEhKChiJiZiLnVpJiZiLnVpLmlzKCI6dmlzaWJsZSIpKXx8KG0mJm0udWkmJm0udWkuaXMoIjp2aXNpYmxlIikpKTt9Y2F0Y2goZSl7cmV0dXJuIGZhbHNlO319
+  function apiDialogOpen(){return apiDialog().open;}
+  function apiUiVisible(comp){try{if(comp&&comp.ui&&comp.ui.is)return !!comp.ui.is(":visible");return !!(comp&&comp._host&&comp._host.style.display!=="none"&&comp.__active!==false);}catch(e){return false;}}
+  function apiUiRoot(comp){try{return comp&&typeof comp.getRoot==="function"?comp.getRoot():comp&&comp.ui&&comp.ui[0];}catch(e){return null;}}
+  function apiDialog(){var out={open:false,naid:0,fingerprint:"",nextAvailable:false,text:""};try{var b=requireDB("UI/Components/NpcBox/NpcBox"),m=requireDB("UI/Components/NpcMenu/NpcMenu"),box=apiUiVisible(b),menu=apiUiVisible(m),row=npcDialog;if(!npcSameScene(row))return out;var naid=box?(Number(b.ownerID)>>>0):(menu&&npcSameScene(menuRecon)?Number(menuRecon.NAID)>>>0:0);if(!naid||naid!==row.naid||!apiEntities().some(function(e){return (Number(e.gid)>>>0)===naid&&(e.type===6||e.type===12);}))return out;var root=apiUiRoot(b),content=root&&root.querySelector&&root.querySelector(".content"),next=root&&root.querySelector&&root.querySelector(".next"),txt=box&&content?String(content.textContent||""):row.text;out.open=box||menu;out.naid=naid;out.text=txt;out.fingerprint=row.oneId+"@"+row.epoch+"|"+row.map+"|"+row.generation+"|"+naid+"|"+txt;out.nextAvailable=!!(box&&!menu&&next&&!next.disabled&&next.style.display!=="none"&&(!window.getComputedStyle||window.getComputedStyle(next).display!=="none")&&out.fingerprint!==apiDialogUsed);}catch(e){}return out;}
+  var apiDialogUsed="",apiDojoState=null;
+  function apiBindDialog(owner,payload){var bad=apiGuard(owner,"dialog"),d=apiDialog(),m=apiMenu(),naid=payload&&arrowPos(payload.naid),fp=payload&&payload.fingerprint;if(bad)return bad;if(apiLease.released)return {ok:false,error:"lease-required"};if(!naid||!d.open||d.naid!==naid||typeof fp!=="string"||!(fp===d.fingerprint||(m.naid===naid&&m.items.length&&fp===m.fingerprint)))return {ok:false,error:"invalid-dialog"};if(apiLease.selectedNpc&&npcSameScene(apiLease.dialogScene)&&apiLease.selectedNpc!==naid)return {ok:false,error:"foreign-npc"};apiLease.selectedNpc=naid;apiLease.dialogScene=npcIdentity();return {ok:true};}
+  function apiNextDialog(owner,payload){var bad=apiGuard(owner,"dialog"),d=apiDialog(),naid=payload&&arrowPos(payload.naid),fp=payload&&payload.fingerprint;if(bad)return bad;if(apiLease.released)return {ok:false,error:"lease-required"};if(!naid||naid!==apiLease.selectedNpc||!npcSameScene(apiLease.dialogScene)||!d.open||naid!==d.naid||fp!==d.fingerprint||!d.nextAvailable)return {ok:false,error:"invalid-dialog-next"};try{npcNextScript(naid);apiDialogUsed=fp;return {ok:true};}catch(e){return {ok:false,error:"next-failed"};}}
+  function apiDojoNpc(){return apiEntities().some(function(e){return (e.type===6||e.type===12)&&/^(喵达人|猫达人|白猫|白猫达人)$/.test(String(e.name).trim());});}
+  // Synthetic Chinese grammar only; unsupported server wording stays unknown.
+  function apiDojoRoundText(text){var s=String(text||"").replace(/\^[0-9a-f]{6}/gi,"").trim(),m=/^(?:(无限挑战|无限道场|道场|道場)\s*[：:]?\s*)?(?:第\s*([1-9]\d*)\s*[轮层波]\s*(开始|出怪|完成|结束|通过)|(?:完成|通过)\s*第?\s*([1-9]\d*)\s*[轮层波])\s*[！!。.]?(?:\s*[,，：:]?\s*(?:(?:还剩|剩余)\s*[:：]?\s*(\d+)\s*(?:只(?:怪物)?|个怪物)?|下一轮即将开始|请(?:领取奖励|领奖)))?\s*[！!。.]?$/.exec(s);if(!m){var left=/^(?:(无限挑战|无限道场|道场|道場)\s*[：:]?\s*)?(?:还剩|剩余)\s*[:：]?\s*(\d+)\s*(?:只(?:怪物)?|个怪物)?[！!。.]?$/.exec(s);return left&&Number.isSafeInteger(Number(left[2]))?{scoped:!!left[1],phase:null,round:null,remaining:Number(left[2])}:null;}var round=Number(m[2]||m[4]),active=/^(开始|出怪)$/.test(m[3]||""),remaining=active?(m[5]!=null?Number(m[5]):null):0;if(!Number.isSafeInteger(round)||(remaining!==null&&!Number.isSafeInteger(remaining)))return null;return {scoped:!!m[1],phase:active?"active":"idle",round:round,remaining:remaining};}
+  function apiDojoNotice(text,announcement){var p=apiDojoRoundText(text),id=npcIdentity(),current=npcSameScene(apiDojoState);if(!announcement||!p||!id.oneId||!id.map||!Number.isFinite(id.epoch)||!clientReady()||(!current&&(!p.phase||(!p.scoped&&!apiDojoNpc()))))return;var state=current?apiDojoState:{round:null,remaining:null};if(current&&state.round!==null&&p.round!==null&&(p.round<state.round||(p.phase==="idle"&&p.round!==state.round)||(p.phase==="active"&&p.round===state.round&&(state.phase==="idle"||state.phase==="settle"))))return;if(p.phase){state.phase=p.phase;state.round=p.round;state.remaining=p.remaining;}else state.remaining=p.remaining;state.oneId=id.oneId;state.epoch=id.epoch;state.map=id.map;state.confirmed=true;state.source="assistant-notice:announcement";apiDojoState=state;}
+  function apiDojoSnapshot(){var d=apiDialog(),m=apiMenu(),known=npcSameScene(apiDojoState),cat=d.open&&apiEntities().some(function(e){return (Number(e.gid)>>>0)===d.naid&&/^(喵达人|猫达人|白猫|白猫达人)$/.test(String(e.name).trim());}),settle=m.items.some(function(x){return /^(领取奖励|领奖)$/.test(String(x).trim());}),idle=m.items.some(function(x){return /^(继续挑战|下一轮)$/.test(String(x).trim());});if(cat&&m.naid===d.naid&&(settle||idle)&&(!known||apiDojoState.menuFingerprint!==m.fingerprint)){var id=npcIdentity(),parsed=apiDojoRoundText(d.text),round=known?apiDojoState.round:null,remaining=known?apiDojoState.remaining:null;if(parsed&&parsed.phase==="idle"&&(round===null||parsed.round===round)){round=parsed.round;remaining=parsed.remaining;}apiDojoState={confirmed:true,oneId:id.oneId,epoch:id.epoch,map:id.map,phase:settle?"settle":"idle",round:round,remaining:remaining,source:"current-named-dojo-npc-menu",menuFingerprint:m.fingerprint};known=true;}return known?{confirmed:true,map:apiDojoState.map,phase:apiDojoState.phase||"unknown",round:apiDojoState.round,remaining:apiDojoState.remaining,source:apiDojoState.source}:{confirmed:false,map:String(getMapName()||""),phase:"unknown",round:null,remaining:null,source:null};}
+  // UNIFIED-PROBE-END resume-dialog-api
+  // UNIFIED-PROBE-BEGIN resume-menu-api ORIGINAL:ICBmdW5jdGlvbiBhcGlNZW51KCl7dmFyIGl0ZW1zPShtZW51UmVjb24uaXRlbXN8fFtdKS5zbGljZSgpLG5haWQ9TnVtYmVyKG1lbnVSZWNvbi5OQUlEKXx8MCx0aW1lPU51bWJlcihtZW51UmVjb24udGltZSl8fDAsZ2VuZXJhdGlvbj1OdW1iZXIobWVudVJlY29uLmdlbmVyYXRpb24pfHwwO3JldHVybiB7bmFpZDpuYWlkLGl0ZW1zOml0ZW1zLHRpbWU6dGltZSxnZW5lcmF0aW9uOmdlbmVyYXRpb24sZmluZ2VycHJpbnQ6Z2VuZXJhdGlvbisiQCIrdGltZSsifCIrbmFpZCsifCIraXRlbXMubWFwKGZ1bmN0aW9uKHgpe3JldHVybiBTdHJpbmcoeCkucmVwbGFjZSgvXHMrL2csIiAiKS50cmltKCk7fSkuam9pbigifCIpfTt9
+  function apiMenu(){var live=npcSameScene(menuRecon)&&npcSameScene(npcDialog)&&npcDialog.naid===Number(menuRecon.NAID)&&npcDialog.generation===menuRecon.dialogGeneration&&apiUiVisible(requireDB("UI/Components/NpcMenu/NpcMenu")),items=live?(menuRecon.items||[]).slice():[],naid=live?Number(menuRecon.NAID)||0:0,time=live?Number(menuRecon.time)||0:0,generation=Number(menuRecon.generation)||0;return {naid:naid,items:items,time:time,generation:generation,fingerprint:generation+"@"+time+"|"+naid+"|"+items.map(function(x){return String(x).replace(/\s+/g," ").trim();}).join("|")};}
+  // UNIFIED-PROBE-END resume-menu-api
   function apiEquippedArrowItid(){try{var am=readEquippedAmmo();return am&&Number(am.count)>0&&Number(am.itid)>0?Number(am.itid):null;}catch(e){return null;}}
-  function apiSnapshot(owner){if(!apiLease||apiLease.owner!==owner)return null;var me=CLIENT.SS&&CLIENT.SS.Entity,entities=apiEntities(),target=zLock&&gidInt(zLock.gid),menu=apiMenu(),map=getMapName()||"";return {protocol:API_PROTOCOL,ready:clientReady(),map:map,player:me?{gid:Number(me.GID),position:me.position?[Number(me.position[0]),Number(me.position[1])]:null,hp:me.life&&Number(me.life.hp),maxHp:me.life&&Number(me.life.hp_max)}:null,mobs:entities.filter(function(e){return e.type===5&&!e.dead;}),npcs:entities.filter(function(e){return e.type===6||e.type===12;}),target:target||null,inDojoMap:/dojo|challenge|trial|道场|道場/i.test(map),dialogOpen:apiDialogOpen(),menu:menu,battleState:npBattleState(),busy:{assistantCombat:!!zRunning,bagClean:!!(bagClean&&bagClean.busy),movement:!!moveXY.busy},arrow:{enabled:arrowRules.enabled,status:arrowStatus,blocked:arrowBlocked,ready:arrowReady,target:arrowTarget?{mid:arrowTarget.mid,gid:arrowTarget.gid}:null,defaultItid:arrowPos(arrowRules.defaultItid),currentItid:apiEquippedArrowItid()}};}
+  // UNIFIED-PROBE-BEGIN resume-snapshot ORIGINAL:ICBmdW5jdGlvbiBhcGlTbmFwc2hvdChvd25lcil7aWYoIWFwaUxlYXNlfHxhcGlMZWFzZS5vd25lciE9PW93bmVyKXJldHVybiBudWxsO3ZhciBtZT1DTElFTlQuU1MmJkNMSUVOVC5TUy5FbnRpdHksZW50aXRpZXM9YXBpRW50aXRpZXMoKSx0YXJnZXQ9ekxvY2smJmdpZEludCh6TG9jay5naWQpLG1lbnU9YXBpTWVudSgpLG1hcD1nZXRNYXBOYW1lKCl8fCIiO3JldHVybiB7cHJvdG9jb2w6QVBJX1BST1RPQ09MLHJlYWR5OmNsaWVudFJlYWR5KCksbWFwOm1hcCxwbGF5ZXI6bWU/e2dpZDpOdW1iZXIobWUuR0lEKSxwb3NpdGlvbjptZS5wb3NpdGlvbj9bTnVtYmVyKG1lLnBvc2l0aW9uWzBdKSxOdW1iZXIobWUucG9zaXRpb25bMV0pXTpudWxsLGhwOm1lLmxpZmUmJk51bWJlcihtZS5saWZlLmhwKSxtYXhIcDptZS5saWZlJiZOdW1iZXIobWUubGlmZS5ocF9tYXgpfTpudWxsLG1vYnM6ZW50aXRpZXMuZmlsdGVyKGZ1bmN0aW9uKGUpe3JldHVybiBlLnR5cGU9PT01JiYhZS5kZWFkO30pLG5wY3M6ZW50aXRpZXMuZmlsdGVyKGZ1bmN0aW9uKGUpe3JldHVybiBlLnR5cGU9PT02fHxlLnR5cGU9PT0xMjt9KSx0YXJnZXQ6dGFyZ2V0fHxudWxsLGluRG9qb01hcDovZG9qb3xjaGFsbGVuZ2V8dHJpYWx86YGT5Zy6fOmBk+WgtC9pLnRlc3QobWFwKSxkaWFsb2dPcGVuOmFwaURpYWxvZ09wZW4oKSxtZW51Om1lbnUsYmF0dGxlU3RhdGU6bnBCYXR0bGVTdGF0ZSgpLGJ1c3k6e2Fzc2lzdGFudENvbWJhdDohIXpSdW5uaW5nLGJhZ0NsZWFuOiEhKGJhZ0NsZWFuJiZiYWdDbGVhbi5idXN5KSxtb3ZlbWVudDohIW1vdmVYWS5idXN5fSxhcnJvdzp7ZW5hYmxlZDphcnJvd1J1bGVzLmVuYWJsZWQsc3RhdHVzOmFycm93U3RhdHVzLGJsb2NrZWQ6YXJyb3dCbG9ja2VkLHJlYWR5OmFycm93UmVhZHksdGFyZ2V0OmFycm93VGFyZ2V0P3ttaWQ6YXJyb3dUYXJnZXQubWlkLGdpZDphcnJvd1RhcmdldC5naWR9Om51bGwsZGVmYXVsdEl0aWQ6YXJyb3dQb3MoYXJyb3dSdWxlcy5kZWZhdWx0SXRpZCksY3VycmVudEl0aWQ6YXBpRXF1aXBwZWRBcnJvd0l0aWQoKX19O30=
+  function apiSnapshot(owner){if(!apiLease||apiLease.owner!==owner)return null;arrowSyncProfile();var identity=npcIdentity(),dialog=apiDialog(),dojo=apiDojoSnapshot(),me=CLIENT.SS&&CLIENT.SS.Entity,entities=apiEntities(),target=zLock&&gidInt(zLock.gid),menu=apiMenu(),map=getMapName()||"";return {protocol:API_PROTOCOL,ready:clientReady(),map:map,player:me?{gid:Number(me.GID),position:me.position?[Number(me.position[0]),Number(me.position[1])]:null,hp:me.life&&Number(me.life.hp),maxHp:me.life&&Number(me.life.hp_max)}:null,mobs:entities.filter(function(e){return e.type===5&&!e.dead;}),npcs:entities.filter(function(e){return e.type===6||e.type===12;}),target:target||null,identity:{oneId:identity.oneId||null,epoch:identity.epoch},dojo:dojo,inDojoMap:dojo.confirmed,dialog:dialog,dialogOpen:dialog.open,menu:menu,battleState:npBattleState(),busy:{assistantCombat:!!zRunning,bagClean:!!(bagClean&&bagClean.busy),movement:!!moveXY.busy},arrow:{enabled:arrowRules.enabled,masterEnabled:arrowProfileTrusted&&arrowManageOn(),selectEnabled:arrowRules.enabled,configuredByElem:JSON.parse(JSON.stringify(arrowRules.byElem)),configuredByMid:JSON.parse(JSON.stringify(arrowRules.byMid)),profileKey:arrowProfileKey,profileTrusted:arrowProfileTrusted,evaluated:!!arrowTarget,status:arrowStatus,blocked:arrowBlocked,ready:arrowReady,target:arrowTarget?{mid:arrowTarget.mid,gid:arrowTarget.gid}:null,defaultItid:arrowPos(arrowRules.defaultItid),currentItid:apiEquippedArrowItid()}};}
+  // UNIFIED-PROBE-END resume-snapshot
   // V2.38.13 FIX-14：release 后原属主在 250ms 窗口内重新 acquire，必须复位 released / 按新请求刷新 scopes / 递增代次；
   //   否则会拿到旧代次旧 scopes 且 released 仍为真，下一帧 apiBattleTick 会把刚到手的租约当成已释放的旧租约清空。
-  function apiAcquire(owner,scopes){if(!apiOwner(owner)||!apiScopes(scopes))return {ok:false,error:"invalid-owner-or-scopes"};if(!clientReady())return {ok:false,error:"client-not-ready"};if(apiLease&&apiLease.owner!==owner)return {ok:false,error:"owned"};if(apiLease){if(!apiLease.released)return {ok:true,generation:apiLease.generation};apiLease.released=false;apiLease.scopes=scopes.slice();apiLease.generation=++apiGeneration;return {ok:true,generation:apiLease.generation};}if(zRunning||bagClean&&bagClean.busy)return {ok:false,error:"assistant-busy"};apiLease={owner:owner,scopes:scopes.slice(),generation:++apiGeneration,selectedNpc:0,released:false,battle:{state:"none",initial:npBattleState()}};apiEmit("state",{owner:owner});return {ok:true,generation:apiLease.generation};}
+  // UNIFIED-PROBE-BEGIN resume-lease-dialog ORIGINAL:ICBmdW5jdGlvbiBhcGlBY3F1aXJlKG93bmVyLHNjb3Blcyl7aWYoIWFwaU93bmVyKG93bmVyKXx8IWFwaVNjb3BlcyhzY29wZXMpKXJldHVybiB7b2s6ZmFsc2UsZXJyb3I6ImludmFsaWQtb3duZXItb3Itc2NvcGVzIn07aWYoIWNsaWVudFJlYWR5KCkpcmV0dXJuIHtvazpmYWxzZSxlcnJvcjoiY2xpZW50LW5vdC1yZWFkeSJ9O2lmKGFwaUxlYXNlJiZhcGlMZWFzZS5vd25lciE9PW93bmVyKXJldHVybiB7b2s6ZmFsc2UsZXJyb3I6Im93bmVkIn07aWYoYXBpTGVhc2Upe2lmKCFhcGlMZWFzZS5yZWxlYXNlZClyZXR1cm4ge29rOnRydWUsZ2VuZXJhdGlvbjphcGlMZWFzZS5nZW5lcmF0aW9ufTthcGlMZWFzZS5yZWxlYXNlZD1mYWxzZTthcGlMZWFzZS5zY29wZXM9c2NvcGVzLnNsaWNlKCk7YXBpTGVhc2UuZ2VuZXJhdGlvbj0rK2FwaUdlbmVyYXRpb247cmV0dXJuIHtvazp0cnVlLGdlbmVyYXRpb246YXBpTGVhc2UuZ2VuZXJhdGlvbn07fWlmKHpSdW5uaW5nfHxiYWdDbGVhbiYmYmFnQ2xlYW4uYnVzeSlyZXR1cm4ge29rOmZhbHNlLGVycm9yOiJhc3Npc3RhbnQtYnVzeSJ9O2FwaUxlYXNlPXtvd25lcjpvd25lcixzY29wZXM6c2NvcGVzLnNsaWNlKCksZ2VuZXJhdGlvbjorK2FwaUdlbmVyYXRpb24sc2VsZWN0ZWROcGM6MCxyZWxlYXNlZDpmYWxzZSxiYXR0bGU6e3N0YXRlOiJub25lIixpbml0aWFsOm5wQmF0dGxlU3RhdGUoKX19O2FwaUVtaXQoInN0YXRlIix7b3duZXI6b3duZXJ9KTtyZXR1cm4ge29rOnRydWUsZ2VuZXJhdGlvbjphcGlMZWFzZS5nZW5lcmF0aW9ufTt9
+  function apiAcquire(owner,scopes){if(!apiOwner(owner)||!apiScopes(scopes))return {ok:false,error:"invalid-owner-or-scopes"};if(!clientReady())return {ok:false,error:"client-not-ready"};if(apiLease&&apiLease.owner!==owner)return {ok:false,error:"owned"};if(apiLease){if(!apiLease.released)return {ok:true,generation:apiLease.generation};apiLease.released=false;apiLease.selectedNpc=0;apiLease.dialogScene=null;apiLease.scopes=scopes.slice();apiLease.generation=++apiGeneration;return {ok:true,generation:apiLease.generation};}if(zRunning||bagClean&&bagClean.busy)return {ok:false,error:"assistant-busy"};apiLease={owner:owner,scopes:scopes.slice(),generation:++apiGeneration,selectedNpc:0,released:false,battle:{state:"none",initial:npBattleState()}};apiEmit("state",{owner:owner});return {ok:true,generation:apiLease.generation};}
+  // UNIFIED-PROBE-END resume-lease-dialog
   function apiGuard(owner,scope){if(!clientReady())return {ok:false,error:"client-not-ready"};if(!apiHas(owner,scope))return {ok:false,error:"lease-required"};return null;}
   function apiBattleTargetEntity(target){var mid=target&&arrowPos(target.mid),gid=target&&arrowPos(target.gid);if(!mid||!gid)return null;var rows=apiEntities();for(var i=0;i<rows.length;i++){var e=rows[i];if(e.gid===gid&&e.type===5&&!e.dead&&e.mid===mid)return e;}return null;}
   function apiClearBattleTarget(owner){var bad=apiGuard(owner,"battle");if(bad)return bad;if(apiBattleTarget&&apiBattleTarget.owner===owner){var old=apiBattleTarget,suppressed=apiBattleSuppressed;apiBattleTarget=null;apiBattleSuppressed={};if(old.owner===DOJO_OWNER){for(var id in suppressed)npOnlyTarget(id,lockList[String(id)]?1:0);npOnlyTarget(old.mid,lockList[String(old.mid)]?1:0);npSyncTargets();}}return {ok:true};}
@@ -24050,7 +24623,9 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   function apiContact(owner,gid){var bad=apiGuard(owner,"dialog");gid=arrowPos(gid);if(bad)return bad;if(!gid)return {ok:false,error:"invalid-gid"};var found=apiEntities().filter(function(e){return e.gid===gid&&(e.type===6||e.type===12);})[0];if(!found)return {ok:false,error:"npc-not-found"};try{var p=new (czp("CONTACTNPC"))();  // UNIFIED-PROBE-BEGIN api-contact-source ORIGINAL:cC5OQUlEPWdpZDtwLnR5cGU9MTtDTElFTlQuTk0uc2VuZFBhY2tldChwKTs=
 p.NAID=gid;p.type=1;upTag(p,"assistant:apiContact");CLIENT.NM.sendPacket(p);
   // UNIFIED-PROBE-END api-contact-source INLINE
-apiLease.selectedNpc=gid;lastTalkNpc={GID:gid,name:found.name,pos:found.position};return {ok:true};}catch(e){return {ok:false,error:"contact-failed"};}}
+  // UNIFIED-PROBE-BEGIN resume-contact-scene ORIGINAL:YXBpTGVhc2Uuc2VsZWN0ZWROcGM9Z2lkO2xhc3RUYWxrTnBjPXtHSUQ6Z2lkLG5hbWU6Zm91bmQubmFtZSxwb3M6Zm91bmQucG9zaXRpb259O3JldHVybiB7b2s6dHJ1ZX07fWNhdGNoKGUpe3JldHVybiB7b2s6ZmFsc2UsZXJyb3I6ImNvbnRhY3QtZmFpbGVkIn07fX0=
+apiLease.selectedNpc=gid;apiLease.dialogScene=npcIdentity();lastTalkNpc={GID:gid,name:found.name,pos:found.position,oneId:apiLease.dialogScene.oneId,epoch:apiLease.dialogScene.epoch,map:apiLease.dialogScene.map};return {ok:true};}catch(e){return {ok:false,error:"contact-failed"};}}
+  // UNIFIED-PROBE-END resume-contact-scene
   function apiWalk(owner,payload){var bad=apiGuard(owner,"movement"),x=payload&&Number(payload.x),y=payload&&Number(payload.y);if(bad)return bad;if(!payload||!Number.isInteger(x)||!Number.isInteger(y))return {ok:false,error:"invalid-position"};return {ok:!!walkToXY(x,y,null,"dsh-arrow-rules-status")};}
   // A2 契约 v2：对外传送（只复用 tpSend，不新造发包逻辑；失败一律 {ok:false,error}）
   function apiTeleport(owner,payload){
@@ -24068,16 +24643,23 @@ apiLease.selectedNpc=gid;lastTalkNpc={GID:gid,name:found.name,pos:found.position
   }
   // V2.38.13：把服务器 2634 回执（0 受理 / 2 没卷轴或会员卡 / 3 地图不支持 / 4 未知地图）如实暴露成 error（带 code 与原文），只读，不发包
   function apiTeleportResult(owner){var bad=apiGuard(owner,"movement");if(bad&&bad.error==="lease-required")bad=apiGuard(owner,"fly");if(bad)return {ok:false,error:"lease-required"};try{if(tpLast.code==null)return {ok:null,code:null,error:"no-ack"};var cn=TP_ACK_WHY[tpLast.code]||"未知代码";if(tpLast.code===0)return {ok:true,code:0,error:""};return {ok:false,code:tpLast.code,error:"code="+tpLast.code+"（"+cn+"）"};}catch(e){return {ok:null,code:null,error:"no-ack"};}}
-  function apiChoose(owner,payload){var bad=apiGuard(owner,"dialog"),menu=apiMenu(),naid=payload&&arrowPos(payload.naid),index=payload&&Number(payload.index),fp=payload&&payload.fingerprint;if(bad)return bad;if(!payload||!naid||!Number.isInteger(index)||index<0||index>=menu.items.length||naid!==menu.naid||naid!==apiLease.selectedNpc||typeof fp!=="string"||fp!==menu.fingerprint)return {ok:false,error:"invalid-menu"};if(fp===apiMenuUsed)return {ok:false,error:"menu-already-used"};apiMenuUsed=fp;try{var p=new (czp("CHOOSE_MENU"))();  // UNIFIED-PROBE-BEGIN api-choose-source ORIGINAL:cC5OQUlEPW5haWQ7cC5udW09aW5kZXgrMTtDTElFTlQuTk0uc2VuZFBhY2tldChwKTs=
+  // UNIFIED-PROBE-BEGIN resume-choose-scene ORIGINAL:ICBmdW5jdGlvbiBhcGlDaG9vc2Uob3duZXIscGF5bG9hZCl7dmFyIGJhZD1hcGlHdWFyZChvd25lciwiZGlhbG9nIiksbWVudT1hcGlNZW51KCksbmFpZD1wYXlsb2FkJiZhcnJvd1BvcyhwYXlsb2FkLm5haWQpLGluZGV4PXBheWxvYWQmJk51bWJlcihwYXlsb2FkLmluZGV4KSxmcD1wYXlsb2FkJiZwYXlsb2FkLmZpbmdlcnByaW50O2lmKGJhZClyZXR1cm4gYmFkO2lmKCFwYXlsb2FkfHwhbmFpZHx8IU51bWJlci5pc0ludGVnZXIoaW5kZXgpfHxpbmRleDwwfHxpbmRleD49bWVudS5pdGVtcy5sZW5ndGh8fG5haWQhPT1tZW51Lm5haWR8fG5haWQhPT1hcGlMZWFzZS5zZWxlY3RlZE5wY3x8dHlwZW9mIGZwIT09InN0cmluZyJ8fGZwIT09bWVudS5maW5nZXJwcmludClyZXR1cm4ge29rOmZhbHNlLGVycm9yOiJpbnZhbGlkLW1lbnUifTtpZihmcD09PWFwaU1lbnVVc2VkKXJldHVybiB7b2s6ZmFsc2UsZXJyb3I6Im1lbnUtYWxyZWFkeS11c2VkIn07YXBpTWVudVVzZWQ9ZnA7dHJ5e3ZhciBwPW5ldyAoY3pwKCJDSE9PU0VfTUVOVSIpKSgpOw==
+  function apiChoose(owner,payload){var bad=apiGuard(owner,"dialog"),menu=apiMenu(),d=apiDialog(),naid=payload&&arrowPos(payload.naid),index=payload&&Number(payload.index),fp=payload&&payload.fingerprint;if(bad)return bad;if(apiLease.released||!npcSameScene(apiLease.dialogScene)||!payload||!naid||!d.open||d.naid!==naid||!Number.isInteger(index)||index<0||index>=menu.items.length||naid!==menu.naid||naid!==apiLease.selectedNpc||typeof fp!=="string"||fp!==menu.fingerprint)return {ok:false,error:"invalid-menu"};if(fp===apiMenuUsed)return {ok:false,error:"menu-already-used"};apiMenuUsed=fp;try{var p=new (czp("CHOOSE_MENU"))();
+  // UNIFIED-PROBE-END resume-choose-scene INLINE
+  // UNIFIED-PROBE-BEGIN api-choose-source ORIGINAL:cC5OQUlEPW5haWQ7cC5udW09aW5kZXgrMTtDTElFTlQuTk0uc2VuZFBhY2tldChwKTs=
 p.NAID=naid;p.num=index+1;upTag(p,"assistant:apiChoose");CLIENT.NM.sendPacket(p);
   // UNIFIED-PROBE-END api-choose-source INLINE
 return {ok:true};}catch(e){return {ok:false,error:"choose-failed"};}}
   function apiBattle(owner,on){var bad=apiGuard(owner,"battle");if(bad)return bad;if(typeof on!=="boolean")return {ok:false,error:"invalid-payload"};apiBattleTick();var b=apiLease.battle,s=npBattleState(),generation=apiLease.generation,current=function(){return apiCurrent(owner,generation);};if(on){if(typeof apiCombat!=="undefined"&&apiCombat)return {ok:false,error:"combat-owned"};if(s!==false)return {ok:true,result:s===true?"preexisting":"unknown"};if(b.state==="pending-on"||b.state==="owned")return {ok:true,result:b.state};var r=npRequestBattle(true,"external:"+owner,true,current);if(r==="sent"||r==="queued")b.state="pending-on";return {ok:r!=="failed",result:r};}if(b.state!=="owned")return {ok:true,result:"not-owned"};var r2=npRequestBattle(false,"external:"+owner,true,current);if(r2==="sent"||r2==="queued")b.state="pending-off";return {ok:r2!=="failed",result:r2};}
   function apiAssistCombat(owner,on){var bad=apiGuard(owner,"battle");if(bad)return bad;if(typeof on!=="boolean")return {ok:false,error:"invalid-payload"};if(on){var r=apiCombatStart(owner);if(!r||r.ok!==true)return r||{ok:false,error:"combat-start-failed"};return {ok:true,result:r.result};}apiCombatStop();return {ok:true,result:"stopped"};}
-  function apiSetArrow(owner,target){var bad=apiGuard(owner,"arrow"),mid=target&&arrowPos(target.mid),gid=target&&arrowPos(target.gid);if(bad)return bad;if(!target||!mid||!gid)return {ok:false,error:"invalid-target"};if(!arrowTarget||arrowTarget.owner!==owner||arrowTarget.mid!==mid||arrowTarget.gid!==gid){arrowPending=null;arrowSupply=null;arrowSelfPending=null;}arrowTarget={owner:owner,mid:mid,gid:gid};arrowTargetTick(Date.now());return {ok:true,enabled:arrowRules.enabled,blocked:arrowBlocked,ready:arrowReady,status:arrowStatus};}
+  // UNIFIED-PROBE-BEGIN resume-set-arrow-sync ORIGINAL:ICBmdW5jdGlvbiBhcGlTZXRBcnJvdyhvd25lcix0YXJnZXQpe3ZhciBiYWQ9YXBpR3VhcmQob3duZXIsImFycm93IiksbWlkPXRhcmdldCYmYXJyb3dQb3ModGFyZ2V0Lm1pZCksZ2lkPXRhcmdldCYmYXJyb3dQb3ModGFyZ2V0LmdpZCk7aWYoYmFkKXJldHVybiBiYWQ7aWYoIXRhcmdldHx8IW1pZHx8IWdpZClyZXR1cm4ge29rOmZhbHNlLGVycm9yOiJpbnZhbGlkLXRhcmdldCJ9O2lmKCFhcnJvd1RhcmdldHx8YXJyb3dUYXJnZXQub3duZXIhPT1vd25lcnx8YXJyb3dUYXJnZXQubWlkIT09bWlkfHxhcnJvd1RhcmdldC5naWQhPT1naWQpe2Fycm93UGVuZGluZz1udWxsO2Fycm93U3VwcGx5PW51bGw7YXJyb3dTZWxmUGVuZGluZz1udWxsO31hcnJvd1RhcmdldD17b3duZXI6b3duZXIsbWlkOm1pZCxnaWQ6Z2lkfTthcnJvd1RhcmdldFRpY2soRGF0ZS5ub3coKSk7cmV0dXJuIHtvazp0cnVlLGVuYWJsZWQ6YXJyb3dSdWxlcy5lbmFibGVkLGJsb2NrZWQ6YXJyb3dCbG9ja2VkLHJlYWR5OmFycm93UmVhZHksc3RhdHVzOmFycm93U3RhdHVzfTt9
+  function apiSetArrow(owner,target){var bad=apiGuard(owner,"arrow"),mid=target&&arrowPos(target.mid),gid=target&&arrowPos(target.gid);if(bad)return bad;if(!target||!mid||!gid)return {ok:false,error:"invalid-target"};arrowSyncProfile();if(!arrowTarget||arrowTarget.owner!==owner||arrowTarget.mid!==mid||arrowTarget.gid!==gid){arrowPending=null;arrowSupply=null;arrowSelfPending=null;}arrowTarget={owner:owner,mid:mid,gid:gid};arrowTargetTick(Date.now());return {ok:true,enabled:arrowRules.enabled,blocked:arrowBlocked,ready:arrowReady,status:arrowStatus};}
+  // UNIFIED-PROBE-END resume-set-arrow-sync
   function apiClearArrow(owner){var bad=apiGuard(owner,"arrow");if(bad)return bad;if(arrowTarget&&arrowTarget.owner===owner)arrowTarget=null;arrowPending=null;arrowSupply=null;arrowSelfPending=null;arrowReady=false;arrowBlocked=false;return {ok:true};}
   function apiFly(owner,payload){var bad=apiGuard(owner,"fly");if(bad)return bad;if(!payload||typeof payload.reason!=="string"||!payload.reason.trim()||payload.reason.length>120)return {ok:false,error:"invalid-payload"};return {ok:!!doFly()};}
-  function apiNoticeWatch(){if(apiNoticeObserver||typeof MutationObserver!=="function"||!document.body)return;apiNoticeObserver=new MutationObserver(function(ms){ms.forEach(function(m){Array.prototype.forEach.call(m.addedNodes||[],function(n){var el=n&&n.nodeType===1?n:n&&n.parentElement;if(!el||!el.closest)return;var box=el.closest('[id*="Chat"],[class*="Chat"],[id*="chat"],[class*="chat"],[id*="Announce"],[class*="Announce"],[id*="announce"],[class*="announce"]');var text=n&&n.textContent&&String(n.textContent).trim();if(box&&text)apiEmit("notice",{text:text});});});});apiNoticeObserver.observe(document.body,{childList:true,subtree:true});}
+  // UNIFIED-PROBE-BEGIN resume-dojo-observer ORIGINAL:ICBmdW5jdGlvbiBhcGlOb3RpY2VXYXRjaCgpe2lmKGFwaU5vdGljZU9ic2VydmVyfHx0eXBlb2YgTXV0YXRpb25PYnNlcnZlciE9PSJmdW5jdGlvbiJ8fCFkb2N1bWVudC5ib2R5KXJldHVybjthcGlOb3RpY2VPYnNlcnZlcj1uZXcgTXV0YXRpb25PYnNlcnZlcihmdW5jdGlvbihtcyl7bXMuZm9yRWFjaChmdW5jdGlvbihtKXtBcnJheS5wcm90b3R5cGUuZm9yRWFjaC5jYWxsKG0uYWRkZWROb2Rlc3x8W10sZnVuY3Rpb24obil7dmFyIGVsPW4mJm4ubm9kZVR5cGU9PT0xP246biYmbi5wYXJlbnRFbGVtZW50O2lmKCFlbHx8IWVsLmNsb3Nlc3QpcmV0dXJuO3ZhciBib3g9ZWwuY2xvc2VzdCgnW2lkKj0iQ2hhdCJdLFtjbGFzcyo9IkNoYXQiXSxbaWQqPSJjaGF0Il0sW2NsYXNzKj0iY2hhdCJdLFtpZCo9IkFubm91bmNlIl0sW2NsYXNzKj0iQW5ub3VuY2UiXSxbaWQqPSJhbm5vdW5jZSJdLFtjbGFzcyo9ImFubm91bmNlIl0nKTt2YXIgdGV4dD1uJiZuLnRleHRDb250ZW50JiZTdHJpbmcobi50ZXh0Q29udGVudCkudHJpbSgpO2lmKGJveCYmdGV4dClhcGlFbWl0KCJub3RpY2UiLHt0ZXh0OnRleHR9KTt9KTt9KTt9KTthcGlOb3RpY2VPYnNlcnZlci5vYnNlcnZlKGRvY3VtZW50LmJvZHkse2NoaWxkTGlzdDp0cnVlLHN1YnRyZWU6dHJ1ZX0pO30=
+  function apiNoticeWatch(){if(apiNoticeObserver||typeof MutationObserver!=="function"||!document.body)return;apiNoticeObserver=new MutationObserver(function(ms){ms.forEach(function(m){Array.prototype.forEach.call(m.addedNodes||[],function(n){var el=n&&n.nodeType===1?n:n&&n.parentElement;if(!el||!el.closest)return;var box=el.closest('[id*="Chat"],[class*="Chat"],[id*="chat"],[class*="chat"],[id*="Announce"],[class*="Announce"],[id*="announce"],[class*="announce"]');var text=n&&n.textContent&&String(n.textContent).trim();if(box&&text){apiDojoNotice(text,/announce/i.test(String(box.id||"")+" "+String(box.className||"")));apiEmit("notice",{text:text});}});});});apiNoticeObserver.observe(document.body,{childList:true,subtree:true});}
+  // UNIFIED-PROBE-END resume-dojo-observer
 
 
   // ================= V2.36.0 不可丢物品出口策略 / pushplus / 窗口注册门面 =================
@@ -24139,14 +24721,17 @@ return {ok:true};}catch(e){return {ok:false,error:"choose-failed"};}}
     }catch(e){return false;} // 未配置 / fetch 失败 / 被拦截：一律静默
   }
   // 窗口注册入口：薄封装 fwReg / fwMakeWin / fwClose，外部脚本经门面即可复用本脚本浮窗系统
+  // UNIFIED-PROBE-BEGIN resume-script-window ORIGINAL:ICBmdW5jdGlvbiBhcGlSZWdpc3RlcldpbmRvdyhpZCx0aXRsZSxnZXRFbCl7CiAgICB0cnl7CiAgICAgIGlmKHR5cGVvZiBpZCE9PSJzdHJpbmcifHwhL15bQS1aYS16MC05Xy1dezEsMzJ9JC8udGVzdChpZCkpcmV0dXJuIHtvazpmYWxzZSxlcnJvcjoiaW52YWxpZC1pZCJ9OwogICAgICBpZih0eXBlb2YgZ2V0RWwhPT0iZnVuY3Rpb24iKXJldHVybiB7b2s6ZmFsc2UsZXJyb3I6ImludmFsaWQtZ2V0dGVyIn07CiAgICAgIGZ3UmVnKGlkLFN0cmluZyh0aXRsZXx8aWQpLGdldEVsKTsKICAgICAgcmV0dXJuIHtvazp0cnVlLGlkOmlkfTsKICAgIH1jYXRjaChlKXtyZXR1cm4ge29rOmZhbHNlLGVycm9yOiJyZWdpc3Rlci1mYWlsZWQifTt9CiAgfQ==
   function apiRegisterWindow(id,title,getEl){
     try{
       if(typeof id!=="string"||!/^[A-Za-z0-9_-]{1,32}$/.test(id))return {ok:false,error:"invalid-id"};
       if(typeof getEl!=="function")return {ok:false,error:"invalid-getter"};
       fwReg(id,String(title||id),getEl);
+      apiScriptWindows[id]={sourceId:scrUsExecutingId||"",title:String(title||id)};try{scrUsRenderList();}catch(eList){}
       return {ok:true,id:id};
     }catch(e){return {ok:false,error:"register-failed"};}
   }
+  // UNIFIED-PROBE-END resume-script-window
   function apiOpenWindow(id){
     try{
       if(typeof id!=="string"||!fwState[id])return {ok:false,error:"unknown-window"};
@@ -24333,7 +24918,9 @@ return {ok:true};}catch(e){return {ok:false,error:"choose-failed"};}}
 
   // UNIFIED-PROBE-END guard-facade
   // UNIFIED-PROBE-BEGIN guard-facade-lines ORIGINAL:ICB2YXIgYXBpRmFjYWRlPXtwcm90b2NvbDpBUElfUFJPVE9DT0wsYXNzaXN0YW50VmVyc2lvbjpWRVIsdGVsZXBvcnQ6YXBpVGVsZXBvcnQsdGVsZXBvcnRSZXN1bHQ6YXBpVGVsZXBvcnRSZXN1bHQscHJlcGFyZUNvbWJhdDphcGlQcmVwYXJlQ29tYmF0LHJlcXVlc3RQaWNrdXA6YXBpUmVxdWVzdFBpY2t1cCxhc3Npc3RDb21iYXQ6YXBpQXNzaXN0Q29tYmF0LGRvam9HdWFyZDphcGlEb2pvR3VhcmQsaGFuZHNoYWtlOmZ1bmN0aW9uKHJlcXVlc3Qpe3JldHVybiByZXF1ZXN0JiZyZXF1ZXN0LnByb3RvY29sPT09QVBJX1BST1RPQ09MJiZyZXF1ZXN0LmNsaWVudD09PSJyby1pbmZpbml0ZS1kb2pvIj9hcGlGYWNhZGU6bnVsbDt9LGNhcGFiaWxpdGllczpmdW5jdGlvbigpe3JldHVybiB7cHJvdG9jb2w6QVBJX1BST1RPQ09MLHNjb3BlczpbImRvam8iLCJiYXR0bGUiLCJtb3ZlbWVudCIsImRpYWxvZyIsImFycm93IiwiZmx5Il0sbW9kdWxlczpbImRvam8iXSxhcnJvd1J1bGVzOnRydWUsYmF0dGxlVGFyZ2V0OnRydWUsYXNzaXN0Q29tYmF0OnRydWUsZG9qb0d1YXJkOnRydWV9O30scmVhZHk6ZnVuY3Rpb24oKXtyZXR1cm4gISFjbGllbnRSZWFkeSgpO30sc25hcHNob3Q6YXBpU25hcHNob3QsYWNxdWlyZTphcGlBY3F1aXJlLHJlbGVhc2U6YXBpUmVsZWFzZSxjb250YWN0TnBjOmFwaUNvbnRhY3Qsd2Fsa1RvOmFwaVdhbGssY2hvb3NlTWVudTphcGlDaG9vc2UscmVxdWVzdEJhdHRsZTphcGlCYXR0bGUsc2V0QmF0dGxlVGFyZ2V0OmFwaVNldEJhdHRsZVRhcmdldCxjbGVhckJhdHRsZVRhcmdldDphcGlDbGVhckJhdHRsZVRhcmdldCxzZXRBcnJvd1RhcmdldDphcGlTZXRBcnJvdyxjbGVhckFycm93VGFyZ2V0OmFwaUNsZWFyQXJyb3cscmVxdWVzdEZseTphcGlGbHkscmVnaXN0ZXJXaW5kb3c6YXBpUmVnaXN0ZXJXaW5kb3csb3BlbldpbmRvdzphcGlPcGVuV2luZG93LGNsb3NlV2luZG93OmFwaUNsb3NlV2luZG93LGJhZzp7cGxhbjphcGlCYWdQbGFuLGRyb3A6YXBpQmFnRHJvcCxidXN5OmZ1bmN0aW9uKCl7cmV0dXJuICEhKGJhZ0NsZWFuJiZiYWdDbGVhbi5idXN5KTt9fSxtYWlsOntzZW5kOmFwaU1haWxTZW5kfSxub3RpZnk6e3B1c2g6bm90aWZ5UHVzaCx0b2tlbjpub3RpZnlMb2FkVG9rZW4sc2V0VG9rZW46bm90aWZ5U2F2ZVRva2VuLGNvbmZpZ3VyZWQ6ZnVuY3Rpb24oKXtyZXR1cm4gISFub3RpZnlMb2FkVG9rZW4oKTt9fSxpdGVtczp7bm9Ecm9wOml0ZW1Ob0Ryb3BTdGF0ZSxvdXRsZXQ6aXRlbU91dGxldEFsbG93ZWQsbm90ZTpJVEVNX09VVExFVF9OT1RFfX07
-  var apiFacade={protocol:API_PROTOCOL,assistantVersion:VER,teleport:apiTeleport,teleportResult:apiTeleportResult,prepareCombat:apiPrepareCombat,requestPickup:apiRequestPickup,assistCombat:apiAssistCombat,handshake:function(request){return request&&request.protocol===API_PROTOCOL&&request.client==="ro-infinite-dojo"?apiFacade:null;},capabilities:function(){return {protocol:API_PROTOCOL,scopes:["dojo","battle","movement","dialog","arrow","fly"],modules:["dojo"],arrowRules:true,battleTarget:true,assistCombat:true};},ready:function(){return !!clientReady();},snapshot:apiSnapshot,acquire:apiAcquire,release:apiRelease,contactNpc:apiContact,walkTo:apiWalk,chooseMenu:apiChoose,requestBattle:apiBattle,setBattleTarget:apiSetBattleTarget,clearBattleTarget:apiClearBattleTarget,setArrowTarget:apiSetArrow,clearArrowTarget:apiClearArrow,requestFly:apiFly,registerWindow:apiRegisterWindow,openWindow:apiOpenWindow,closeWindow:apiCloseWindow,bag:{plan:apiBagPlan,drop:apiBagDrop,busy:function(){return !!(bagClean&&bagClean.busy);}},mail:{send:apiMailSend},notify:{push:notifyPush,token:notifyLoadToken,setToken:notifySaveToken,configured:function(){return !!notifyLoadToken();}},items:{noDrop:itemNoDropState,outlet:itemOutletAllowed,note:ITEM_OUTLET_NOTE}};
+  // UNIFIED-PROBE-BEGIN resume-facade ORIGINAL:ICB2YXIgYXBpRmFjYWRlPXtwcm90b2NvbDpBUElfUFJPVE9DT0wsYXNzaXN0YW50VmVyc2lvbjpWRVIsdGVsZXBvcnQ6YXBpVGVsZXBvcnQsdGVsZXBvcnRSZXN1bHQ6YXBpVGVsZXBvcnRSZXN1bHQscHJlcGFyZUNvbWJhdDphcGlQcmVwYXJlQ29tYmF0LHJlcXVlc3RQaWNrdXA6YXBpUmVxdWVzdFBpY2t1cCxhc3Npc3RDb21iYXQ6YXBpQXNzaXN0Q29tYmF0LGhhbmRzaGFrZTpmdW5jdGlvbihyZXF1ZXN0KXtyZXR1cm4gcmVxdWVzdCYmcmVxdWVzdC5wcm90b2NvbD09PUFQSV9QUk9UT0NPTCYmcmVxdWVzdC5jbGllbnQ9PT0icm8taW5maW5pdGUtZG9qbyI/YXBpRmFjYWRlOm51bGw7fSxjYXBhYmlsaXRpZXM6ZnVuY3Rpb24oKXtyZXR1cm4ge3Byb3RvY29sOkFQSV9QUk9UT0NPTCxzY29wZXM6WyJkb2pvIiwiYmF0dGxlIiwibW92ZW1lbnQiLCJkaWFsb2ciLCJhcnJvdyIsImZseSJdLG1vZHVsZXM6WyJkb2pvIl0sYXJyb3dSdWxlczp0cnVlLGJhdHRsZVRhcmdldDp0cnVlLGFzc2lzdENvbWJhdDp0cnVlfTt9LHJlYWR5OmZ1bmN0aW9uKCl7cmV0dXJuICEhY2xpZW50UmVhZHkoKTt9LHNuYXBzaG90OmFwaVNuYXBzaG90LGFjcXVpcmU6YXBpQWNxdWlyZSxyZWxlYXNlOmFwaVJlbGVhc2UsY29udGFjdE5wYzphcGlDb250YWN0LHdhbGtUbzphcGlXYWxrLGNob29zZU1lbnU6YXBpQ2hvb3NlLHJlcXVlc3RCYXR0bGU6YXBpQmF0dGxlLHNldEJhdHRsZVRhcmdldDphcGlTZXRCYXR0bGVUYXJnZXQsY2xlYXJCYXR0bGVUYXJnZXQ6YXBpQ2xlYXJCYXR0bGVUYXJnZXQsc2V0QXJyb3dUYXJnZXQ6YXBpU2V0QXJyb3csY2xlYXJBcnJvd1RhcmdldDphcGlDbGVhckFycm93LHJlcXVlc3RGbHk6YXBpRmx5LHJlZ2lzdGVyV2luZG93OmFwaVJlZ2lzdGVyV2luZG93LG9wZW5XaW5kb3c6YXBpT3BlbldpbmRvdyxjbG9zZVdpbmRvdzphcGlDbG9zZVdpbmRvdyxiYWc6e3BsYW46YXBpQmFnUGxhbixkcm9wOmFwaUJhZ0Ryb3AsYnVzeTpmdW5jdGlvbigpe3JldHVybiAhIShiYWdDbGVhbiYmYmFnQ2xlYW4uYnVzeSk7fX0sbWFpbDp7c2VuZDphcGlNYWlsU2VuZH0sbm90aWZ5OntwdXNoOm5vdGlmeVB1c2gsdG9rZW46bm90aWZ5TG9hZFRva2VuLHNldFRva2VuOm5vdGlmeVNhdmVUb2tlbixjb25maWd1cmVkOmZ1bmN0aW9uKCl7cmV0dXJuICEhbm90aWZ5TG9hZFRva2VuKCk7fX0saXRlbXM6e25vRHJvcDppdGVtTm9Ecm9wU3RhdGUsb3V0bGV0Oml0ZW1PdXRsZXRBbGxvd2VkLG5vdGU6SVRFTV9PVVRMRVRfTk9URX19Ow==
+  var apiFacade={protocol:API_PROTOCOL,assistantVersion:VER,teleport:apiTeleport,teleportResult:apiTeleportResult,prepareCombat:apiPrepareCombat,requestPickup:apiRequestPickup,assistCombat:apiAssistCombat,handshake:function(request){return request&&request.protocol===API_PROTOCOL&&request.client==="ro-infinite-dojo"?apiFacade:null;},capabilities:function(){return {protocol:API_PROTOCOL,scopes:["dojo","battle","movement","dialog","arrow","fly"],modules:["dojo"],arrowRules:true,battleTarget:true,assistCombat:true,nextDialog:true,dialogBinding:true,dojoResume:true};},ready:function(){return !!clientReady();},snapshot:apiSnapshot,acquire:apiAcquire,release:apiRelease,contactNpc:apiContact,bindDialog:apiBindDialog,nextDialog:apiNextDialog,walkTo:apiWalk,chooseMenu:apiChoose,requestBattle:apiBattle,setBattleTarget:apiSetBattleTarget,clearBattleTarget:apiClearBattleTarget,setArrowTarget:apiSetArrow,clearArrowTarget:apiClearArrow,requestFly:apiFly,registerWindow:apiRegisterWindow,openWindow:apiOpenWindow,closeWindow:apiCloseWindow,bag:{plan:apiBagPlan,drop:apiBagDrop,busy:function(){return !!(bagClean&&bagClean.busy);}},mail:{send:apiMailSend},notify:{push:notifyPush,token:notifyLoadToken,setToken:notifySaveToken,configured:function(){return !!notifyLoadToken();}},items:{noDrop:itemNoDropState,outlet:itemOutletAllowed,note:ITEM_OUTLET_NOTE}};
+  // UNIFIED-PROBE-END resume-facade
   // UNIFIED-PROBE-END guard-facade-lines
   try{window.__DSH_RO_ASSIST_API__=Object.freeze(apiFacade);}catch(e){window.__DSH_RO_ASSIST_API__=apiFacade;}
   apiNoticeWatch();setTimeout(function(){apiEmit("ready",{protocol:API_PROTOCOL,assistantVersion:VER});},0);
@@ -24347,7 +24934,10 @@ return {ok:true};}catch(e){return {ok:false,error:"choose-failed"};}}
   //   ② CharSelect 的 Cancel 按钮 → cancel() → UIManager.showPromptBox(msg17,'ok','cancel', onYes)
   //   ③ WinPrompt 里第一颗按钮（data-background=btn_ok.bmp）→ Component.onExitRequest() → 真正下线
   // 只在「活着 → 死亡」那一刻计一次；只统计助手或内挂在跑时的死亡（手动玩不计数，避免误下线）。
+  // UNIFIED-PROBE-BEGIN scr-us-autostart ORIGINAL:ICB2YXIgREVBVEhfR1VBUkRfV0lORE9XID0gMzAwMDAwLCBERUFUSF9HVUFSRF9MSU1JVCA9IDM7
+  try { scrUsBootAutostart(); } catch (eUs) {}
   var DEATH_GUARD_WINDOW = 300000, DEATH_GUARD_LIMIT = 3;
+  // UNIFIED-PROBE-END scr-us-autostart
   var deathGuardAt = [], deathGuardDead = false, deathGuardRun = null, deathGuardDone = false;
   function deathGuardOn() {
     var el = $id("dsh-z-deathguard");
@@ -28778,7 +29368,9 @@ return {ok:true};}catch(e){return {ok:false,error:"choose-failed"};}}
   var RO_EXP_MON = ["dps", "boss", "tgt", "ztip"];
   // UNIFIED-PROBE-END newui-mon-whitelist
   // UNIFIED-PROBE-BEGIN newui-actions-set ORIGINAL:ICB2YXIgUk9fRVhQX0FDVElPTlMgPSBbImdlYXIiLCAidHAiLCAiemh1MiIsICJ6c2tpbGwiLCAiYm9zcyIsICJkcHMiLCAiaXRlbSIsICJzY3IiXTs=
-  var RO_EXP_ACTIONS = ["gear", "tp", "zhu2", "zskill", "boss", "dps", "item"];
+  // CLEANUP-RELEASE-BEGIN petal-actions ORIGINAL:ICB2YXIgUk9fRVhQX0FDVElPTlMgPSBbImdlYXIiLCAidHAiLCAiemh1MiIsICJ6c2tpbGwiLCAiYm9zcyIsICJkcHMiLCAiaXRlbSJdOw==
+  var RO_EXP_ACTIONS = ["gear", "tp", "zhu2", "zskill", "boss", "dps", "item", "scr"];
+  // CLEANUP-RELEASE-END petal-actions
   // UNIFIED-PROBE-END newui-actions-set
   var RO_EXP_SKILLS = { gear: 40, tp: 26, scr: 142, arrowrules: 46, zhu2: 5, zskill: 14, combat: 5, aid: 29, party: 28, dps: 5, boss: 10, item: 50, tgt: 10, znear: 10 };
   function roExpOn() { return !!(roExpCfg && roExpCfg.enabled); }
@@ -28790,14 +29382,21 @@ return {ok:true};}catch(e){return {ok:false,error:"choose-failed"};}}
     function valid(a, fallback, allowed, max) { return (Array.isArray(a) ? a : fallback).filter(function (id, i, all) { return allowed.indexOf(id) >= 0 && all.indexOf(id) === i; }).slice(0, max); }
   // UNIFIED-PROBE-BEGIN newui-petals-default ORIGINAL:ICAgIHJldHVybiB7IGVuYWJsZWQ6IGMuZW5hYmxlZCAhPT0gZmFsc2UsIG1vbml0b3JzOiB2YWxpZChjLm1vbml0b3JzLCBbImRwcyIsICJ0Z3QiLCAienRpcCJdLCBST19FWFBfTU9OLCBST19FWFBfTU9OLmxlbmd0aCksIHBldGFsczogdmFsaWQoYy5wZXRhbHMsIFsiZ2VhciIsICJ6aHUyIiwgInpza2lsbCIsICJ0cCIsICJpdGVtIiwgInNjciJdLCBST19NT0RVTEVTLmZpbHRlcihmdW5jdGlvbiAobSkgeyByZXR1cm4gbS5raW5kID09PSAiZnciICYmICFtLm5vVG9nZ2xlOyB9KS5tYXAoZnVuY3Rpb24gKG0pIHsgcmV0dXJuIG0uaWQ7IH0pLCA2KSB9Ow==
   // UNIFIED-PROBE-BEGIN newui-petals-scrub ORIGINAL:ICAgIHJldHVybiB7IGVuYWJsZWQ6IGMuZW5hYmxlZCAhPT0gZmFsc2UsIG1vbml0b3JzOiB2YWxpZChjLm1vbml0b3JzLCBbImRwcyIsICJ0Z3QiLCAienRpcCJdLCBST19FWFBfTU9OLCBST19FWFBfTU9OLmxlbmd0aCksIHBldGFsczogdmFsaWQoYy5wZXRhbHMsIFJPX0VYUF9BQ1RJT05TLCBST19NT0RVTEVTLmZpbHRlcihmdW5jdGlvbiAobSkgeyByZXR1cm4gbS5raW5kID09PSAiZnciICYmICFtLm5vVG9nZ2xlOyB9KS5tYXAoZnVuY3Rpb24gKG0pIHsgcmV0dXJuIG0uaWQ7IH0pLCA2KSB9Ow==
-    return { enabled: c.enabled !== false, monitors: valid(c.monitors, ["dps", "tgt", "ztip"], RO_EXP_MON, RO_EXP_MON.length), petals: valid(c.petals, RO_EXP_ACTIONS, RO_MODULES.filter(function (m) { return m.kind === "fw" && !m.noToggle; }).map(function (m) { return m.id; }), 8).filter(function (id) { return id !== "scr"; }) };
+  // CLEANUP-RELEASE-BEGIN petal-load ORIGINAL:ICAgIHJldHVybiB7IGVuYWJsZWQ6IGMuZW5hYmxlZCAhPT0gZmFsc2UsIG1vbml0b3JzOiB2YWxpZChjLm1vbml0b3JzLCBbImRwcyIsICJ0Z3QiLCAienRpcCJdLCBST19FWFBfTU9OLCBST19FWFBfTU9OLmxlbmd0aCksIHBldGFsczogdmFsaWQoYy5wZXRhbHMsIFJPX0VYUF9BQ1RJT05TLCBST19NT0RVTEVTLmZpbHRlcihmdW5jdGlvbiAobSkgeyByZXR1cm4gbS5raW5kID09PSAiZnciICYmICFtLm5vVG9nZ2xlOyB9KS5tYXAoZnVuY3Rpb24gKG0pIHsgcmV0dXJuIG0uaWQ7IH0pLCA4KS5maWx0ZXIoZnVuY3Rpb24gKGlkKSB7IHJldHVybiBpZCAhPT0gInNjciI7IH0pIH07
+    return { enabled: c.enabled !== false, monitors: valid(c.monitors, ["dps", "tgt", "ztip"], RO_EXP_MON, RO_EXP_MON.length), petals: valid(c.petals, RO_EXP_ACTIONS, RO_MODULES.filter(function (m) { return m.kind === "fw" && !m.noToggle; }).map(function (m) { return m.id; }), 8) };
+  // CLEANUP-RELEASE-END petal-load
   // UNIFIED-PROBE-END newui-petals-scrub
   // UNIFIED-PROBE-END newui-petals-default
   }
+  // UNIFIED-PROBE-BEGIN resume-petal-save ORIGINAL:ICBmdW5jdGlvbiByb0V4cFNhdmUoKSB7CiAgICB0cnkgeyBsb2NhbFN0b3JhZ2Uuc2V0SXRlbShST19FWFBfS0VZLCBKU09OLnN0cmluZ2lmeShyb0V4cENmZykpOyB9CiAgICBjYXRjaCAoZSkgeyByb0ZlZWRiYWNrKCLmlrBVSemAieaLqeacquS/neWtmO+8muacrOWcsOWtmOWCqOS4jeWPr+WGmSIsICJlcnIiKTsgY29uc29sZS5lcnJvcigiW1JP5pawVUldIOS/neWtmOWksei0pSIsIGUpOyB9CiAgfQ==
   function roExpSave() {
+  // CLEANUP-RELEASE-BEGIN petal-save ORIGINAL:ICAgIGlmIChyb0V4cENmZykgcm9FeHBDZmcucGV0YWxzPShyb0V4cENmZy5wZXRhbHN8fFtdKS5maWx0ZXIoZnVuY3Rpb24oaWQpe3JldHVybiBpZCE9PSJzY3IiJiYhIXJvRXhwTW9kdWxlKGlkKTt9KTs=
+    if (roExpCfg) roExpCfg.petals=(roExpCfg.petals||[]).filter(function(id,i,all){var m=roExpModule(id);return m&&m.kind==="fw"&&!m.noToggle&&all.indexOf(id)===i;}).slice(0,8);
+  // CLEANUP-RELEASE-END petal-save
     try { localStorage.setItem(RO_EXP_KEY, JSON.stringify(roExpCfg)); }
     catch (e) { roFeedback("新UI选择未保存：本地存储不可写", "err"); console.error("[RO新UI] 保存失败", e); }
   }
+  // UNIFIED-PROBE-END resume-petal-save
   function roExpButton(parent, text, action) {
     var b = document.createElement("button"); b.type = "button"; b.textContent = text;
     b.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
@@ -28927,7 +29526,9 @@ return {ok:true};}catch(e){return {ok:false,error:"choose-failed"};}}
     "perf": "data:image/png;base64,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",
     "memclean": "data:image/png;base64,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",
     "profins": "data:image/png;base64,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",
-    "ro-infinite-dojo": "data:image/png;base64,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"
+  // UNIFIED-PROBE-BEGIN resume-icon-drop ORIGINAL:ICAgICJyby1pbmZpbml0ZS1kb2pvIjogImRhdGE6aW1hZ2UvcG5nO2Jhc2U2NCxpVkJPUncwS0dnb0FBQUFOU1VoRVVnQUFBREFBQUFBd0NBWUFBQUJYQXZtSEFBQUFBWE5TUjBJQXJzNGM2UUFBQUFSblFVMUJBQUN4and2OFlRVUFBQUFKY0VoWmN3QUFEc01BQUE3REFjZHZxR1FBQUJmNFNVUkJWR2hEelpvSFVKUnB1dSt0bXQxVHQ3YTI3cWt6TlhOM2EyWnJhKy9aUFROM0o1MEpPc1loZzZKakFoMFRqQ0NLQ2laQVZGQUJTUklrU0JRa2lDQlJjczRaQ1UzT29jazVOTjFrb2VGM3E1dVp1YnVlZTgvdUNYdnEvcXVlYXFxNytiNy8vMzJmOUQ1ZmI5bnlOMEJzN1BHM21DdDhoNUVmYkU3d0RveThBN3oxNW5mL3Y4REdWTmw3YXhPdnROY255dDJsazFVRjB1bWFEdW1VUUxJMklaQ3NUZFpKcEtJbWlWVFNLdGtRTjNlczlHY1VMRFdFdW05TXZOTGVhSTk4Nzgxci9aY0JhOFdmYmN6VmFxMkxHNUxYeFkwU3BEM0FJREFNNjhPdzFBMExIVERYdXZrNld3ZVRaVEJSQUpNRk1GNUViNEtscEQvS0tMblpWMWVyc05ENloyL2U0MjhHNlhLZi9zWlNUeE9NQWVQd3VwK05oUjQyRm5yWldCQWlGVFVobmFwaGRhaVFsWUVDRm5veW1SRThaNkk4a0pGQ0g3b1Q3ZWlJdGlUZi9qaXZIQTVTWXExSjVNVmRUUzhNZCtxL2VhLy9WR3dzOWUvZWVEMVFCalBJeWNzSXozY2puYTVuYmZ3VnF5TmxMSGFuSTJsNXlWUlZNR01sdmd3WGVDTk1mWWd3Mlk3ZTFJZDBKem5RSG10RlZhQUpvVWJLeEpscUVIbFZoWWlMdXdrMzJJbXgydWRsRlFVdmQ3OTU3Lzh3cE9JR3EzVkozVHByYmF5UGx5TWRlOFg2bElEVm9TSVdPNU9STk1jeFhoYkFRSllyd21SYmVwSWVJRXh6b1MzaElkWGgxdVQ2bUJGbmY0RlE4eE80bjFQSDR1Q1htS3Ard0MyTlAzTDZ5OTl3NnB1UE1UbTZteWczYzE2TE85YVh4bHVzM3VUdzd3SVRoYjljbnk2TlpxMlJ4Y1l3RnVwQ1dPMU5aYVVuRlhGOUJHTUZIdlNsT2RDWDZrQi94aVBhRTUwcEM3bExxdHRWSXU1OVQrRFZ3M2pvcStLdXE0aVhuaEpQRGRVSk5GREJWZnNMQXM3dTRvV2hBbjZudjhKNC8zWmFNL3lZYkV4blpid1pWb2RZbVdxSm5tZ3AvT1diblA1cWlGdWV2cjNXKzdJR1NTR3ZoV21JbStPWkxBdGdvdGlIM2xSSE9xTXQ2SWk1aitENVhmTDh6SW0yUG9mWGhYMjRudmtHUHdNVkltNGNJc0hpT09rUGRNaDFNcURnMFVVSzNTOVM1bldackFjbnliVFNvdEJKaDVySCtsaHJmVWw2bUR2U3FSWWsvZFhNRDliQ1NqL0w0NDAxZ3kwVmI3L0o3UzhDK0lXME0xeEEvd3NrRlI2TVp0clFFWE9IQ3IrcjlLWTQwWjdvUXI2Zk9VR214M0RYVjhWTFg1WGdTL3VJdmFWRmxvTWVKWjdHVlBxYlVCTjBrL3F3TzdTK3RLY24wNHZ1REUrNk16d1l5dmVuTGNxQzFzaGJkTWRha08rcXkvMEx4MWdhYlpBTGtBelVNRGNnZ01WZWxzWWFCQ0toNE8vZjVQaXZJc0hxV054S2pROGpXUTYwaDE1RzRLMUxZOGcxYkwvYlFhQ0pObDVHaDNBNnVZdWdpK3FrV2V0UzZuV2Q2dUE3TkVSWTBaN2dRbjkrQU9PVjRZaWJYckxVa2NKOFd6TGk5Z3k2czcxcGlMelBaRTBrbzhXK0RHVTVNWmpoeUdTT0ErYkg5dEJXa2NiaXlBOGkrbXZrUWxnWllINVFrUHdteC84bkxCUitiUlY2ZmhmdDRXWlVleHRTSDNpZGJBZGQvSTBPWUhkOEJ6NzZ5c1RkK1k0OHgzT1VlaHJSR0duRFFKNHZNN1dSTEhZa3M5eVRoYVE3aDZIYVJHclMvVWwvYWsxbmNSaEx3aHdrYmFtSVc1T1piVWxpcWpxVWlXSXZ4Z3E5Q0RBOWpJN0NIMmtxaW1WNXRCRnhmelhpdmswUjg3S2RXTzVIMUZQeGx3TTdYTy96YlNhNzMrT3gzaTdhbjE0aTEwbVAwR3NIZWF5cndKUHphaVRkUFVHWnozVmFZaHdZS2doQVZCZU5xRG1Cd2NwSTZ0Sjl5QWkySnR6cENrL3ZHL0RFOGl4UExmWHdNenZGUTZPalNMcHllVDFVemxKdkFZdmRPY3gxcEROZC9Zekppa0Q2Qzd4cHlmREUzdkFvNHQ0cStRNkkrNnJrSmhtb1pubTBnWlh4UnNTRDFkdmU1UHluZUV2bnMzZXJUMy95TnJGMzl2UDhoaVpPSjNmei9Ob2hzaHowS2ZlNVNtdTBOWjNwbmpTa2U1TWI3c2dMTjFOODc1N0R5L3g3QWl6MWVXNTdrU1IzRTNMOUxTZ090cUl3MEpLSzV3OTRabVZBZlZZSTYrTlZMQWp6NWVTWCt3dFo2RXhCVkJYSWJHMFlER1hqWTZGUFJWS1FuTEJNaUZ5QXpQcXJZYlpEdGd2VnhNYiszM3NxeDI4LzBQVSt2UTN6dlgvRVZuc2IvaGZVeWJML25sS3ZLelRIMmxFVmFZZVhiRFdOdGJHL2NCRG5pNGNJdUgyR0xOL2JsRDIzNDlVTFIxNUZPbElXYmtkUnNCVkZUKzlTSEdwTlhZSUgrY0UydlBRMFoyT21ucldwUnRhbVcxaWJxT1gxVUFtUzVsam0ycEpZN1U0a0wvUStBUSt1c1Q3ZHhxeXdrbG5oSzhTOWxYSUJjeklSYzUySXVzdDEzK1MrUldCbytQUG82K3FkR2ZlMHlIRTZKN2N5THlOcWdzem9UblZscmlVUmJ3dDkvRy9wa3ZUb09tbnUxMG4zdUU2dTN5MktnKy9MVjdzOHdvRzZSRS9xRWoyb2ZmbUlsalFmbXROOHFJNTdSSXJYVFI3ZitwNjFtU2JXcHh0WW02emZ0S2ttbHZzTFdPeE1ZYUVwZ29uS0VGeHY2RERUVmNhc3NHTFRlbC9KZDBFbVlHMnltWm51OGs0US9QelBCSlI3bkQxUzU2MUh4b05qQ0VMTWFZbTFRNWp0dzNobEdLS0dHTlo2TXdteHUweUFoUjRGVCs5VDhzeU9zbkFIS3NMdHFZMTFwaVhGazdZMGIrcmkzU2dKZHlETjV6Ymg5cGQ0ZkV1SFI2WTYrTnNZMFZZZXo4WjhGOUxwUnFUVFRVaW5tK1cyTmx6Q1lsc01DODFSMEp0TXVLTVJaZkgrTEF6V3lNakszR2JUbGVTWnFRcEVyY3gybHh6NU13RjF3Y1pwdzBtVzFBVWIwNTVneTNqRmMyWmJVcEYwcENOcFMrRjFUeG9sMFM0NEcyblRtdnlZcG1RdkdwSmxxK3RPOFhON0l1d004VEk3aWZQMUUzaGJYU1QyaVMwbGFjOFJOdWF4TUY0UHkwSlk2RVE2MVlCMHBoR3BxQVdwcUZVdVpuVzBuS1gyZUphN1VxQS9tWGduUFlJZm1yTTIyZnFUQU5rdS9CalV6TFF3M1ZXUzloUDVqZkhJWHcwazNWc1FKdHlqTzlHYXZveUhpT29pNVpWM3RqRVdVZE5MVm9iS2tRelhZSC9wS0dGV2V2amUxc0g5NWhuY3pYV3cwTjFMWVdJSUhZSmNabVFyTk5jSnE0T2J0dGdENGpZNTJYVlJDK3N5RnhJMXNTNFRNVjNQc2pBVFNlMHo1cHBpa0E0WE1sRGdnNkhpQjRRNTMySnB1SjZaN2dwRVBlVS91Tk1yWm5zcldSeXNZYmFuYkdGY21QY3J1WUI3SjdackpWaHAwUmhseVdqaFl3YXpuT2xMdFdFNHgwbWVwMWVHeStVcnhYdzNYZFZweFBwWlU1NFd5R2hMRm11ejdmamRQOCtFc0JwV1JtRlJ5THE0bmZVZkNjdFdXZFRHK213SDYrSU9wRE90OGwxNFBWektRbnNDSzcxWnJQVG15R05nc1QwUmNVTVVNL1hSQk5zYVVSRHR3K0p3SFRNOU1oRVZ6UDRnUkN5c1lIMmlnWW0yZkMyNWdITktIM2s4T3FmTWFMRTNNMVZQbWFvSVpQSlZNSXU5ZWF3TWxTS2RyRVU2SVdCdG9nN20yMkcxZDlNbFhnOHgyRmFFL2NXRG1HanZvcWs0U3Q2RXNTQ1VWMC9aZDlablcxbWZhVVk2V1NmLy81V1JLbGJINjVCTzFMSTJWc25hWk4ybVc0MVhzdGdhelVKYlBHczlxYlJrK2hCZ1k4elNjSzNjalRaZHFmd25FY3cwTTlGZTRDRVg0SGRMdHpEVzBZRFY1aERHaTl5WnJYM0dmR3Y4VDhHMk5sVy9LVUwyT2wyUGRLWkp2cW9zRFRMUlg0ZWI2V251bkZaaVRkUU9DMTNNOUZmU1V2YVM5bGRKYk14MS8rVHIwcGtXMW1kbHU5SDJReEEzeXErNVBsVVBzMDB3V3NSR2J5cXIzY2xNVllYaWFYcUtxWTRTWnJwS21lNHNaYWE3N0NkM1dwOXNaTEt0b0ZEV3RQMWRhYlJiejkzVENreFZlQ01SQkxMUUdzTmllenl2aDh1UXlsWnZ1dUZQTWtmajVoSHhkYStjN1BKTUsrM1ZtZmhaWFNJNzBvdVl4N2VKY0w1Q2d1Y05udG1lcHlvN0FxVGptOFJGelp2K0wxc0VHZWw1MlhYNjVIVkIySlRIcTV3d0NxS2NLSDloeDFpQkw3N1h0V2t0aW1PK3Y0cXBqbUs1RUprQWNlOHJWa1pybVd3cjdObXlzYkh4N25oRDZyemxTU1h5bjVxeU1aREdVbWN5U3gySnJQVG5zRFpleWVwSStXYm1tR21SKzNpM0lJVzBaL1pFZXQ0aTJQNHlVYTdYeUF0OVFFV01DNDJwWG5UbCt0TlhIRUpqbWcvUFhjM1ltTzlCT2xFdFAxN090eVd3S0V1WDRqcWFhcEt4ZDduR0pUTnRqTzhjNDZidFNVeXR0ZEMvcW96ZUJRVjJmdkZiYmwvUVJkUmV6dXBvL1o4SldCaW9ZcW85ZjM0TGN5UHZMQXhVU0tJZVh1V3hzU1pJeW1Bd2c3WGVOSmFGNmJ3ZUxHWjFxRVNlTldScHNLOHBIeTlMQTRvalhhbE45cVl6TjVDZTNDZDA1L2pSbE9SR1MvcGpXak45YWMzMnB6TXZFSSticHhtcFM1Q255dVdCVWhBMU1ONlV3WlhyQnpsaHBFQmNtaTFqMHdrTVNFTnBYdldrZlA0QmhXSkxzaVp1RTlsc3pHVkhkZFEwdC9JeXlBT21XNUQwVlc0S0dLeG1valZmc21WeHNQNzl4V0hCUW52K002N3QrNFNDZ0J1VWhsc2h6UGRtcFNPT0pXRVdHN0pEK25ROUxBbHByOG9rd3MyTXFjWVVPdkpES1hsdVM1YVBLYVVobGtRLytKNVhrYmEwWnZ2UmxoM0FZSGs0a2E3WEtFMStBa3Nkc0RGTVUyMHhoODl0SlNET0VwaGdiQ1dlbUU0ejdDdU9jU3RQa3l2cGFseE8xZUJHMWlHY0JHZEpFbGtTMldtSzB1bVB1V3R5a2ZXSkp1WUhxMW44VWNEY2lPQWRTWCtWUk55UlI2Q2xEc2MvZlJkRGxZOFlyZ3hudFNlSnBiNzhINEt1Z1kzWlpoYkc2dkc0ZlphMlRCODZjcDVRRUh5UHdoQXJXak44YU0vMHBhY2dpSzY4QUJwU3ZhaUlmWVRYYlIwS0V3T0FFZXFLRTFEODdyZFVkMFlqUTFLbk8zZUs5MkdTcjQ1WjNuNU1jalM1a3JtUFM2bDdNVWpTNEV5Y0d0OUZxbkcvVEpkRWtTVzd6LzB2VEMvcHlYZGljYkNLOGRZOHlaYTUwYnAzeGNLSytjV0JTcXBpWGJoL1JvbXArZ2cyQmpKWTdzdGhVWmpEbWl5SVpSbG9xaFlXMndsNmFFTHhjMXVHeTU3Umt4OUlaMTRRalJsUHlBOTNKUGlCSVU3WHZzUHU2bmY0Mmx3aU44YVQ5WVZPWmdhYjJIdjhJL0phUGRsZ2plQ0dtOXdyM1lkMXVSWVdKUWN4SzlqTGpWeE5qRFAyY1RGdEwrZFROTkJMM012SmFBMDBneFRSai8rVzBHRVRQdFgrUjRJOTdHR3VuYkhtN1BrdDBQSjNvcDZTSHVsNFBjMDVvZHc1b2NCQ1c3UThKeThMTTFqdVNwYjdyNHk4UEhPOEhxUWtMUXdINDZQRXVKbmdjdjBFVGlabk1OWFp4ODJ6QnloT0M2VkhrTTdDY0NYTXk0SytEVmFGM0RMWDVVSHNDZm5LUDYweng2eElFZXV5STl3djArSkd4aUcrajFEalZPd09qTE0wTVV6VlJDOWVnek14Nmh4N29jYlJNRFhVZkwvaDNNdERXRmVjNVNPRmYySzRJUTlSZDFHUHZBNkl1a29LMTZjYUdHdEk0LzVwSmVxU1hKSDJwYkxVSmN0Rzhid2V5UHVoQmpSc3VwT2ttNXhZSDJMOGJSRGtoU0dlNmlMUStUWmhudmNBOGVZMGJxWkJYanVRdE5CUm1ZbjZwUThSMDBYMWNES1hjM2RoWHFDSmVmNStqTEtVc2MyOHhlRGtNTjU1N253WG9zcnhxRDE4LzNJdjM0V3JjelJVbFVQQkt1eC9xb3lDNTI3TWlyOW5qOWxYMk55OHhQcG9WYUZjd0V4M2lRZWlabmwyOERZOVNaU2pBUXlsc2RBU3pYSjNDc3U5MmNnRXlrU3NUVGZLMjJGV3VqZHJnU3c0WC9kZzl2MEJTbE9DNUpNRWVjMlFWZGpKT2xocXc5YjZJdVl2dElFT3JFdTBNTXBSNVhxMkp0ZXlOTkZMMnNPRHREdnluWkdoZTZRTHF3UUwxQjd2WkYvZ0xvNkVxblBncVNxYUFTcW8rQ3F6NzZrR2VrbkgwRHkrRzJGQjFHWWxsdlVVNnhOMVRMWGxrdWh4RTVzemUyQW9uWlgyR0phN2tsanB6V1p0dkpybG5reVcrM0kzcTdGc1IwU3RzdGtOZzAyNTZIMjdtOW5lRWhESktyZXMzNjlqUTlUS3hsUXpCM1MyRWROc1NjOU1JUHBwaWx6TzNNdWw5TDFjeXRCRU4xa0ppNVFiSUYyRGxWbVFMc0xhRXFXTitSZ0U2N1BEYlJ0cVQ1VFk2NitHaXFjeU94OSt3NW5VNzlpaCt6bDd2L2hzc3hlU2RYV2lydUtGcGNGWHRHUUdZSGJvSzVvVEhaaHFpR0crTllibGpuZ1dXMlYveDdIU0p4TlRpWFM4R2hhN2FDeU5SK3ViVHptbTlBV3RwZEZzaUdRSEZZSGNFTGN3M2xyTTl0TWZValBoUm1iSFBVNi9WT1JDcWdiblV2YWluN3FQazBsS1hFKzh4TWJLQXV1TFU2ek5qYkVxR1lVVkNTdnowOFFVUjNEQTR4RGJYWGVpN0tIS2R0czlhTVVjWmJmNTdvVXRXN1pzZHFNeUROYW1wZzFXSnhIcmNnTmp6Uzg1L09GL0o5enFMTXY5V2ZJcDNHSkhvcnhua2NYQjJvU0ExYkZLbUs1aG9pMGIxVTkvZythWHY2Y2lLeHpXKzFpWENaQjlMcXFsUGpPRXowLzlsclpaYjRKcnJxRWRyY0RaUkhWMFpXa3lVUU90T0VVTVkvUlluWjloYlg2Y0ZmRUlTN1BETE13TXNqRFZEM1BUaUNjSHVSTnhoMysyMzhGMlJ5VU9SV3VoOWV6SS96a1B5T0JyZXZoSWl0c0Y0aDZjSXZpeUFnSEdhakNheVhKN0pFdHRNU3gxcGZ6UUR6V3dJV3FCK1U1WWxyVUlBaXdOdGFuTWpXYW9yWURhakVDV1I2dmwvUTZpR2lwZmV2RFIwZDlRTkdxTlYrVkZEa1VxY2pKT2pST3g2aHlQVXVkZ2hBSTZZYWRZRkUvd1dqTEtvbWlRK2FsK0pKUDlpQ2Y2a1lvbm1lcnY0cEwzRlQ2MjNzNVdXMFgyUlJ6aFhNbTVQeitSQVQvZm1DN3ZaTDZVOFN3N1lxL3RRVlFYd2twSEZNdXlpdHdleCtxWTdEalh3THFvZ2NHV1BBUTV6MGw4WWtXby9XVmkzYTRUNzNxTlNIdERza0x0WUxFVFpnVTBad2J5QjQzM2VkRnhEVC9CSlRTZkthRDFRcFVqejlVNC9Fd1Z6V0FGamdWcU16czl6TEpvbVBucEFjVGp2Y3hQRG9Ca21xeWlSSGJkVXVWRHk2L1k0YXpLTmhkVkZIMzNkd1lROE9kblloa2k3cHpRbmV0SWd1a2NzdTBQVXg5ckE1UEZySFFuc3R6NWt0V0JYSmJHcW9oME0rR0Y0MlZTZlc2VEcyeE5aZFJEcWlJZHlRMjhLNTlLUExPOXlQeEFLYXNEMlFqVDNmbEU2WDFzeTg4UjFXbU9Xb0FpQjRKVTJCK293djRBVmRRREZEbm9jNGp4a1c0V1plUW4rbGdUVHpBMzFvL3RNMnYrWVBZNW56bnVab2VyS3RzZXF2RDE0NzFzZFZiK2wxT0pIL0NXaTRGR05lSlN4Z29mVWZEWUVHWmU4VnFZek92dWVLUTlpZlRWeE9Gejh3U2RHVDVVUmptUkYzaVBERzl6b2gwdTh0TDVNaFVSRC9DN28wTkRxcWY4VERGZkg4TVJ6VS9ZNzZORTh2QTlEZ2FwbytLbGhJYVBpdHhVZkpUWTY3NmZ3ZjQyRm1VK0w1bWtzYUdVWTg2bitLZDdYN0w5a1NvN1hOWFk2cVRNMTY3cWZHYWxXQzNqK1NieG4vRHJMVnUyeVdZNkxEV1Q3NjdIZkZzTXExMXhyUGJFczlJV3had3dELys3WitYRHFoVDNxMFRiR1JCdGY0RjBMek1xSXgwUXhEa1RZcVVuSDNveFd3K2paYmhlUGM2dk5INk5aNk1odDNKUHM5UDFHMVM5VlZEeFVrYkJYWkU5ZGlwTWp2U3lOak9HVjdRYm41cHY1OU9ITzluanFjRk9WM1crZnFqS1ZnZFZ2clJUNGZNN0N2L3FaRTZPcFB2SHJLQ2RVcjlMZEtYWnN5R01aYlUzaGZtRzUwaDdNNG54dkUxKzRGMXFveDNKOXplbktPZ3VtWDUzaUhHNUtoOG4ycDQvUUd0K0NDdkNiQ1NOY2RROHQrSDNIN3lMZ3YwdW5uUmQ0MGpJZm5hNUs2TDRXSmx2SGl2eGxlMGViSjVhYy9iUmVmN3g3dWRzYzFOazF5TTFkcmhzMmpZSFZYYTQ3K1B6K3dwL2VUYjZJemI2RXVPR2tpeEpkVHdGUTdJSEdzbnlkRXBmQnNXeEhyaGYxU0xPNlRMdVY0NWlwYmNYZDlPVFJEaGZKVGZNanA2U01CYTZNcGlzalpGUHFJZnlmYkUrcmM0dnYzaVgwekhIZU5SMEZUVS9EYlk2N1dHM2h6STczWlQ1L2UzUCthUFYxK3h5VjJQN0l4VzJPNnV3M1VtTmJZNnE3SGk4ankvdGxQNzY2YlFNSVBoRm5jOVpRVzJvR1JzamVmS3p3VUpqT0pNNUQrVWo4N1NBZTZUNlcxSVNia3RUZ2pPUzVrU1dPbEtaYjA1Z1NoREZZRWt3UGRsK3RDYTVVeC9yUXJyek5RNXYvNWhmS0w3UGlSZmEzQzQvaTRhL09sODVmTU0ySjBWMnVLcXd3MW1acngyVStmcWhDbHNmS3N0SXM5TnpIenZkOWdxK2NsTDd0ejBma01Ia295MXZGOWdlRkZEbnhWeUZGNklpRndiaWJpS01zMkN1T29TVjlnUVdtdUtZRnNRd1hQb01ZWTQvN1NtZU5NUTRVL25zQVVVQjk4ajJzaUROL1M0dkg5NG03TFlSbWp2K21iYysvUWQyT0NsalhLekgrU3hkdmcwN3pEYytlL25hUllXdjdKVDR5bDZablk4MDJCdCtqQU5oMmdLVENwTi8reE9hSDdFaEhueDd2dVpwd2txUkF4UHAxdlRIV3lCTWVFQm56RDI2a2h4cGlMS25NZGFWMmdnSHlnUHZVZUJqUWE2M0Ria0JMdVFFZVJIdjlZaUFCelpZRzEzQldPc3daNVczby9qSmg3ejN4ZS80SDZjK1JzWDNJRHBwWjlITjFPTjQ0aWtPUngvbllPUnh0T0oxT1BaU0o4R2d3dURmVC81UDBSWnFiTlViWmJZK0VHZEJTNVFOOVdGM0tmVTFKZFgrTWxtdU44bnpzaWJiMTVsRWIzZENuVjF3dm5VSDA3UDZHQno4RnYzOUdoZ2RPWUNGN2pFZW1SZ1NaSDBUbHlzR0hGYmZ4ZSsyL2svK2Z0ZnYrSWQ5SC9EK3ljLzR5R2dYSCtwdlcvK0QvdGQvZmNEK3Rhand1cmk3MU1Pd3JOcnZKaVZldDRoM05DUHl3VTFpWEd4eHUyV0d1WjRlRjQ0YzR2eTMrN2grL0RCVzU4L2dibmFScDFhbXZIaG9RWnlITmNtK2RpVDUyQkx2YVUzU1l4dUNyYTl4eitBNDEzVU9jdlhzSWZhcGJDMzc1WC83MlgvK2MrSS9SWkxWWmYwVVQ0ZW1xd2ZWdWZ5dE9wZVA3c2RZYXovM0RVN2hmZHVJNTQ0V3hMcmJrT2h0UzBhZ0E0WGhibFRHKzFPYkdrUmRlakIxNlNGeXEwa0tvRDRsZ0laa2YxNUZQbXBxU1hyeXQzMVMvd1orZG5yN1oxcnVaaGVUWTkxdEpLV1J2Z2dTQXFsTGVrcExkaGlkaFZIMFZ5WXlVcC9PZUZNMlk0MVpURGJuTU5PV2g2U3JrTm1PUEVicVV5V2o5V25KbzlYSldsRDRYL2RiaVRkUm14VDBYbTFLa0haUGNiVDdlR05td1V4blVjZE1SNUZrc3IxQU10RldJSmxvTFpCTXRSZEs1TzkzRmhlSXVvdmNaN3NLdERlbWF2L0R2MWI1MzRiU1ByYUtkbE1lQUFBQUFFbEZUa1N1UW1DQyI=
+    // 专属一级图标退役；注册脚本窗口不占花瓣。
+  // UNIFIED-PROBE-END resume-icon-drop
   };
   // UNIFIED-PROBE-END newui-own-icons
   function roExpLayout() {
@@ -29070,7 +29671,9 @@ return {ok:true};}catch(e){return {ok:false,error:"choose-failed"};}}
     RO_MODULES.filter(function (m) { return m.kind === "fw" && !m.noToggle; }).forEach(function (m) {
       choice(body, m.name, roExpCfg.petals.indexOf(m.id) >= 0, function (cb) {
   // UNIFIED-PROBE-BEGIN newui-petal-limit-code ORIGINAL:ICAgICAgICBpZiAoY2IuY2hlY2tlZCAmJiByb0V4cENmZy5wZXRhbHMuaW5kZXhPZihtLmlkKSA8IDAgJiYgcm9FeHBDZmcucGV0YWxzLmxlbmd0aCA+PSA2KSB7IGNiLmNoZWNrZWQgPSBmYWxzZTsgcm9GZWVkYmFjaygi6Iqx55Oj5pyA5aSa5YWt6aG577yM6K+35YWI5Y+W5raI5LiA6aG5IiwgIndhcm4iKTsgcmV0dXJuOyB9
-        if (cb.checked && roExpCfg.petals.indexOf(m.id) < 0 && roExpCfg.petals.length >= 8) { cb.checked = false; roFeedback("花瓣最多六项，请先取消一项", "warn"); return; }
+  // CLEANUP-RELEASE-BEGIN petal-warning ORIGINAL:ICAgICAgICBpZiAoY2IuY2hlY2tlZCAmJiByb0V4cENmZy5wZXRhbHMuaW5kZXhPZihtLmlkKSA8IDAgJiYgcm9FeHBDZmcucGV0YWxzLmxlbmd0aCA+PSA4KSB7IGNiLmNoZWNrZWQgPSBmYWxzZTsgcm9GZWVkYmFjaygi6Iqx55Oj5pyA5aSa5YWt6aG577yM6K+35YWI5Y+W5raI5LiA6aG5IiwgIndhcm4iKTsgcmV0dXJuOyB9
+        if (cb.checked && roExpCfg.petals.indexOf(m.id) < 0 && roExpCfg.petals.length >= 8) { cb.checked = false; roFeedback("花瓣最多八项，请先取消一项", "warn"); return; }
+  // CLEANUP-RELEASE-END petal-warning
   // UNIFIED-PROBE-END newui-petal-limit-code
         roExpCfg.petals = roExpCfg.petals.filter(function (k) { return k !== m.id; }); if (cb.checked) roExpCfg.petals.push(m.id);
       });
