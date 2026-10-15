@@ -21,10 +21,10 @@
       "id": "assist-exp",
       "name": "RO 助手（实验版）",
       "channel": "exp",
-      "version": "2.38.77.13",
+      "version": "2.38.79.1",
       "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js",
       "status": "published",
-      "sha256": "398bfa6d1b73e8b5a271cb4f141b67d3de4b888126c43169a10e7222e2321f97"
+      "sha256": "dcf1767d3e394058b732cea7ab589e3b386f730926b069906eefc5e77e995a84"
     },
     {
       "id": "dojo",

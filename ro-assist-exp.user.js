@@ -2,7 +2,7 @@
 // @name         仙境传说 · 原站插件模式（游戏助手 · 实验版）
 // @namespace    dsh.ro-plugin
   // CLEANUP-RELEASE-BEGIN version-header ORIGINAL:Ly8gQHZlcnNpb24gICAgICAyLjM4Ljc3Ljk=
-// @version      2.38.77.13
+// @version      2.38.79.1
   // CLEANUP-RELEASE-END version-header
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
@@ -763,7 +763,7 @@
   var LS_KEY = "dsh_ro_plugin_v1";
   var VERSION_RE = /\?([0-9.]+)/;
   // CLEANUP-RELEASE-BEGIN version-runtime ORIGINAL:ICB2YXIgVkVSID0gIjIuMzguNzcuOSI7IC8vIOmdouadv+agh+mimC/liqDovb3mj5DnpLov5pel5b+X57uf5LiA54mI5pys5Y+377yIYnVtcCDml7bkuI4gQHZlcnNpb24g5ZCM5q2l5pS577yJ
-  var VER = "2.38.77.13"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
+  var VER = "2.38.79.1"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
   // CLEANUP-RELEASE-END version-runtime
   try { window.__dshCombinedActive = true; } catch (e) {} // V2.30.0 防双浮层让位旗标：独立版词条色脚本见旗标即让位
   // ==================== 统一采集器注册表（dsh-collect v1 · 内部命名空间，不新增 window 全局）====================
@@ -10823,10 +10823,10 @@ function createRoItemCapture(env) {
           if ((s.skid === 5035 || s.skid === 5041) && !askTargetId(s.skid)) { setStatus("自身角色 ID 未就绪：暂不施放 " + s.name, "warn"); continue; }
           var p = new (czp("USE_SKILL"))();
           p.SKID = s.skid;
-          p.selectedLevel = s.lv;
+          p.selectedLevel = clampSkillLv(s.skid, s.lv);
           p.targetID = askTargetId(s.skid);
           dshCastMark(s.skid, s.lv, p.targetID, "ask");
-          CLIENT.NM.sendPacket(p);
+          { if (!(p.selectedLevel > 0)) continue; var zDispatched = zSkillAttempt(zSkillPacket(s.skid, p.selectedLevel, p.targetID, ent.position), "ask", false); if (!zDispatched.sent) continue; if (!zSkillTicketValid(zDispatched.ticket)) return false; }
           s.lastAt = now;
           askNextCastAt = now + 300; // 分开技能包；未发送的后续项不能被错记为已补
           if (s.st) s.missCnt = (s.missCnt || 0) + 1; // 补了但判活仍缺 → missCnt++（连续2次退避到全局间隔）
@@ -10885,6 +10885,8 @@ function createRoItemCapture(env) {
     if (castComboBusy) { setStatus("补 buff 组合进行中，请稍候", "warn"); return; }
     if (!askList || !askList.length) { setStatus("补 buff 组合：buff 列表为空", "warn"); return; }
     if (!clientReady() || !CLIENT.SS || !CLIENT.SS.Entity) { setStatus("补 buff 组合：未进入游戏", "warn"); return; }
+    zSkillSync();
+    var comboTicket = zSkillTicket();
     castComboBusy = true;
     comboDiag = []; comboLastReport = "";
     var list = askList.slice(), t0 = Date.now(), i = 0, sent = 0, errCnt = 0;
@@ -10894,6 +10896,7 @@ function createRoItemCapture(env) {
     });
     function finish() {
       setTimeout(function () {
+        if (!zSkillTicketValid(comboTicket) || !castComboBusy) return;
         var eff = 0, un = 0, uk = 0;
         comboDiag.forEach(function (d) {
           var s = list[d.i];
@@ -10901,10 +10904,10 @@ function createRoItemCapture(env) {
           if (!s || s.__stId < 0) { d.after = "无状态ID"; d.verdict = "无法判定"; uk++; return; }
           var on = buffStateOn(s.__stId);
           d.after = on ? "在身" : "不在身";
-          if (s.__before !== on) { d.verdict = "已生效"; eff++; }
+          if (s.__before !== on) { d.verdict = "观测到状态变化（动作归属未证）"; eff++; }
           else { d.verdict = "未见变化（疑似被后摇吃掉或状态未识别）"; un++; }
         });
-        comboLastReport = "本次共 " + list.length + " 条：发送 " + sent + " 条 · 已生效 " + eff + " · 未见变化 " + un +
+        comboLastReport = "本次共 " + list.length + " 条：发送 " + sent + " 条 · 观测变化（归属未证） " + eff + " · 未见变化 " + un +
           " · 无法判定 " + uk + (errCnt ? (" · 发送失败 " + errCnt) : "") + "（耗时 " + ((Date.now() - t0) / 1000).toFixed(1) + "s）";
         castComboBusy = false;
         setStatus("补 buff：" + comboLastReport, un ? "warn" : "ok");
@@ -10913,9 +10916,10 @@ function createRoItemCapture(env) {
       }, 1200);
     }
     function next() {
-      if (!castComboBusy) return;
+      if (!zSkillTicketValid(comboTicket) || !castComboBusy) return;
+      if (ordinaryCastBlocked() || zSkillBusy()) { setTimeout(next, 150); return; }
       if (i >= list.length) { finish(); return; }
-      var idx = i++, s = list[idx];
+      var idx = i, s = list[idx];
       var delay = comboSrvDelay(s.skid);
       var gap = Math.max(comboGapMs(), delay || 0);
       var rec = { i: idx, name: (s && s.name) || ("技能" + (s && s.skid)), skid: s && s.skid, lv: s && s.lv,
@@ -10929,8 +10933,8 @@ function createRoItemCapture(env) {
         p.targetID = askTargetId(s.skid);
         if ((s.skid === 5035 || s.skid === 5041) && !p.targetID) throw Error("自身角色 ID 未就绪，拒绝无目标施法");
         dshCastMark(s.skid, s.lv, p.targetID, "combo");
-        CLIENT.NM.sendPacket(p);
-        sent++;
+        { var zDispatched = zSkillAttempt(zSkillPacket(s.skid, s.lv, p.targetID, CLIENT.SS.Entity.position), "combo", false); if (!zDispatched.sent) throw Error("未证实际发送，未计次数"); if (!zSkillTicketValid(zDispatched.ticket)) return false; }
+        i++; sent++;
         setStatus("补 buff " + (idx + 1) + "/" + list.length + "：" + rec.name + "（等 " + gap + "ms 放下一条）", "st");
       } catch (e) {
         rec.err = String((e && e.message) || e); errCnt++;
@@ -13686,8 +13690,9 @@ function createRoItemCapture(env) {
       if (!tg) return false;
       var p = new (czp("USE_SKILL"))();
       p.SKID = skid; p.selectedLevel = lv; p.targetID = tg.GID;
-      CLIENT.NM.sendPacket(p);
+      { var zDispatched = zSkillAttempt(zSkillPacket(skid, lv, tg.GID, (zEntOf(tg.GID) || {}).position), "qoa", false); if (!zDispatched.sent) return false; if (!zSkillTicketValid(zDispatched.ticket)) return false; }
       var cd = Math.max(skillCdMs({ skid: skid, cd: 0 }), 1000); // 保底 1s：扫描拍 0.3-0.5s 不可能重放同一解围技能
+      if (!zSkillTicketValid(zDispatched.ticket)) return false;
       skillNextAt[skid] = now + cd; zQoaNextAt = now + cd;
       dshCastMark(skid, lv, tg.GID, "qoa");
       zReinAoeAt = Date.now(); // V2.38.4+：解围技能触发戳（自动上马判据④「群殴/解围触发中」用）
@@ -14325,8 +14330,9 @@ function createRoItemCapture(env) {
       if (lv <= 0 || sp < 10 + lv * 3 || (skillNextAt[28] && Date.now() < skillNextAt[28])) return false;
       var p = new (czp("USE_SKILL"))();
       p.SKID = 28; p.selectedLevel = lv; p.targetID = ent.GID || (CLIENT.SS && CLIENT.SS.AID) || 0;
-      CLIENT.NM.sendPacket(p);
+      { var zDispatched = zSkillAttempt(p, "self-heal", true); if (!zDispatched.sent) return false; if (!zSkillTicketValid(zDispatched.ticket)) return false; }
       var cd = skillCdMs({ skid: 28, cd: 0 });
+      if (!zSkillTicketValid(zDispatched.ticket)) return false;
       skillNextAt[28] = Date.now() + cd; selfHealHoldUntil = skillNextAt[28]; lockAct("heal", cd);
       dshCastMark(28, lv, p.targetID, "self-heal");
       tlog("self-heal lv" + lv);
@@ -14620,7 +14626,7 @@ function createRoItemCapture(env) {
       p.SKID = 26; // AL_TELEPORT 瞬移术
       p.selectedLevel = 1;
       p.targetID = 0;
-      CLIENT.NM.sendPacket(p);
+      { var zDispatched = zSkillAttempt(p, "teleport", true); if (!zDispatched.sent) return false; if (!zSkillTicketValid(zDispatched.ticket)) return false; }
       zWalkState.dir = Math.floor(Math.random() * 8); zWalkState.dirAt = Date.now(); // 瞬移后随机换方向
       zWalkState.lastPos = null; zWalkState.stuckCnt = 0; zWalkState.tried = 0;
       tlog("fly-skill-teleport");
@@ -14880,6 +14886,7 @@ function createRoItemCapture(env) {
       return;
     }
     npStopDebtClear(); npAssistantOnSend = null; // 新一轮模式接管之前的停机意图，避免旧回执误关玩家的新选择
+    zWatchManualMove(); zSkillSync();
     zRunning = true;
     $id("dsh-z-state").textContent = "助手运行中…";
     startScan();
@@ -14910,7 +14917,10 @@ function createRoItemCapture(env) {
     setStatus("助手模式已启动（扫描+攻击）· 动作自检 " + _czchk.brief, "ok");
   }
   function stopZhu(mapStopResult) {
-    if (zFarPatrol.active) zFarPatrolClear(true); // 停止时撤销本轮远点巡图，不带到下次启动
+    if (zFarPatrol.active) zFarPatrolClear(true);
+    try { var ownedEnt = CLIENT.SS && CLIENT.SS.Entity; if (zOwnRoute(ownedEnt) && !zManualRoute(ownedEnt) && ownedEnt.walk && ownedEnt.walk.resetRoute) ownedEnt.walk.resetRoute(); } catch (eOwnedStop) {}
+    zWalkState.ownedRoute = null; // 停止时撤销本轮远点巡图，不带到下次启动
+    zSkillCancel();
     if (!deathReturnStopping) deathReturnCancel("手动停止战斗");
     zRunning = false;
     stopScan();
@@ -15597,6 +15607,7 @@ function createRoItemCapture(env) {
   function sendNormalAtk(gid) {
     try {
       if (!clientReady() || !gid) return;
+      if (zSkillBusy()) return;
       var now = Date.now();
       // V2.16.2：断连检测——锁定怪还活着但 HP 超 2.5s 未下降 → 点选补锁定（官方点击路径重新锁定）
       if (zAtkLast.gid === gid && now - zAtkLast.at >= 1500) {
@@ -15623,7 +15634,7 @@ function createRoItemCapture(env) {
       var p = new (czp("REQUEST_ACT"))();
       p.targetGID = gid;
       p.action = npNoCtrlOn() ? 7 : 0; // noctrl 开=7（免ctrl锁定攻击），关=0
-      CLIENT.NM.sendPacket(p);
+      { var zDispatched = zSkillAttempt(p, "attack", false); if (!zDispatched.sent) return; if (!zSkillTicketValid(zDispatched.ticket)) return false; }
       zAtkLast.gid = gid;
       zAtkLast.at = now;
       zAtkLast.outOfRange = false;
@@ -15635,15 +15646,176 @@ function createRoItemCapture(env) {
   function sendLockInject(gid) {
     try {
       if (!clientReady() || !gid) return;
+      if (zSkillBusy() || zManualRoute(CLIENT.SS && CLIENT.SS.Entity)) return;
       // V2.15.30：纯技能流（穿插平A关）完全不发平A锁定包——sendLockInject 也是平A包，受同一开关控制
       var mixEl = $id("dsh-z-attmix");
       if (mixEl && !mixEl.checked) return;
       var p = new (czp("REQUEST_ACT"))();
       p.targetGID = gid;
       p.action = npNoCtrlOn() ? 7 : 0;
-      CLIENT.NM.sendPacket(p);
+      { var zDispatched = zSkillAttempt(p, "lock-inject", false); if (!zDispatched.sent) return; if (!zSkillTicketValid(zDispatched.ticket)) return false; }
       if (btDiagOn) btLog('lock-inject', 'gid=' + gid + ' action=' + p.action + '（内挂目标跟随）');
+      return true;
     } catch (e) {}
+  }
+  // Native PF only: validate its full output (including direct-search corners and endpoint).
+  function zNativePath(tx, ty) {
+    try {
+      var PF = requireDB("Utils/PathFinding"), ent = CLIENT.SS && CLIENT.SS.Entity;
+      if (!PF || typeof PF.search !== "function" || !ent || !ent.position || !dshAStarData()) return null;
+      tx = Math.floor(tx); ty = Math.floor(ty);
+      var px = Math.floor(ent.position[0]), py = Math.floor(ent.position[1]), out = new Int16Array(512);
+      if (![tx,ty,px,py].every(isFinite) || !dshWalkable(tx,ty)) return null;
+      if (px === tx && py === ty) return { x:tx, y:ty, n:1, path:[[px,py]] };
+      var n = PF.search(px, py, tx, ty, 0, out);
+      if (!(n > 1 && n <= 256) || out[0] !== px || out[1] !== py || out[(n-1)*2] !== tx || out[(n-1)*2+1] !== ty) return null;
+      var path = [[px,py]];
+      for (var i=1; i<n; i++) {
+        var x=out[i*2], y=out[i*2+1], dx=x-px, dy=y-py;
+        if (Math.abs(dx)>1 || Math.abs(dy)>1 || (!dx && !dy) || !dshWalkable(x,y)) return null;
+        if (dx && dy && (!dshWalkable(px+dx,py) || !dshWalkable(px,py+dy))) return null;
+        path.push([x,y]); px=x; py=y;
+      }
+      return { x:tx, y:ty, n:n, path:path };
+    } catch (e) { return null; }
+  }
+  function zTargetReach(target, range) {
+    var ent = CLIENT.SS && CLIENT.SS.Entity;
+    if (!target || !target.position || !ent || !ent.position || target.isDeath || target.remove_tick || (target.ACTION && target.action === target.ACTION.DIE)) return null;
+    var mx=Math.floor(target.position[0]), my=Math.floor(target.position[1]), px=Math.floor(ent.position[0]), py=Math.floor(ent.position[1]);
+    range=Math.max(1,Math.floor(range));
+    if (zRangeDist(target.position, ent.position)<=range && zLosClear(px,py,mx,my)) return { x:px, y:py, n:1, path:[[px,py]] };
+    // Enumerate attack cells, not a third pathfinder. Native search remains bounded by the client.
+    var cells=[];
+    for(var dx=-range;dx<=range;dx++) for(var dy=-range;dy<=range;dy++) {
+      var x=mx+dx,y=my+dy;
+      if(dshWalkable(x,y) && zLosClear(x,y,mx,my)) cells.push([x,y]);
+    }
+    cells.sort(function(a,b){return zRangeDist(a,ent.position)-zRangeDist(b,ent.position);});
+    for(var i=0;i<cells.length;i++){var p=zNativePath(cells[i][0],cells[i][1]);if(p)return p;}
+    return null;
+  }
+  function zWatchManualMove() {
+    var nm=CLIENT.NM; if(!nm || typeof nm.sendPacket!=="function" || nm.sendPacket.__zRouteWatch) return;
+    var original=nm.sendPacket;
+    function watch(p) {
+      if(p && p.dest && !zWalkState.moveDispatch) {
+        zWalkState.manualRoute={ at:Date.now(), seen:false }; zWalkState.ownedRoute=null;
+        zWalkState.chaseHold=null; zWalkState.skillChase=null; zFarPatrolClear(false);
+      }
+      return original.apply(this,arguments);
+    }
+    watch.__zRouteWatch=true; nm.sendPacket=watch;
+  }
+  function zOwnRoute(ent) {
+    var own=zWalkState.ownedRoute, w=ent && ent.walk;
+    if(!own || !zSkillTicketValid(own.ticket)) return false;
+    if(w && w.total>0 && w.index<w.total) return !!(w.path && w.path[w.total-2]===own.x && w.path[w.total-1]===own.y);
+    return false;
+  }
+  function zManualRoute(ent) {
+    zWatchManualMove();
+    var w=ent && ent.walk, active=!!(w && w.total>0 && w.index<w.total), manual=zWalkState.manualRoute;
+    if(moveXY.busy) return true;
+    if(active && !zOwnRoute(ent)) {
+      if(!manual) manual=zWalkState.manualRoute={at:Date.now(),seen:true};
+      manual.seen=true; zWalkState.ownedRoute=null; zWalkState.chaseHold=null; zWalkState.skillChase=null;
+      zFarPatrolClear(false); return true;
+    }
+    if(manual && !manual.seen && Date.now()-manual.at<1500) return true; // await local route creation after external packet
+    if(manual) { zWalkState.manualRoute=null; zWalkState.chaseHold=null; zWalkState.skillChase=null; zLock.gid=null; }
+    return false;
+  }
+  function zSendMove(p) {
+    zWatchManualMove();
+    if(zManualRoute(CLIENT.SS && CLIENT.SS.Entity)) return false;
+    zWalkState.moveDispatch=true;
+    try {
+      { var zDispatched = zSkillAttempt(p,"movement",true); if (!zDispatched.sent) return false; if (!zSkillTicketValid(zDispatched.ticket)) return false; }
+      zWalkState.ownedRoute={ ticket:zSkillTicket(), x:p.dest[0], y:p.dest[1] }; zMarkSelfMove(); return true;
+    } finally { zWalkState.moveDispatch=false; }
+  }
+  function zPickTarget(ent) {
+    if(!zSkillSync() || !ent || !ent.position) return null;
+    if(zManualRoute(ent) || zEngagedNow(Date.now())) zChaseTarget(null);
+    var EM=requireDB("Renderer/EntityManager"), now=Date.now(), anyLock=Object.keys(lockList).length>0;
+    var all=!$id("dsh-z-allmobs") || $id("dsh-z-allmobs").checked;
+    var reactive=zLock.reactive ? gidInt(zLock.gid) : 0, held=zWalkState.chaseHold, pool=[];
+    if (held) { var old=zEntOf(held.gid); if (!old || old!==held.entity || (old._job!=null?old._job:old.job!=null?old.job:old.mobId)!==held.mid) { if (zWalkState.ownedRoute && zWalkState.ownedRoute.target === held.gid && zOwnRoute(ent) && !zManualRoute(ent)) { try { ent.walk.resetRoute(); } catch (eLostTarget) {} zWalkState.ownedRoute=null; } held=null; zWalkState.chaseHold=null; zChaseTarget(null); zLockCounts={}; zCastIdx=0; } }
+    var allowHit=now-zHpWatch.lastHitAt<3000 && (!$id("dsh-z-ona") || $id("dsh-z-ona").value==="还击");
+    var temp=apiBattleTarget && apiBattleTargetEntity(apiBattleTarget), tempGid=temp && temp.gid;
+    if(!EM || !EM.forEach) return null;
+    EM.forEach(function(e){
+      if(!e || e.objecttype!==5 || !e.position || e.isDeath || e.remove_tick || (e.ACTION && e.action===e.ACTION.DIE)) return;
+      var gid=gidInt(e.GID), mid=e._job!=null?e._job:e.job!=null?e.job:e.mobId;
+      if(zBossIgnoredGid(gid,mid)) return;
+      var boss=gid===gidInt(zBossWantGid) && !!zBossWantGid, specified=gid===gidInt(tempGid) && !!tempGid;
+      var heldReactive=held && held.entity===e && gid===gidInt(held.gid) && gid===reactive && zMobBossState(mid)==="normal" && (!($id("dsh-z-ona")) || $id("dsh-z-ona").value==="还击") &&
+        (now-held.at<8000 || now-(zWalkState.chaseHoldProgressAt || held.at)<8000 || zRangeDist(e.position,ent.position)<zWalkState.chaseHoldDist || zRangeDist(e.position,ent.position)<=calcAtkRange());
+      var locked=anyLock?!!lockList[String(mid)]:all, hit=heldReactive || (allowHit && zMobBossState(mid)==="normal" && (gid===reactive || (zHitBy[gid] && now-zHitBy[gid].ts<zHitKeepMs)));
+      if(!locked && !boss && !specified && !hit) return;
+      var dist=zRangeDist(e.position,ent.position), reach=zTargetReach(e,calcAtkRange()); if(!reach) return;
+      var keep=held ? gid===gidInt(held.gid) : gid===gidInt(zLock.gid);
+      var tier=specified?100:boss?99:keep?90:locked?((zHitBy[gid] && now-zHitBy[gid].ts<zHitKeepMs)?3:dist<=1?2:1):0;
+      pool.push({e:e,tier:tier,hp:locked && e.life && e.life.hp!=null?e.life.hp:1e18,dist:dist,path:reach.n});
+    });
+    pool.sort(function(a,b){return b.tier-a.tier || a.hp-b.hp || a.path-b.path || a.dist-b.dist;});
+    if(!pool.length){zWalkState.chaseHold=null; zChaseTarget(null); return null;}
+    var pick=pool[0].e; if(!held || held.entity!==pick) { zWalkState.chaseHoldDist=zRangeDist(pick.position,ent.position); zWalkState.chaseHoldProgressAt=now; } if(gidInt(zWalkState.chaseGid)!==gidInt(pick.GID) || (held && held.entity!==pick)) { zWalkState.chaseGid=null; zWalkState.chaseSince=0; zWalkState.chaseFrom=null; zWalkState.chaseReplan=false; zWalkState.npRescueGid=0; zWalkState.npRescueUntil=0; } zWalkState.chaseHold={gid:pick.GID,entity:pick,mid:pick._job!=null?pick._job:pick.job!=null?pick.job:pick.mobId,at:held && gidInt(held.gid)===gidInt(pick.GID)?held.at:now}; return pick;
+  }
+  function zChaseTarget(target, range) {
+    var ent=CLIENT.SS && CLIENT.SS.Entity;
+    if(!target) { zWalkState.chaseGid=null; zWalkState.chaseDist=0; zWalkState.chaseSince=0; zWalkState.chaseFrom=null; zWalkState.chaseReplan=false; zWalkState.npRescueGid=0; zWalkState.npRescueUntil=0; return "target-invalid"; }
+    if(!zSkillSync() || zManualRoute(ent)) return "cancelled";
+    if(!target || zEntOf(target.GID)!==target || target.isDeath || target.remove_tick || (target.ACTION && target.action===target.ACTION.DIE)) return "target-invalid";
+    var p=zTargetReach(target,range); if(!p) return "no-path";
+    var now=Date.now();
+    var cgid7 = target.GID;
+    var cdist7 = zRangeDist(target.position, ent.position); // V2.34.3：格子距离口径
+    if (zWalkState.chaseGid === cgid7 && cdist7 >= zWalkState.chaseDist) {
+      if (!zWalkState.chaseSince) { zWalkState.chaseSince = now; zWalkState.chaseFrom = [ent.position[0], ent.position[1]]; zWalkState.chaseReplan = false; }
+    } else if (zWalkState.chaseGid !== cgid7) {
+      zWalkState.chaseGid = cgid7; zWalkState.chaseSince = 0; zWalkState.chaseFrom = null; zWalkState.chaseReplan = false;
+    } else {
+      zWalkState.chaseSince = 0; zWalkState.chaseFrom = null; zWalkState.chaseReplan = false;
+    }
+    var chaseMoved = zWalkState.chaseFrom ? Math.max(Math.abs(ent.position[0] - zWalkState.chaseFrom[0]), Math.abs(ent.position[1] - zWalkState.chaseFrom[1])) : 99;
+    if (chaseMoved >= 2) { zWalkState.chaseSince = 0; zWalkState.chaseFrom = null; zWalkState.chaseReplan = false; } // ②角色确实在位移 → 不算卡住，立刻清零
+    if (!zWalkState.chaseSince) { zWalkState.npRescueGid=0; zWalkState.npRescueUntil=0; }
+    zWalkState.chaseDist = cdist7;
+    if (zWalkState.chaseSince && chaseMoved < 2) {
+      var chaseStuckMs = now - zWalkState.chaseSince;
+      if (chaseStuckMs >= 4000 && !zWalkState.chaseReplan) {
+        zWalkState.chaseReplan = true; // ③先换一次接近点（下方 ttx/tty 按垂直方向偏一格），仍卡住才允许瞬移
+        tlog("walk-chase-replan 追怪 4s 距离未缩小且角色未位移 → 先换接近点重规划");
+        setStatus("追怪受阻，先换接近点重规划…", "st");
+      } else if (chaseStuckMs >= 6000) {
+        var chaseFlyOn = $id("dsh-z-flystuck") && $id("dsh-z-flystuck").checked && !($id("dsh-z-flykill") && !$id("dsh-z-flykill").checked); // V2.38.24 G1：开关合并为一个
+        if (chaseFlyOn && zEscFlySecNow() > 0 && canTravelFly() && !zEngagedNow(now) && now - zWalkState.lastIdleFly >= zEscFlySecNow() * 1000) {
+          zWalkState.lastIdleFly = now;
+          zWalkState.chaseSince = 0; zWalkState.chaseGid = null; zWalkState.chaseFrom = null; zWalkState.chaseReplan = false;
+          var fok7 = doFly();
+          if (fok7) markFlyOk(); else markFlyFail();
+          tlog("walk-chase-stuck 追怪卡住6s（距离未缩小+角色未位移+已重规划）→ 瞬移");
+          setStatus("追怪卡住，自动瞬移换点…", "warn");
+          return;
+        }
+      }
+    }
+    if(p.n===1) { zWalkState.chaseGid=null; zWalkState.chaseDist=0; zWalkState.chaseSince=0; zWalkState.chaseFrom=null; zWalkState.chaseReplan=false; zWalkState.npRescueGid=0; zWalkState.npRescueUntil=0; return "in-range-observed"; } // interpolated position is not server-arrival proof
+    var interval=Math.max(0.15,Math.min(1,parseFloat($id("dsh-z-moveint")?$id("dsh-z-moveint").value:0.25)||0.25))*1000;
+    if(Date.now()-(zWalkState.lastChase||0)<interval) return "approaching";
+    if(zWalkState.chaseReplan) {
+      var dx=target.position[0]-ent.position[0],dy=target.position[1]-ent.position[1];
+      for(var side=1;side>=-1;side-=2) {
+        var rx=p.x+(Math.abs(dx)<Math.abs(dy)?(dx>=0?-side:side):0), ry=p.y+(Math.abs(dx)>=Math.abs(dy)?(dy>=0?side:-side):0);
+        if(zRangeDist([rx,ry],target.position)<=range && zLosClear(rx,ry,Math.floor(target.position[0]),Math.floor(target.position[1]))) { var replanned=zNativePath(rx,ry); if(replanned) { p=replanned; break; } }
+      }
+    }
+    var pm=new (czp("REQUEST_MOVE"))();pm.dest=[p.x,p.y];
+    if(!zSendMove(pm)) return "cancelled";
+    zWalkState.ownedRoute.target=target.GID;
+    zWalkState.lastChase=Date.now();return "approaching";
   }
   // 客户端 A* 避障寻路：从玩家到目标点，返回沿路径约 5 格处的移动目标点（含路径点数）
   function pathFindTo(tx, ty) {
@@ -15668,11 +15840,12 @@ function createRoItemCapture(env) {
   // 自研寻怪远点：一次提交本地图内可走目标，途中寻路交给游戏；两秒没有坐标变化才换另一目标。
   var zFarPatrol = { active: false, key: "", tx: 0, ty: 0, from: null, last: null, at: 0, progressAt: 0, tries: 0, rejected: [] };
   function zFarPatrolClear(cancelRoute) {
-    if (cancelRoute && zFarPatrol.active) { try { var e = CLIENT.SS && CLIENT.SS.Entity; if (e && typeof e.resetRoute === "function") e.resetRoute(); } catch (ex) {} }
+    if (cancelRoute && zFarPatrol.active && zOwnRoute(CLIENT.SS && CLIENT.SS.Entity) && !zManualRoute(CLIENT.SS && CLIENT.SS.Entity)) { try { var e = CLIENT.SS && CLIENT.SS.Entity; if (e && typeof e.resetRoute === "function") e.resetRoute(); } catch (ex) {} }
     zFarPatrol.active = false; zFarPatrol.from = null; zFarPatrol.last = null; zFarPatrol.progressAt = 0;
     zFarPatrol.tries = 0; zFarPatrol.rejected = [];
   }
   function zFarPatrolTick(ent, px, py, dirs, now) {
+    if (zManualRoute(ent)) return true;
     var terrain = dshAStarData();
     if (!terrain || terrain.w < 4 || terrain.h < 4) { setStatus("本地图地形未就绪，暂不自动选远点；卡死保护照常运行…", "warn"); return true; } // 不退回短步盲走
     var scope = String(activeProfileKey()) + "|" + String(getMapName() || "");
@@ -15698,9 +15871,9 @@ function createRoItemCapture(env) {
       if (Math.max(Math.abs(tx - px), Math.abs(ty - py)) < 16) continue;
       var dest = dshSnapWalk(tx, ty);
       if (!dest || zFarPatrol.rejected.indexOf(dest[0] + "," + dest[1]) >= 0) continue;
-      // 只检查远点本身可走；途中路线由游戏处理，不在助手中分解或要求本地 A* 先走通。
+      if (!zNativePath(dest[0], dest[1])) continue; // prove complete native route, not just endpoint
       var packet = new (czp("REQUEST_MOVE"))(); packet.dest = [dest[0], dest[1]];
-      CLIENT.NM.sendPacket(packet); zMarkSelfMove();
+      if (!zSendMove(packet)) return true;
       zFarPatrol.active = true; zFarPatrol.tx = dest[0]; zFarPatrol.ty = dest[1];
       zFarPatrol.from = [px, py]; zFarPatrol.last = [px, py]; zFarPatrol.at = now; zFarPatrol.progressAt = now;
       zWalkState.dir = (base + i) % dirs.length;
@@ -15714,12 +15887,13 @@ function createRoItemCapture(env) {
   }
   function zWalk() {
     try {
-      if (!clientReady()) return;
+      if (!clientReady() || !zSkillSync()) return;
+      if (zManualRoute(CLIENT.SS && CLIENT.SS.Entity)) { zChaseTarget(null); zFarPatrolClear(false); return; }
       // V2.38.40 手动走位档：zWalk 是助手全部寻怪移动的唯一入口（走向目标 / 追怪 / 巡图直走 / A* 绕障 / 无目标换点瞬移 /
       //   卡死自动瞬移 / 脱困换点 / 打不到就换点 / 换图反向走与回图传送 / 首领保持距离接管，都挂在这条链上）→ 本档一律原地不动。
       //   只保留坐下周期（回血/回蓝属保命·回复动作，不产生任何位移）。首领「出现即瞬移」仍在 checkDefense 里按 dsh-z-flykill 照常执行。
       if (isManual() && typeof zFarPatrol !== "undefined" && zFarPatrol && zFarPatrol.active) zFarPatrolClear(true);
-      if (isManual()) { doSitCycle(scanMobs || []); return; }
+      if (isManual()) { zChaseTarget(null); doSitCycle(scanMobs || []); return; }
       if (moveXY.busy) { if (typeof zFarPatrol !== "undefined" && zFarPatrol && zFarPatrol.active) zFarPatrolClear(true); return; } // 手动坐标走路接管时撤销自己的远点路线
       if (zEscape.until > Date.now()) return; // V2.15.23：逃脱中（移动避开怪）→ 不寻怪不打怪
       if (pendingPick) { try { zMon.action = "拾取物品中"; } catch (e) {} return; } // V2.15.16：有拾取任务在身 → 寻怪让位（防拾取移动包被寻怪覆盖）
@@ -15727,6 +15901,7 @@ function createRoItemCapture(env) {
       var ent = CLIENT.SS.Entity;
       if (!ent || !ent.position) return;
       if (zEngagedNow(Date.now())) {
+        zChaseTarget(null);
         if (typeof zFarPatrolClear === "function") zFarPatrolClear(true); // 已交战，停止自研巡图；防止旧远点路线继续拉走角色
         zWalkState.noTargetSince = 0;
         if (npHuntOn) npHuntStop("engaged", true);
@@ -15742,7 +15917,7 @@ function createRoItemCapture(env) {
         var zRouteTotalW = zRouteW ? (+zRouteW.total || 0) : 0;
         var zRouteIdxW = zRouteW ? (+zRouteW.index || 0) : 0;
         var zOwnPending = !!(typeof zFarPatrol !== "undefined" && zFarPatrol && zFarPatrol.active && zFarPatrol.from && zFarPatrol.key === String(activeProfileKey()) + "|" + String(curKeyB || "") && zEnRW && zEnRW.position && zEnRW.position[0] === zFarPatrol.from[0] && zEnRW.position[1] === zFarPatrol.from[1] && Date.now() - zFarPatrol.at < 3000);
-        var zRouteExtW = !!(zRouteTotalW > 0 && zRouteIdxW < zRouteTotalW && (Date.now() - (zWalkState.lastSelfMoveAt || 0) > 1500) && !zOwnPending);
+        var zRouteExtW = zManualRoute(ent);
         zWalkState.routeExt = zRouteExtW; zWalkState.routeTotal = zRouteTotalW; zWalkState.routeIdx = zRouteIdxW;
         if (zWalkState.startMap && curKeyB && normMapKey(curKeyB) !== normMapKey(zWalkState.startMap)) {
           // V2.32.2 换图加固：换图瞬间地图名/坐标未稳会误触反向走；要求新图名连续稳定 1.2s 且坐标有效才认定
@@ -15769,7 +15944,7 @@ function createRoItemCapture(env) {
                 var bDest = mvSnapWalkable(btx, bty);
                 var pB = new (czp("REQUEST_MOVE"))();
                 pB.dest = [bDest[0], bDest[1]];
-                CLIENT.NM.sendPacket(pB);
+                zSendMove(pB);
                 zMarkSelfMove(); // V2.38.4 G1①：反向走回是助手自己发的位移
                 zWalkState.lastMoveDir = zWalkState.backDir;
                 setStatus("已换图，反向走回原图…", "warn");
@@ -15814,73 +15989,7 @@ function createRoItemCapture(env) {
       var npMode = npHuntMode() === "np" || isHybrid();
       // V2.7.3：2s 判定门槛下移到「无怪直走」段；追怪用独立 1s 节流（缩短锁定→出手周期）
       // 优先：找最近的锁定怪（任意距离）→ 避障寻路走过去
-      var EM = requireDB("Renderer/EntityManager");
-      var anyLock = Object.keys(lockList).length > 0;
-      var beingHit = (now - zHpWatch.lastHitAt) < 3000; // 被攻击中
-      var onaMode = $id("dsh-z-ona") ? $id("dsh-z-ona").value : "还击";
-      var allowHitTarget = beingHit && onaMode === "还击"; // 被攻击且设置为还击 → 无锁定怪时非锁定怪也追
-      // V2.34.4：与 zAttack 同口径——名单非空时只认名单，「打全部怪」仅在没有名单时生效
-      var zAllMobsW = !$id("dsh-z-allmobs") || $id("dsh-z-allmobs").checked;
-      // V2.16.3：追怪候选分两池——锁定怪候选（lockNear）永远优先；还击候选（hitNear）仅当没有任何锁定怪候选时才兜底。
-      //   旧实现把还击怪混入同一候选并按「血少优先」排序，快死的非锁定怪会抢走锁定怪目标（来回转向/追怪中断）。
-      var near = null, nearD = 1e9, nearHp = 1e18; // V2.15.25：nearHp=最近候选绝对剩余HP（血少优先抢尾刀）
-      var lockNear = null, lockNearD = 1e9, lockNearHp = 1e18, lockNearTier = -1; // 锁定怪候选（优先）
-      var hitNear = null, hitNearD = 1e9, hitNearHp = 1e18;    // 还击候选（兜底）
-      var heldNear = null, heldNearD = 1e9, heldNearHp = 1e18; // V2.38.4 G2②：chaseHold 保持中的那只怪（优先，防两只怪之间来回换目标点）
-      var bossNear = null, bossNearD = 1e9; // 首领「优先攻击」也要优先追同一只，不能被旧 chaseHold 抢走
-      var zReactiveGid = zLock.reactive ? gidInt(zLock.gid) : 0; // V2.34.4：还击锁定的攻击者必须被追击（与 zAttack 同锚点）
-      var zBossChaseGid = zBossWantGid || 0; // V2.38.15：被首领设置指定为最高优先的那只（优先攻击 / 尾刀到线）越过锁定名单与「打全部怪」被追击
-      var zWalkSeenMob = 0, zWalkBlockedMob = 0; // V2.38.4：视野内活怪数 / 被名单门挡掉的怪数（仅诊断，不参与筛选）
-      if (EM && EM.forEach) {
-        EM.forEach(function (e) {
-          try {
-            if (e.objecttype !== 5) return;
-            if (e.isDeath) return;
-            if (e.ACTION && e.action != null && e.action === e.ACTION.DIE) return;
-            if (e.remove_tick) return;
-            var mid = e._job != null ? String(e._job) : (e.job != null ? String(e.job) : (e.mobId != null ? String(e.mobId) : null));
-            // V2.38.15：首领忽略集合统一剔除（不处理 / 尾刀未到线 / 血量未知 → 不追、不打、不因它飞）；普通怪一律不受影响
-            if (zBossIgnoredGid(e.GID, mid)) return;
-            var inLockN = anyLock ? !!(mid && lockList[mid]) : zAllMobsW; // V2.34.4：名单非空→只认名单；名单为空→按「打全部怪」
-            if (!inLockN && zReactiveGid && gidInt(e.GID) === zReactiveGid) inLockN = true;
-            if (!inLockN && zBossChaseGid && gidInt(e.GID) === zBossChaseGid) inLockN = true; // V2.38.15：首领最高优先目标
-            zWalkSeenMob++;
-            if (!inLockN && !allowHitTarget) zWalkBlockedMob++; // V2.38.4：被名单门挡掉的怪计数（仅诊断，不参与筛选）
-            if (!inLockN && !allowHitTarget) return;
-            if (!ent.position || !e.position) return;
-            var d = zRangeDist(e.position, ent.position); // V2.34.3：格子距离口径（与客户端一致）
-            if (zBossChaseGid && gidInt(e.GID) === gidInt(zBossChaseGid)) { bossNear = e; bossNearD = d; }
-            // V2.36.3：索敌优先级——已攻击我的锁定怪（打死为止）> 身侧(相邻 d<=1) > 血少 > 距离
-            var hpNow = (e.life && e.life.hp != null) ? e.life.hp : 1e18;
-            // V2.38.4 G2②：保持中的那只怪只要还在合格候选池里（未死亡/未移出名单）就优先选中
-            if (!heldNear && zWalkState.chaseHold && gidInt(e.GID) === gidInt(zWalkState.chaseHold.gid)) { heldNear = e; heldNearD = d; heldNearHp = hpNow; }
-            if (inLockN) {
-              var gidK = gidInt(e.GID);
-              var tier = (zHitBy[gidK] && (now - zHitBy[gidK].ts) < zHitKeepMs) ? 2 : (d <= 1 ? 1 : 0);
-              if (!lockNear || tier > lockNearTier || (tier === lockNearTier && (hpNow < lockNearHp || (hpNow === lockNearHp && d < lockNearD)))) { lockNear = e; lockNearD = d; lockNearHp = hpNow; lockNearTier = tier; }
-            } else {
-              // V2.38.15：首领一律不进还击候选（还击只对非首领怪生效）
-              if (isBossMid(mid)) return;
-              if (!hitNear || hpNow < hitNearHp || (hpNow === hitNearHp && d < hitNearD)) { hitNear = e; hitNearD = d; hitNearHp = hpNow; }
-            }
-          } catch (e2) {}
-        });
-        // 锁定怪候选优先；确无锁定怪才用还击候选
-        // V2.38.4 G2②：chaseHold 优先；但「还击锁定的攻击者」优先级最高（不得回退 V2.34.4 F2 的还击追击语义）
-        if (bossNear) { near = bossNear; nearD = bossNearD; nearHp = bossNear.life && bossNear.life.hp != null ? bossNear.life.hp : 1e18; }
-        else if (heldNear && (zReactiveGid === 0 || gidInt(heldNear.GID) === zReactiveGid)) { near = heldNear; nearD = heldNearD; nearHp = heldNearHp; }
-        else if (lockNear) { near = lockNear; nearD = lockNearD; nearHp = lockNearHp; }
-        else if (hitNear) { near = hitNear; nearD = hitNearD; nearHp = hitNearHp; }
-        // V2.38.4：名单门可见提示——视野内确实有怪、却因「锁定名单 / 打全部怪」被排除时不静默直走
-        if (!near && zWalkBlockedMob > 0) {
-          zAtkWhy = "视野内有怪但不在锁定名单";
-          zMon.action = "视野内有怪(" + zWalkBlockedMob + "/" + zWalkSeenMob + ")但不在锁定名单 · 名单" + Object.keys(lockList).length + "只 · 打全部怪" + (zAllMobsW ? "开" : "关");
-          if (now - (zWalkState.lastLockMissLog || 0) >= 5000) {
-            zWalkState.lastLockMissLog = now;
-            tlog("walk-lock-miss 视野内怪=" + zWalkSeenMob + " 被名单挡=" + zWalkBlockedMob + " 名单=" + Object.keys(lockList).length + " allmobs=" + zAllMobsW + " 还击门=" + allowHitTarget);
-          }
-        }
-      }
+      var near = zPickTarget(ent), nearD = near ? zRangeDist(near.position, ent.position) : 1e9;
       // V2.9.0 方向记忆：记下最近一次锁定怪相对方位（10s 有效），无怪直走时优先朝该方向
       // V2.38.4 G2①：滞回——同一候选方向必须连续稳定 ≥1.5s 才允许改写方向记忆（杜绝两只怪分列两侧时每拍翻转）
       try {
@@ -15907,7 +16016,7 @@ function createRoItemCapture(env) {
         zWalkState.routeActive = false; zWalkState.routeTotal = 0; zWalkState.routeIdx = 0;
       }
       if (zRouteExtNow && typeof zFarPatrol !== "undefined" && zFarPatrol && zFarPatrol.active) zFarPatrolClear(false); // 客户端路线接管：失去自有路线所有权，不取消玩家点击的路线
-      if (zRouteExtNow && !near) {
+      if (zRouteExtNow) {
         // ② 只扫不发：路线进行中绝不发直走 / 换点 / 贴近 / 反向走等任何位移（扫描与安全保护照常执行）
         zWalkState.routeActive = true;
         zWalkState.routeTotal = zRouteTotalNow; zWalkState.routeIdx = zRouteIdxNow;
@@ -15915,16 +16024,6 @@ function createRoItemCapture(env) {
         zMon.action = "游戏自动寻路进行中（" + zRouteIdxNow + "/" + zRouteTotalNow + "格），仅扫描…";
         setStatus("游戏自动寻路进行中（" + zRouteIdxNow + "格），仅扫描…", "st");
         return;
-      }
-      if (zRouteExtNow && near) {
-        // ③ 路线进行中扫到符合判断条件的怪 → 主动接战：先显式取消本地路线，再走既有完整判断流程（不新增任何捷径）
-        zWalkState.routeActive = false;
-        zWalkState.routeTotal = 0; zWalkState.routeIdx = 0;
-        zMarkSelfMove();
-        var zRouteCancel = "none";
-        try { var zEnRC = CLIENT.SS && CLIENT.SS.Entity; if (zEnRC && typeof zEnRC.resetRoute === "function") { zEnRC.resetRoute(); zRouteCancel = "resetRoute"; } } catch (eRC) {}
-        tlog("walk-route-engage 客户端路线进行中（" + zRouteIdxNow + "/" + zRouteTotalNow + "格）扫到目标 " + (near._job != null ? near._job : near.GID) + " → 主动接战，取消本地路线(" + zRouteCancel + ")");
-        setStatus("寻路途中扫到目标，主动接战…", "ok");
       }
       if (near) {
         if (typeof zFarPatrolClear === "function") zFarPatrolClear(true); // 见怪即结束长途巡图，再走现有精准接近流程
@@ -15949,6 +16048,7 @@ function createRoItemCapture(env) {
             zWalkState.chaseHold = null;
           }
         }
+        if (zWalkState.chaseGid != null && (gidInt(zWalkState.chaseGid)!==gidHold || nearD<zWalkState.chaseDist || (zWalkState.chaseFrom && zRangeDist(ent.position,zWalkState.chaseFrom)>=2) || nearD<=calcAtkRange())) { zChaseTarget(null); }
         // V2.9.0 内挂模式主动追怪：锁定怪超射程 → 关内挂一次（防拉锯），助手直发移动靠近（服务器寻路）
         // 完全无锁定怪时才由下方 np 分支重新开内挂兜底
         if (npMode || isHybrid()) {
@@ -16030,137 +16130,10 @@ function createRoItemCapture(env) {
             if (npHuntOn) npHuntStop();
           }
         }
-        // V2.16.7：追怪不再直发怪坐标（会走到脸上）——目标改为「距怪 射程-1 格」可走点，停在射程边缘即可攻击（玩家手动点怪同款：射程内直接打）
-        // V2.38.4 追怪卡住判定加强：不再「4s 距离未缩小就瞬移」。必须同时满足
-        //   ①与锁定怪距离未缩小 ②角色自身在窗口内位移 < 2 格 ③已尝试换一次接近点/重规划；阈值 4s → 6s；
-        //   距离缩小或角色位移达标立刻清零。V2.38.25 I：瞬移节流改读「脱困等待」dsh-z-escflysec（默认 6s），「防御瞬移总开关」约束不变。
-        var cgid7 = near.GID;
-        var cdist7 = zRangeDist(near.position, ent.position); // V2.34.3：格子距离口径
-        if (zWalkState.chaseGid === cgid7 && cdist7 >= zWalkState.chaseDist) {
-          if (!zWalkState.chaseSince) { zWalkState.chaseSince = now; zWalkState.chaseFrom = [ent.position[0], ent.position[1]]; zWalkState.chaseReplan = false; }
-        } else if (zWalkState.chaseGid !== cgid7) {
-          zWalkState.chaseGid = cgid7; zWalkState.chaseSince = 0; zWalkState.chaseFrom = null; zWalkState.chaseReplan = false;
-        } else {
-          zWalkState.chaseSince = 0; zWalkState.chaseFrom = null; zWalkState.chaseReplan = false;
-        }
-        var chaseMoved = zWalkState.chaseFrom ? Math.max(Math.abs(ent.position[0] - zWalkState.chaseFrom[0]), Math.abs(ent.position[1] - zWalkState.chaseFrom[1])) : 99;
-        if (chaseMoved >= 2) { zWalkState.chaseSince = 0; zWalkState.chaseFrom = null; zWalkState.chaseReplan = false; } // ②角色确实在位移 → 不算卡住，立刻清零
-        zWalkState.chaseDist = cdist7;
-        if (zWalkState.chaseSince && chaseMoved < 2) {
-          var chaseStuckMs = now - zWalkState.chaseSince;
-          if (chaseStuckMs >= 4000 && !zWalkState.chaseReplan) {
-            zWalkState.chaseReplan = true; // ③先换一次接近点（下方 ttx/tty 按垂直方向偏一格），仍卡住才允许瞬移
-            tlog("walk-chase-replan 追怪 4s 距离未缩小且角色未位移 → 先换接近点重规划");
-            setStatus("追怪受阻，先换接近点重规划…", "st");
-          } else if (chaseStuckMs >= 6000) {
-            var chaseFlyOn = $id("dsh-z-flystuck") && $id("dsh-z-flystuck").checked && !($id("dsh-z-flykill") && !$id("dsh-z-flykill").checked); // V2.38.24 G1：开关合并为一个
-            if (chaseFlyOn && zEscFlySecNow() > 0 && canTravelFly() && !zEngagedNow(now) && now - zWalkState.lastIdleFly >= zEscFlySecNow() * 1000) {
-              zWalkState.lastIdleFly = now;
-              zWalkState.chaseSince = 0; zWalkState.chaseGid = null; zWalkState.chaseFrom = null; zWalkState.chaseReplan = false;
-              var fok7 = doFly();
-              if (fok7) markFlyOk(); else markFlyFail();
-              tlog("walk-chase-stuck 追怪卡住6s（距离未缩小+角色未位移+已重规划）→ 瞬移");
-              setStatus("追怪卡住，自动瞬移换点…", "warn");
-              return;
-            }
-          }
-        }
-        var chaseInt = Math.max(0.15, Math.min(1, parseFloat($id("dsh-z-moveint") ? $id("dsh-z-moveint").value : 0.25) || 0.25)) * 1000;
-        if (now - zWalkState.lastChase < chaseInt) return;
-        zWalkState.lastChase = now;
-        var atkR7 = calcAtkRange();
-        var stopD = Math.max(1, atkR7 - 1);
-        var rdx7 = near.position[0] - ent.position[0];
-        var rdy7 = near.position[1] - ent.position[1];
-        var rdl7 = Math.abs(rdx7) + Math.abs(rdy7);
-        var ttx = Math.round(near.position[0] - (rdl7 > 0 ? (rdx7 / rdl7) * stopD : 0));
-        var tty = Math.round(near.position[1] - (rdl7 > 0 ? (rdy7 / rdl7) * stopD : 0));
-        if (zWalkState.chaseReplan) { // V2.38.4 ③：换一次接近点——沿怪方向垂直偏一格，绕开卡点（不再直发同一落点）
-          if (Math.abs(rdx7) >= Math.abs(rdy7)) { tty += (rdy7 >= 0 ? 1 : -1); }
-          else { ttx += (rdx7 >= 0 ? -1 : 1); }
-        }
-        var cDest = mvSnapWalkable(ttx, tty);
-        // V2.38.22 全图地形识别（只在助手确实在驱动移动的追怪/接管路径上接入）：用本图全量地形 A* 校验到接近点
-        //   的真实可达性，与自研寻怪同款只发「路径末端」一次走通；不再只靠 3×3 单点吸附（墙厚 >3 格时
-        //   吸附点本身落在墙里，服务器只能拒收或自己绕）。接近点不可达 → 换接近点重试；全部不可达 →
-        //   本拍不发这个位移包。dsh-z-astar 关闭 / 地形未就绪 / 外部客户端路线进行中 / 任何异常 →
-        //   一律退回原单点吸附发包，行为与改动前完全一致（fail-closed：绝不停住、绝不静默换行为）。
-        try {
-          var cAstOn = true;
-          try { var cAstEl = document.getElementById("dsh-z-astar"); cAstOn = cAstEl ? cAstEl.checked : true; } catch (eA0) {}
-          var cpx = Math.round(ent.position[0]), cpy = Math.round(ent.position[1]);
-          // V2.38.24 F：视线（站定 + 侧移）判定脱离 A* 开关——只用 Altitude 的 SNIPABLE 与 dshWalkable，
-          //   关掉 dsh-z-astar / 地形未就绪时同样生效；A* 寻路本身（dshFindPath）仍严格受开关与地形数据控制。
-          // 换接近点候选：主接近点 → 沿怪方向垂直偏一格的两个绕行点（与追怪重规划同款偏移）
-          var cCands = [[ttx, tty], Math.abs(rdx7) >= Math.abs(rdy7) ? [ttx, tty + (rdy7 >= 0 ? 1 : -1)] : [ttx + (rdx7 >= 0 ? -1 : 1), tty], Math.abs(rdx7) >= Math.abs(rdy7) ? [ttx, tty - (rdy7 >= 0 ? 1 : -1)] : [ttx - (rdx7 >= 0 ? -1 : 1), tty]];
-          var cReach = false;
-          var cOrder = cCands;
-          var cStepped = false;
-          var cMx = Math.round(near.position[0]), cMy = Math.round(near.position[1]);
-          if (isFinite(cpx) && isFinite(cpy) && isFinite(cMx) && isFinite(cMy)) {
-            // V2.38.23 视线（LOS/SNIPABLE）判定：地形格 WALKABLE(1<<1)=能不能走过去、SNIPABLE(1<<3)=能不能穿过去打，
-            //   两位彼此独立（type 5=只有 SNIPABLE：能射不能走；type 1=都没有）。旧口径只看 WALKABLE → 隔半面墙的
-            //   锁定怪明明在射程内也打不到，助手还每拍把角色往墙上顶（用户手动挪一下才打得到）。
-            //   地形/位缺失或任何异常 → zLosClear 一律当「有视线」（fail-open，等同改动前行为，绝不因数据缺失卡住）。
-            if (zRangeDist(near.position, ent.position) <= atkR7 && zLosClear(cpx, cpy, cMx, cMy)) {
-              // ② 当前格已在射程内且有视线 → 本拍不发位移包（站定开打，不再贴墙来回抖）
-              zWalkState.noTargetSince = 0;
-              tlog("walk-追怪-los-stand 已在射程内且有视线 -> 站定开打（本拍不发位移包）");
-              setStatus("已在射程内且能打到，站定开打…", "ok");
-              return;
-            }
-            var cLosAny = false;
-            for (var ca = 0; ca < cCands.length && !cLosAny; ca++) cLosAny = dshWalkable(cCands[ca][0], cCands[ca][1]) && zLosClear(cCands[ca][0], cCands[ca][1], cMx, cMy);
-            if (!cLosAny) {
-              // ③ 三个候选没有一个是「可走 + 对怪有视线」→ 以角色当前格为原点侧移绕行（④ 有界：同怪连续无解最多 3 次）
-              var cStep = zLosStepAside(cpx, cpy, cMx, cMy, atkR7, cgid7, cdist7);
-              if (cStep) {
-                cDest = cStep; cStepped = true; cOrder = []; cReach = true;
-                tlog("walk-追怪-los-step 接近点全无视线（" + ttx + "," + tty + "）-> 侧移绕行 " + cDest[0] + "," + cDest[1]);
-                setStatus("被墙挡住视线，侧移绕行…", "warn");
-              } else if (zLosFlyTick(now, { gid: cgid7, dist: cdist7, atkR: atkR7, losClear: zLosClear(cpx, cpy, cMx, cMy), stepFull: zLosStepState.cnt >= 3 })) {
-                // V2.38.23 B：同一只怪侧移 3 次仍无视线 → doFly() 换点（本拍不再发追怪位移包）
-                return;
-              }
-            }
-          }
-          if (cAstOn && isFinite(cpx) && isFinite(cpy) && dshAStarData()) {
-            if (zWalkState.routeExt) { // V2.38.4 G2④：外部客户端路线进行中绝不发（两套移动源不得打架）
-              tlog("walk-追怪-astar-route 游戏自动寻路进行中（" + zWalkState.routeIdx + "/" + zWalkState.routeTotal + "格）→ 追怪位移让位");
-              setStatus("游戏自动寻路进行中，追怪位移让位…", "st");
-              return;
-            }
-            if (!cStepped) {
-              // ②' 视线优先排序：可走且有视线的候选排前面；可达性判定一字未改（仍由 dshFindPath 决定，不可达照旧换点重试）
-              cOrder = [];
-              for (var co = 0; co < cCands.length; co++) if (dshWalkable(cCands[co][0], cCands[co][1]) && zLosClear(cCands[co][0], cCands[co][1], cMx, cMy)) cOrder.push(cCands[co]);
-              for (var cp = 0; cp < cCands.length; cp++) if (cOrder.indexOf(cCands[cp]) < 0) cOrder.push(cCands[cp]);
-            }
-            for (var ci = 0; ci < cOrder.length && !cReach; ci++) {
-              var cPath = dshFindPath(cpx, cpy, cOrder[ci][0], cOrder[ci][1]);
-              if (cPath) { // null=不可达；[]=起点即接近点（人已经在点上，吸附该点即可）
-                if (cPath.length) { var cLast = cPath[cPath.length - 1]; cDest = mvSnapWalkable(cLast[0], cLast[1]); }
-                else { cDest = mvSnapWalkable(cOrder[ci][0], cOrder[ci][1]); }
-                cReach = true;
-              }
-            }
-            if (!cReach) {
-              // ponytail: 不可达时每拍最多 3 次 A*（节点上限 8000，约几毫秒）；追怪节拍一拍，够用
-              tlog("walk-追怪-astar-unreachable 接近点不可达（" + ttx + "," + tty + "，共试 " + cCands.length + " 个）→ 本拍不发位移包");
-              setStatus("接近点不可达，换接近点重试…", "st");
-              return;
-            }
-          }
-        } catch (eAst) {
-          cDest = mvSnapWalkable(ttx, tty); // fail-closed：地形/寻路异常退回原单点吸附
-        }
-        zWalkState.noTargetSince = 0; // 有目标，重置无目标计时
-        var pm = new (czp("REQUEST_MOVE"))();
-        pm.dest = [cDest[0], cDest[1]];
-        CLIENT.NM.sendPacket(pm);
-        zMarkSelfMove(); // V2.38.4 G1①：追怪位移是助手自己发的 → 打时间戳
-        tlog("walk-追怪 " + (near._job != null ? near._job : near.GID) + " 停射程边缘 -> " + cDest[0] + "," + cDest[1] + " (atkRange=" + atkR7 + ")");
-        setStatus("发现目标，追至射程边缘…", "ok");
+        var chaseRange = zWalkState.skillChase && gidInt(zWalkState.skillChase.gid) === gidInt(near.GID) ? zWalkState.skillChase.range : calcAtkRange();
+        var chaseResult = zChaseTarget(near, chaseRange);
+        zWalkState.noTargetSince = 0;
+        setStatus("追怪：" + chaseResult, "st");
         return;
       }
       // ================= V2.38.20：BOSS「保持距离逃离」/「等待残血补尾刀」阶段接管移动 =================
@@ -16330,7 +16303,7 @@ function createRoItemCapture(env) {
           var bDest = mvSnapWalkable(zWalkState.center[0], zWalkState.center[1]);
           var pB = new (czp("REQUEST_MOVE"))();
           pB.dest = [bDest[0], bDest[1]];
-          CLIENT.NM.sendPacket(pB);
+          zSendMove(pB);
           zWalkState.tried = 0;
           tlog("walk-bound 超出边界(" + bd0 + ">" + bndR + ")，往回走");
           setStatus("超出地图边界，往回走…", "warn");
@@ -16365,7 +16338,7 @@ function createRoItemCapture(env) {
             var eDest = mvSnapWalkable(cx2, cy2);
             var pE = new (czp("REQUEST_MOVE"))();
             pE.dest = [eDest[0], eDest[1]];
-            CLIENT.NM.sendPacket(pE);
+            zSendMove(pE);
             zWalkState.tried = 0;
             tlog("walk-mapedge 接近地图边缘(" + px0 + "," + py0 + " 图" + mw + "x" + mh + "，边缘安全" + bndEdge + ")，朝图中心走");
             setStatus("接近地图边缘，朝图内走…", "warn");
@@ -16448,7 +16421,7 @@ function createRoItemCapture(env) {
           if (zAStarState.active) {
             if (now - zAStarState.lastTry < 3500) return;
             // 超时仍在走且未卡：重发同目标（幂等续走）
-            if (!zAStarState.stuckSince) { var pmA = new (czp("REQUEST_MOVE"))(); pmA.dest = [zAStarState.tx, zAStarState.ty]; CLIENT.NM.sendPacket(pmA); zMarkSelfMove(); zAStarState.lastTry = now; tlog("walk-astar keep -> " + zAStarState.tx + "," + zAStarState.ty); return; }
+            if (!zAStarState.stuckSince) { var pmA = new (czp("REQUEST_MOVE"))(); pmA.dest = [zAStarState.tx, zAStarState.ty]; zSendMove(pmA); zMarkSelfMove(); zAStarState.lastTry = now; tlog("walk-astar keep -> " + zAStarState.tx + "," + zAStarState.ty); return; }
           }
         }
         // 选目标：方向记忆（10s 内）→ 朝该方向 50 格外；无记忆 → 当前方向延伸
@@ -16482,7 +16455,7 @@ function createRoItemCapture(env) {
             var snapA = mvSnapWalkable(lastP[0], lastP[1]);
             var pmA2 = new (czp("REQUEST_MOVE"))();
             pmA2.dest = [snapA[0], snapA[1]];
-            CLIENT.NM.sendPacket(pmA2);
+            zSendMove(pmA2);
             zMarkSelfMove(); // V2.38.4 G1①：A* 寻路位移是助手自己发的 → 打时间戳
             zWalkState.lastMoveDir = zWalkState.dir; // V2.16.8：记录末次移动方向（换图反向走用）
             zAStarState = { active: true, tx: snapA[0], ty: snapA[1], since: now, lastTry: now, stuckSince: 0, lastPos: [px0, py0], aim: [aimD[0], aimD[1]] };
@@ -16551,7 +16524,7 @@ function createRoItemCapture(env) {
       }
       var pmm = new (czp("REQUEST_MOVE"))();
       pmm.dest = [dDest[0], dDest[1]];
-      CLIENT.NM.sendPacket(pmm);
+      zSendMove(pmm);
       zMarkSelfMove(); // V2.38.4 G1①：无目标直走位移是助手自己发的 → 打时间戳
       zWalkState.tried = 0;
       zWalkState.lastMoveDir = zWalkState.dir; // V2.16.8：记录末次移动方向（换图反向走用）
@@ -16582,7 +16555,7 @@ function createRoItemCapture(env) {
       var dDest2 = mvSnapWalkable(tx2, ty2);
       var pm2 = new (czp("REQUEST_MOVE"))();
       pm2.dest = [dDest2[0], dDest2[1]];
-      CLIENT.NM.sendPacket(pm2);
+      zSendMove(pm2);
       zMarkSelfMove(); // V2.38.4 G1①：转向后前进位移是助手自己发的 → 打时间戳
       tlog("walk-turn-go " + zWalkState.dir + " -> " + dDest2[0] + "," + dDest2[1]);
       setStatus("转向后前进（方向" + zWalkState.dir + "）…", "st");
@@ -16616,9 +16589,10 @@ function createRoItemCapture(env) {
   // ================= V2.38.16 F3 锁定目标 mid 诊断结束 =================
   function zAttack() {
     try {
-      if (!clientReady()) return;
+      if (!zRunning || !clientReady()) return;
       var ent = CLIENT.SS.Entity;
       if (!ent || !ent.life) return;
+      zSkillSync();
       var now = Date.now();
       // V2.34.0 A6：瞬移挂起期间只跳过攻击包发送，不再整拍 return（防御判定与走路继续）
       if (escapePending()) { zAtkWhy = "脱战挂起"; requestEmergencyEscape(escapeState.reason); zHoldTick("紧急脱战（等待位移确认）", true); return; }
@@ -16655,6 +16629,7 @@ function createRoItemCapture(env) {
       var zFollow = !$id("dsh-z-follow") || $id("dsh-z-follow").checked; // 锁定目标跟随追击
       var zNext = !$id("dsh-z-next") || $id("dsh-z-next").checked;       // 打死换下一个
       var zAllMobs = !$id("dsh-z-allmobs") || $id("dsh-z-allmobs").checked; // V2.34.4：仅在未设锁定名单时生效（名单非空时只打名单）
+      var sharedTarget = zPickTarget(ent);
       var target = null, best = 1e9, bestHp = 1e18, bestTier = -1, tempTargetHeld = false;
       // 租约临时目标优先于普通候选；有效但射程外时保留临时锁，只让内挂靠近。
       if (apiBattleTarget) {
@@ -16687,8 +16662,7 @@ function createRoItemCapture(env) {
               zLock.name = (bEnt.display && bEnt.display.name) || String(bEnt._job != null ? bEnt._job : bgid);
               zLock.dist = bd; zLock.reactive = false; zLock.done = false;
               zLockCounts = {}; zCastIdx = 0;
-              sendLockInject(bgid);
-              zAtkLast.gid = bgid; zAtkLast.at = now; zAtkLast.outOfRange = false;
+              if (sendLockInject(bgid)) { zAtkLast.gid = bgid; zAtkLast.at = now; zAtkLast.outOfRange = false; }
               tlog("boss-priority gid=" + bgid + " d=" + bd + " act=" + bossWantD.act);
             }
           }
@@ -16715,7 +16689,7 @@ function createRoItemCapture(env) {
       if (!target && zLock.gid && !zLockBossSkip) {
         EM.forEach(function (e) {
           try {
-            if (e.GID !== zLock.gid || e.objecttype !== 5) return;
+            if (!sharedTarget || e !== sharedTarget || e.GID !== zLock.gid || e.objecttype !== 5) return;
             if (e.isDeath || (e.ACTION && e.action === e.ACTION.DIE) || e.remove_tick) return;
             if (!ent.position || !e.position) return;
             var ld = zRangeDist(e.position, ent.position); // V2.34.3：格子距离口径
@@ -16759,7 +16733,7 @@ function createRoItemCapture(env) {
       if (!target) {
         EM.forEach(function (e) {
           try {
-            if (e.objecttype !== 5) return;
+            if (!sharedTarget || e !== sharedTarget || e.objecttype !== 5) return;
             // 跳过死亡实体：isDeath / ACTION.DIE / 已在移除队列
             if (e.isDeath) return;
             if (e.ACTION && e.action != null && e.action === e.ACTION.DIE) return;
@@ -16872,6 +16846,12 @@ function createRoItemCapture(env) {
           }
         }
       }
+      if (zManualRoute(ent)) { zFarPatrolClear(false); return; }
+      if (zLock.done) return;
+      if (sharedTarget) {
+        target = sharedTarget; zLock.gid = target.GID; zLock.dist = zRangeDist(target.position, ent.position);
+        if ((npMode || zManual) && zLock.dist > (npMode ? npThD : atkRange)) { if (!zManual) zWalk(); return; }
+      } else { target = null; }
       // 换怪延迟：目标变化时记录延迟点；延迟窗口内不攻击（等设定秒数再出手）
       var switchDelay = (parseFloat($id("dsh-z-switchdelay").value) || 0.25) * 1000;
       if (target) {
@@ -16881,8 +16861,7 @@ function createRoItemCapture(env) {
           zLockCounts = {}; // V1.7.5 换目标 → 锁定次数清零重计
           zCastIdx = 0;     // V1.7.5 换目标 → 轮换游标从头开始
           // V2.15.25：注入内挂——换目标时发一次锁定让客户端/内挂跟随助手目标；注入即锁定，普攻节流让位防双包
-          sendLockInject(target.GID);
-          zAtkLast.gid = target.GID; zAtkLast.at = now; zAtkLast.outOfRange = false; // V2.15.29：新目标复位射程标记
+          if (sendLockInject(target.GID)) { zAtkLast.gid = target.GID; zAtkLast.at = now; zAtkLast.outOfRange = false; } // V2.15.29：新目标复位射程标记
         }
         if (now < zTargetSwitchAt) { zMon.action = "换怪延迟"; return; } // 延迟窗口内等待（换怪延迟）
       } else {
@@ -16938,6 +16917,7 @@ function createRoItemCapture(env) {
       // V2.33.0 自回传施法轨迹（经 8899 KV 中继，助手直接提取，无需复制粘贴）
       try { var tD2 = zRangeDist(target.position, ent.position); dshCastLog("cast=" + cast + " gap=" + (attNextGap === Infinity ? "Inf" : Math.round(attNextGap)) + " d=" + tD2 + " lastSk=" + (zLastCastSkid || 0)); } catch (e) {}
       if (btDiagOn) { try { var tD = zRangeDist(target.position, ent.position); btLog('zAtk', 'cast=' + cast + ' targetDist=' + tD + ' atkRange=' + atkRange + ' pmRange=' + pmRange + ' npMode=' + npMode); } catch (e) {} }
+      if (cast === "busy" || cast === "escape") return;
       if (cast === "walk") {
         zAtkWhy = "走位追怪";
         zWaitSince = 0; // 走位后穿插普攻立即出手（上次普攻时间重置）
@@ -17474,6 +17454,89 @@ function createRoItemCapture(env) {
     try { setStatus("间隔无效或过大，已使用默认值（最长2147483647ms）", "warn"); } catch (e) {}
     return fallback;
   }
+  // Ordinary skill attempts: transport acceptance is not a server result (Q5).
+  // No nonce exists in ACK3/ACK_TOUSESKILL: never claim a latest-SKID action or its RTT.
+  var zSkillFlow = { generation: 0, context: null, busyUntil: 0, owner: null, actions: [], observation: null, seq: 0 };
+  try { window.addEventListener("blur", function () { zSkillCancel(); }); } catch (eSkillBlur) {}
+  function zSkillTicket() {
+    var source = npCaptureSource(npServerAutoAtk.socket);
+    return { source: source, epoch: identityEpoch, map: normMapKey(getMapName()), cid: gidInt(selfCharId()),
+      aid: gidInt(CLIENT.SS && CLIENT.SS.AID), generation: zSkillFlow.generation };
+  }
+  function zSkillTicketValid(t) {
+    return !!(t && t.generation === zSkillFlow.generation && t.epoch === identityEpoch && t.cid > 0 && t.cid === gidInt(selfCharId()) &&
+      t.aid > 0 && t.aid === gidInt(CLIENT.SS && CLIENT.SS.AID) && t.map && t.map === normMapKey(getMapName()) && npSourceValid(t.source));
+  }
+  function zSkillCancel() {
+    zSkillFlow.generation++; zSkillFlow.busyUntil = 0; zSkillFlow.context = null; zSkillFlow.owner = null;
+    zSkillFlow.actions.forEach(function (a) { if (a.state === "sent-pending") a.state = "unknown"; });
+    castComboBusy = false;
+    if (typeof zWalkState !== "undefined") { zWalkState.chaseHold = null; zWalkState.skillChase = null; zWalkState.chaseGid=null; zWalkState.chaseDist=0; zWalkState.chaseSince=0; zWalkState.chaseFrom=null; zWalkState.chaseReplan=false; zWalkState.npRescueGid=0; zWalkState.npRescueUntil=0; }
+  }
+  function zSkillSync() {
+    if (!zSkillTicketValid(zSkillFlow.context)) {
+      zSkillCancel(); zSkillFlow.context = zSkillTicket();
+      Object.keys(skillDelay).forEach(function (k) { delete skillDelay[k]; }); skillNextAt = {}; zSkillRtt = {}; zSkillRttAvg = 0; zSkillSentAt = {};
+    }
+    var now = Date.now();
+    zSkillFlow.actions.forEach(function (a) { if (a.state === "sent-pending" && now >= a.deadline) a.state = "unknown"; });
+    return zSkillTicketValid(zSkillFlow.context);
+  }
+  function zSkillBusy() { return !zSkillSync() || !!(zSkillFlow.owner && zSkillTicketValid(zSkillFlow.owner.ticket)) || Date.now() < zSkillFlow.busyUntil; }
+  function zSkillPacket(skid, lv, targetId, position) {
+    var bits = skillTypeBits(skid), ent = CLIENT.SS && CLIENT.SS.Entity;
+    if (bits === 0) return null; // passive skill, not a cast producer
+    var self = skid === 261 || skid === 401 || (bits != null && (bits & 4) === 4) || (skillBuffStatus(skid) >= 0 && (bits == null || !(bits & 2)));
+    var ground = !self && bits != null && (bits & 2) === 2;
+    var groundName = czPacketVer() >= 20190904 ? "USE_SKILL_TOGROUND3" : (czPacketVer() >= 20180307 ? "USE_SKILL_TOGROUND2" : "USE_SKILL_TOGROUND");
+    var C = czp(ground ? groundName : "USE_SKILL");
+    if (!C || !ent) return null;
+    var p = new C(); p.SKID = skid; p.selectedLevel = clampSkillLv(skid, lv);
+    if (!(p.selectedLevel > 0)) return null;
+    if (ground) {
+      if (!position || !isFinite(position[0]) || !isFinite(position[1])) return null;
+      p.xPos = Math.floor(position[0]); p.yPos = Math.floor(position[1]);
+    } else { p.targetID = self ? ent.GID : targetId; if (!p.targetID && skid !== 26) return null; }
+    return p;
+  }
+  function zSkillAttempt(packet, origin, urgent) {
+    var out = { sent: false, state: "unsent", origin: origin, error: "" };
+    if (!packet || !zSkillSync() || (!urgent && (zSkillFlow.owner || Date.now() < zSkillFlow.busyUntil))) return out;
+    var ticket = zSkillTicket(), previous = zSkillFlow.owner, owner = { ticket: ticket }, socket, nm, send, build, buffer = null, accepted = false;
+    zSkillFlow.owner = owner;
+    function observedBuild() { var built = build.apply(this, arguments); buffer = built && built.buffer; return built; }
+    function observedSend(bytes) {
+      var owns = bytes === buffer && buffer && socket.readyState === 1 && zSkillTicketValid(ticket);
+      var result = send.apply(this, arguments);
+      if (owns && result !== false) accepted = true;
+      return result;
+    }
+    try {
+    try {
+      socket = ticket.source.socket; nm = CLIENT.NM;
+      if (!socket || socket.readyState !== 1 || !nm || typeof nm.sendPacket !== "function" || typeof socket.send !== "function" || typeof packet.build !== "function") return out;
+      send = socket.send; build = packet.build;
+      packet.build = observedBuild; socket.send = observedSend;
+      if (packet.build !== observedBuild || socket.send !== observedSend) return out;
+      nm.sendPacket(packet);
+    } catch (e) { out.error = String(e && e.message || e); }
+    finally {
+      try { if (packet.build === observedBuild) packet.build = build; } catch (eBuild) { out.error = out.error || String(eBuild && eBuild.message || eBuild); }
+      try { if (socket && socket.send === observedSend) socket.send = send; } catch (eSend) { out.error = out.error || String(eSend && eSend.message || eSend); }
+    }
+    if (!accepted) return out;
+    out.sent = true; out.state = out.error || !zSkillTicketValid(ticket) ? "unknown" : "sent-pending";
+    out.ticket = ticket;
+    if (!packet.SKID) return out;
+    out.id = ++zSkillFlow.seq; out.skid = packet.SKID; out.target = packet.targetID || 0;
+    out.ticket = ticket; out.at = Date.now(); out.deadline = out.at + ESCAPE_TIMEOUT_MS;
+    if (!zSkillTicketValid(ticket)) out.state = "unknown";
+    zSkillFlow.actions.push(out); if (zSkillFlow.actions.length > 128) zSkillFlow.actions.shift();
+    // Shared dispatch spacing, not full per-skill CD. Old accepted tickets remain unknown only.
+    if (zSkillTicketValid(ticket)) { var spacing = Math.min(150, skillCdMs({ skid: packet.SKID, cd: 0 })); if (zSkillTicketValid(ticket)) zSkillFlow.busyUntil = Math.max(zSkillFlow.busyUntil, out.at + spacing); else out.state = "unknown"; }
+    return out;
+    } finally { if (accepted && !zSkillTicketValid(ticket)) out.state = "unknown"; if (zSkillFlow.owner === owner && ticket.generation === zSkillFlow.generation) zSkillFlow.owner = previous && zSkillTicketValid(previous.ticket) ? previous : null; }
+  }
   function skillCdMs(o) {
     try {
       if (!o) return 150;
@@ -17547,9 +17610,11 @@ function createRoItemCapture(env) {
       if (zSphereProbe.sent) return false;
       var lv = learnedSkillLv(261); if (!(lv > 0)) return false;
       var p = new (czp("USE_SKILL"))(); p.SKID = 261; p.selectedLevel = lv; p.targetID = ent.GID;
-      CLIENT.NM.sendPacket(p);
-      zSphereProbe.sent = true; zPrepAt = Date.now();
-      skillNextAt[261] = Date.now() + skillCdMs({ skid: 261, cd: 0 });
+      { var zDispatched = zSkillAttempt(p, "sphere-probe", false); if (!zDispatched.sent) return false; if (!zSkillTicketValid(zDispatched.ticket)) return false; }
+      var zCommitAt = Date.now(), zCommitCd = skillCdMs({ skid: 261, cd: 0 });
+      if (!zSkillTicketValid(zDispatched.ticket)) return false;
+      zSphereProbe.sent = true; zPrepAt = zCommitAt;
+      skillNextAt[261] = zCommitAt + zCommitCd;
       tlog("cast-prep sphere 261 一次性气弹读数同步，等自身 464 包");
       setStatus("气弹数未知：已蓄气一次，等待服务器气弹包确认", "st");
       return true;
@@ -17592,10 +17657,12 @@ function createRoItemCapture(env) {
             ps.SKID = sid;
             ps.selectedLevel = lv;
             ps.targetID = ent.GID || 0;
-            CLIENT.NM.sendPacket(ps);
-            zPrepAt = Date.now(); // 补状态节流：1s 内不再补，间隙穿插普攻
+            { var zDispatched = zSkillAttempt(ps, "sphere-prep", false); if (!zDispatched.sent) return false; if (!zSkillTicketValid(zDispatched.ticket)) return false; }
+            var zCommitAt = Date.now(), zCommitCd = skillCdMs({ skid: sid, cd: 0 });
+            if (!zSkillTicketValid(zDispatched.ticket)) return false;
+            zPrepAt = zCommitAt; // 补状态节流：1s 内不再补，间隙穿插普攻
             zPrepSpam = (st.spheres <= 0) ? zPrepSpam + 1 : 0; // V2.32.2 补球计数
-            skillNextAt[sid] = Date.now() + skillCdMs({ skid: sid, cd: 0 }); // V2.15.28：补球技能独立 CD
+            skillNextAt[sid] = zCommitAt + zCommitCd; // V2.15.28：补球技能独立 CD
             tlog("cast-prep sphere " + sid + " lv" + lv + " src=" + (need.sphereSrc || sphereSrcGlobal()) + " (now " + st.spheres + "/" + need.spheres + ")");
             setStatus("气弹不足(" + st.spheres + "/" + need.spheres + ")，自动补球…", "st");
             return true;
@@ -17622,9 +17689,11 @@ function createRoItemCapture(env) {
             ps2.SKID = sid2;
             ps2.selectedLevel = lv2;
             ps2.targetID = ent.GID || 0;
-            CLIENT.NM.sendPacket(ps2);
-            zPrepAt = Date.now(); // 补状态节流：1s 内不再补，间隙穿插普攻
-            skillNextAt[sid2] = Date.now() + Math.max(skillCdMs({ skid: sid2, cd: 0 }), sid2 === 270 ? 1500 : 0); // 爆气等待状态回执，避免重复刷包
+            { var zDispatched = zSkillAttempt(ps2, "status-prep", false); if (!zDispatched.sent) return false; if (!zSkillTicketValid(zDispatched.ticket)) return false; }
+            var zCommitAt = Date.now(), zCommitCd = Math.max(skillCdMs({ skid: sid2, cd: 0 }), sid2 === 270 ? 1500 : 0);
+            if (!zSkillTicketValid(zDispatched.ticket)) return false;
+            zPrepAt = zCommitAt; // 补状态节流：1s 内不再补，间隙穿插普攻
+            skillNextAt[sid2] = zCommitAt + zCommitCd; // 爆气等待状态回执，避免重复刷包
             tlog("cast-prep status " + sid2 + " lv" + lv2 + " -> " + stName);
             setStatus("缺" + statusNameToCond(stName) + "，自动补状态技能(" + (getSkillNameById(sid2) || sid2) + ")…", "st");
             return true;
@@ -17668,8 +17737,9 @@ function createRoItemCapture(env) {
     // 助手自动补状态（蓄气/爆气等）→ 状态满足后再释放指定技能。顺序里也可手写 cond 覆盖。
     // 自身 buff（type & SELF）：对自身施放（targetID=自己 GID），不受怪物距离限制
     // 返回：true=已施放 / "walk"=条件满足但超射程需走近 / "wait-cd"=技能冷却窗口 / "wait"=全被前置挡住 / "none"=无技能配置
+    if (zSkillBusy()) return "busy";
     if (!order.length) return "none";
-    if (!target || !target.position) return "wait";
+    if (!target || !target.position || zEntOf(target.GID) !== target || target.isDeath || target.remove_tick || (target.ACTION && target.action === target.ACTION.DIE)) return "wait";
     var ent = CLIENT.SS.Entity;
     if (!ent || !ent.position) return "wait";
     // V2.15.28 每技能独立 CD：每个技能记录自己的 skillNextAt[SKID]（上次释放 + 该技能真实间隔），到点才发。
@@ -17742,7 +17812,7 @@ function createRoItemCapture(env) {
         continue;
       }
       var bits = skillTypeBits(o.skid);
-      var isSelf = o.skid === 261 || o.skid === 401 || skillBuffStatus(o.skid) >= 0 || (bits != null && (bits & 4) === 4); // 补球技能必须对自身施放
+      var isSelf = o.skid === 261 || o.skid === 401 || (bits != null && (bits & 4) === 4) || (skillBuffStatus(o.skid) >= 0 && (bits == null || !(bits & 2))); // 补球技能必须对自身施放
       if (isSelf) {
         if (!ent.GID) { dshCastSkip(o.skid, "自身GID未知"); continue; }
         try {
@@ -17751,11 +17821,12 @@ function createRoItemCapture(env) {
           ps.selectedLevel = realLv;
           ps.targetID = ent.GID || 0;
           dshCastMark(o.skid, realLv, ent.GID || 0, "zhu");
-          CLIENT.NM.sendPacket(ps);
-          zSkillSentAt[o.skid] = Date.now(); // V2.16.7：记录发包时刻算 RTT
-          zLastCastAt = Date.now(); // 记录技能释放时间（兼容旧引用）
-          zLastCastSkid = o.skid; // V2.15.24：记本次技能（兼容旧引用）
-          skillNextAt[o.skid] = Date.now() + skillCdMs(o); // V2.15.28：本技能独立 CD（手填cd优先，否则按节奏设置/默认150ms）
+          { var zDispatched = zSkillAttempt(zSkillPacket(o.skid, realLv, ent.GID, ent.position), "zhu", false); if (!zDispatched.sent) continue; if (!zSkillTicketValid(zDispatched.ticket)) return false; }
+          var zCommitAt = Date.now(), zCommitSkid = o.skid, zCommitCd = skillCdMs(o);
+          if (!zSkillTicketValid(zDispatched.ticket)) return false;
+          zLastCastAt = zCommitAt; // 记录技能释放时间（兼容旧引用）
+          zLastCastSkid = zCommitSkid; // V2.15.24：记本次技能（兼容旧引用）
+          skillNextAt[zCommitSkid] = zCommitAt + zCommitCd; // V2.15.28：本技能独立 CD（手填cd优先，否则按节奏设置/默认150ms）
           zUseCounts[o.skid] = (zUseCounts[o.skid] || 0) + 1; // V1.7.0 maxUses 计数
           zLockCounts[o.skid] = (zLockCounts[o.skid] || 0) + 1; // V1.7.5 锁定次数计数
           zCastIdx = (i + 1) % orderLen; // V1.7.5 轮换游标：下轮从本技能之后开始扫
@@ -17767,7 +17838,7 @@ function createRoItemCapture(env) {
       // 对怪技能：前置已满足，再看射程——射程内直接放；超射程只记录（继续评估后面的技能，找射程内可放的）
       var need = getSkillRange(o.skid, realLv) + 1; // 客户端 onUseSkill：attackRange+1
       if (btDiagOn) btLog('range', 'skid=' + o.skid + ' lv=' + realLv + ' need=' + need + ' d=' + d + ' ' + (d > need ? '超射程→走' : '射程内'));
-      if (d > need) {
+      if (d > need || !zLosClear(Math.floor(ent.position[0]), Math.floor(ent.position[1]), Math.floor(target.position[0]), Math.floor(target.position[1]))) {
         if (!walkSk) walkSk = o;
         continue;
       }
@@ -17777,11 +17848,12 @@ function createRoItemCapture(env) {
         p.selectedLevel = realLv;
         p.targetID = target.GID;
         dshCastMark(o.skid, realLv, target.GID, "zhu");
-        CLIENT.NM.sendPacket(p);
-        zSkillSentAt[o.skid] = Date.now(); // V2.16.7：记录发包时刻算 RTT
-        zLastCastAt = Date.now(); // 记录技能释放时间（兼容旧引用）
-        zLastCastSkid = o.skid; // V2.15.24：记本次技能（兼容旧引用）
-        skillNextAt[o.skid] = Date.now() + skillCdMs(o); // V2.15.28：本技能独立 CD（手填cd优先，否则按节奏设置/默认150ms）
+        { var zDispatched = zSkillAttempt(zSkillPacket(o.skid, realLv, target.GID, target.position), "zhu", false); if (!zDispatched.sent) continue; if (!zSkillTicketValid(zDispatched.ticket)) return false; }
+        var zCommitAt = Date.now(), zCommitSkid = o.skid, zCommitCd = skillCdMs(o);
+        if (!zSkillTicketValid(zDispatched.ticket)) return false;
+        zLastCastAt = zCommitAt; // 记录技能释放时间（兼容旧引用）
+        zLastCastSkid = zCommitSkid; // V2.15.24：记本次技能（兼容旧引用）
+        skillNextAt[zCommitSkid] = zCommitAt + zCommitCd; // V2.15.28：本技能独立 CD（手填cd优先，否则按节奏设置/默认150ms）
         zUseCounts[o.skid] = (zUseCounts[o.skid] || 0) + 1; // V1.7.0 maxUses 计数
         zLockCounts[o.skid] = (zLockCounts[o.skid] || 0) + 1; // V1.7.5 锁定次数计数
         zCastIdx = (i + 1) % orderLen; // V1.7.5 轮换游标：下轮从本技能之后开始扫
@@ -17791,7 +17863,7 @@ function createRoItemCapture(env) {
       } catch (e) { continue; }
     }
     // 合流：无射程内可放技能 → 超射程的走近再放 > 补第一个被挡技能的前置 > 等（外层普攻穿插）
-    if (walkSk) return "walk";
+    if (walkSk) { zWalkState.skillChase = { gid: target.GID, range: getSkillRange(walkSk.skid, clampSkillLv(walkSk.skid, walkSk.lv)) + 1 }; return "walk"; }
     if (blocked && prereqEn) {
       if (castStatusPrep(blocked.condStr, order)) { zLastCastAt = Date.now(); zLastCastSkid = 0; return true; } // V2.15.28：补状态技能已在内部记 skillNextAt 独立 CD（zLastCast* 仅兼容旧引用）
     }
@@ -20482,12 +20554,12 @@ function createRoItemCapture(env) {
       blockMcTick();
     } catch (e) {}
   }
-  function dispatchInbound(bytes, receiptSource) {
+  function dispatchInbound(bytes, receiptSource, skillEpoch, skillMap) {
     try {
       if (!bytes || !bytes.byteLength) return;
       // V2.38.4 入站分帧：一条 WebSocket 消息里可能装着多个包。先按运行时长度表逐帧切分，再对每一帧执行下面的 opcode 分派链；
       //   长度表不可用、或首包长度未知时 walkInboundFrames 只回调一次整条消息 —— 与旧实现逐字等价，绝不回归。
-      var walk = walkInboundFrames(bytes, function (frame, op, off, ok) { dispatchInboundFrame(frame, op, off, ok, receiptSource); });
+      var walk = walkInboundFrames(bytes, function (frame, op, off, ok) { dispatchInboundFrame(frame, op, off, ok, receiptSource, skillEpoch, skillMap); });
       if (walk && walk.rest < bytes.byteLength) {
         framePartial++; // 尾部切不出的残包只计数：不做跨消息缓冲（只会漏读，绝不错位串包），下次抓包可见 partial 记录
         if (typeof txCap !== "undefined" && txCap && txCap.on) txCapPushInbound(bytes, -1, walk.rest, true, walk.rest);
@@ -20741,7 +20813,7 @@ function createRoItemCapture(env) {
     } catch (e) {}
   }
   // V2.38.4 单帧分派：opcode 判定链与 V2.38.2 逐字一致（条件与顺序不变），可被单独一帧调用；异常只吞掉这一帧
-  function dispatchInboundFrame(bytes, op, frameOff, lenTblOk, receiptSource) {
+  function dispatchInboundFrame(bytes, op, frameOff, lenTblOk, receiptSource, skillEpoch, skillMap) {
     try {
       if (typeof op !== "number") { try { op = new DataView(bytes).getUint16(0, true); } catch (e0) { return; } }
       identityPktHook(bytes, op, receiptSource); // V2.38.6：手机端 char_id 包流来源（113/2757 记录身份、107 清身份）
@@ -20766,8 +20838,9 @@ function createRoItemCapture(env) {
       if (op === 183) onMenuList(bytes);
       else if (op === 180) onSayDialog(bytes);
       else if (op === 182) onCloseDialog();
-      else if (op === 0x43d || op === 0x43e) onSkillPostDelay(bytes, op);
-      else if (op === 0xb1a) onSkillAck3(bytes); // V2.15.28：2842 USESKILL_ACK3 动态技能延迟
+      else if (op === 0x43d || op === 0x43e) onSkillPostDelay(bytes, op, receiptSource, skillEpoch, skillMap);
+      else if (op === 0x110) onSkillRejectObservation(bytes, receiptSource, skillEpoch, skillMap);
+      else if (op === 0xb1a) onSkillAck3(bytes, receiptSource, skillEpoch, skillMap); // V2.15.28：2842 USESKILL_ACK3 动态技能延迟
       else if (op === 0x1d0 || op === 0x1e1) onSelfSpirits(bytes, frameOff, lenTblOk === true);
       else if (op === 0xc6 || op === 0xc7) itipShopPkt(bytes, op); // V2.16.21 商店买卖列表：取单价（买价/卖价）
       else onRawOpcode(bytes, op);
@@ -20792,62 +20865,56 @@ function createRoItemCapture(env) {
   }
   // V2.15.24：拦截服务器下发的技能真实后摇（ZC.SKILL_POSTDELAY 0x43d 单技能 / 0x43e 批量列表）
   // 存 skillDelay[SKID]=延迟ms → 攻击循环按真实后摇一次一发（消除无效补发点击 → 缓解服务器点击限制）
-  function onSkillPostDelay(bytes, op) {
+  function onSkillPostDelay(bytes, op, receiptSource, skillEpoch, skillMap) {
     try {
-      var dv = new DataView(bytes);
-      var msg;
-      if (op === 0x43d) {
-        var skid = dv.getUint16(2, true);
-        var dly = dv.getUint32(4, true);
-        skillDelay[skid] = dly;
-        msg = 'skid=' + skid + ' delay=' + dly + 'ms';
-      } else {
-        // 0x43e：无长度字段，按 (包长-2)/6 逐条解析（每条 SKID ushort + DelayTM ulong）
-        var cnt = Math.floor((bytes.byteLength - 2) / 6);
-        for (var i = 0; i < cnt; i++) {
-          var o = 2 + i * 6;
-          skillDelay[dv.getUint16(o, true)] = dv.getUint32(o + 2, true);
-        }
-        msg = 'list=' + cnt + ' 条（累计 ' + Object.keys(skillDelay).length + ' 个技能）';
+      if (skillEpoch !== identityEpoch || !skillMap || skillMap !== normMapKey(getMapName()) || !npSourceValid(receiptSource)) return;
+      var dv = new DataView(bytes), rows = [];
+      if (op === 0x43d && bytes.byteLength >= 8) rows.push({ skid:dv.getUint16(2,true), delay:dv.getUint32(4,true) });
+      else if (op === 0x43e) {
+        for (var o=2; o+6<=bytes.byteLength; o+=6) rows.push({ skid:dv.getUint16(o,true), delay:dv.getUint32(o+2,true) });
       }
-      console.log('[POSTDELAY] ' + msg);
-      if (btDiagOn) btLog('post-delay', msg);
+      // These payloads carry no caster. Current transport alone is not caster/action attribution.
+      zSkillFlow.observation={ rows:rows, at:Date.now(), source:receiptSource, epoch:skillEpoch, attribution:"timing-without-caster-only" };
+      if (btDiagOn) btLog("post-delay", "unattributed rows=" + rows.length + "; no CD/RTT commit");
     } catch (e) {}
   }
   // V2.15.28：拦截 2842 (0xb1a) ZC.USESKILL_ACK3——服务器每次施法后下发真实技能延迟（动态，随等级/装备/状态变动）
   // 结构（29B 定长，Ragna PacketStructure L15523 + cap6 实测）：op2 + AID4@2 + targetID4@6 + x2@10 + y2@12 + SKID2@14 + property4@16 + delayTime4@20 + disposable1@24 + attackMT4@25
   // 动态覆盖 skillDelay[SKID] → 每技能按服务器真实后摇到点释放（v2.15.24 的 0x43d/0x43e 服务器不下发，实际数据源是 2842）
-  function onSkillAck3(bytes) {
+  function onSkillRejectObservation(bytes, receiptSource, skillEpoch, skillMap) {
     try {
-      if (bytes.byteLength < 26) return;
-      var dv = new DataView(bytes);
-      var skid = dv.getUint16(14, true);
-      var dly = dv.getUint32(20, true);
-      if (skid > 0) skillDelay[skid] = dly;
-      var aid = dv.getUint32(2, true), selfAid = (CLIENT.SS && (CLIENT.SS.AID || (CLIENT.SS.Entity && CLIENT.SS.Entity.GID))) || 0;
-      if (skid === 26 && escapeState.pending && escapeState.lastCast > 0 && (!selfAid || aid === selfAid)) escapeState.ackAt = Date.now();
-      if (skid > 0) { try { dpsOnSkill(skid); } catch (e5) {} } // V2.24.0：伤害统计的技能归属兜底
-      // V2.16.7：RTT 估算（发包→收2842回执时间差，滑动平均，供 skillCdMs 延迟补偿）
-      if (skid > 0 && zSkillSentAt[skid]) {
-        var rtt = Date.now() - zSkillSentAt[skid];
-        if (rtt > 0 && rtt < 2000) {
-          zSkillRtt[skid] = zSkillRtt[skid] ? (zSkillRtt[skid] * 0.7 + rtt * 0.3) : rtt;
-          zSkillRttAvg = zSkillRttAvg ? (zSkillRttAvg * 0.7 + rtt * 0.3) : rtt;
-        }
-        delete zSkillSentAt[skid];
-      }
-      console.log('[ACK3-DELAY] skid=' + skid + ' delay=' + dly + 'ms');
-      if (btDiagOn) btLog('post-delay', 'ACK3 skid=' + skid + ' delay=' + dly + 'ms');
+      if (skillEpoch !== identityEpoch || !skillMap || skillMap !== normMapKey(getMapName()) || !npSourceValid(receiptSource) || bytes.byteLength < 14) return;
+      var dv=new DataView(bytes);
+      zSkillFlow.observation={ skid:dv.getUint16(2,true), result:dv.getUint8(12), cause:dv.getUint8(13), at:Date.now(), source:receiptSource, epoch:skillEpoch, attribution:"unattributed-result-only" };
+      // No caster/target/nonce: cannot reject or complete any pending action, including latest SKID.
+    } catch(e) {}
+  }
+  function onSkillAck3(bytes, receiptSource, skillEpoch, skillMap) {
+    try {
+      if (skillEpoch !== identityEpoch || !skillMap || skillMap !== normMapKey(getMapName()) || !npSourceValid(receiptSource) || bytes.byteLength < 29) return;
+      var dv = new DataView(bytes), aid = dv.getUint32(2, true), selfAid = gidInt(CLIENT.SS && CLIENT.SS.AID);
+      if (!selfAid || aid !== selfAid) return;
+      var skid = dv.getUint16(14, true), dly = dv.getUint32(20, true), anim = dv.getUint32(25, true);
+      if (!(skid > 0) || !zSkillSync()) return;
+      // Genuine current-role self timing observation; NOT an action result or full raw server CD.
+      skillDelay[skid] = dly;
+      zSkillFlow.observation = { skid: skid, aid: aid, target: dv.getUint32(6, true), at: Date.now(), delay: dly, attackMT: anim, source: receiptSource, epoch: skillEpoch, attribution: "self-observation-only" };
+      zSkillFlow.busyUntil = Math.max(zSkillFlow.busyUntil, Date.now() + anim);
+      if (skid === 26 && escapeState.pending && escapeState.lastCast > 0) escapeState.ackAt = Date.now();
+      try { dpsOnSkill(skid); } catch (e5) {}
+      // Even one helper pending action may overlap a manual/native cast: no RTT or completion claim.
+      if (btDiagOn) btLog('post-delay', 'self observation skid=' + skid + ' delay=' + dly + 'ms; action unknown');
     } catch (e) {}
   }
   function onReconInbound(data, socket, receiptSource) {
     try { if(typeof arrowEquipHookTick === "function")arrowEquipHookTick(); } catch(eEquipBefore) {}
     try {
       if (!npSourceValid(receiptSource, true)) return;
-      if (data instanceof ArrayBuffer) { dispatchInbound(data, receiptSource); return; }
-      if (ArrayBuffer.isView(data)) { dispatchInbound(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), receiptSource); return; }
+      var skillEpoch = identityEpoch, skillMap = normMapKey(getMapName());
+      if (data instanceof ArrayBuffer) { dispatchInbound(data, receiptSource, skillEpoch, skillMap); return; }
+      if (ArrayBuffer.isView(data)) { dispatchInbound(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), receiptSource, skillEpoch, skillMap); return; }
       if (typeof Blob !== "undefined" && data instanceof Blob && data.arrayBuffer) data.arrayBuffer().then(function (bytes) {
-        if (npSourceValid(receiptSource, true)) dispatchInbound(bytes, receiptSource);
+        if (skillEpoch === identityEpoch && skillMap === normMapKey(getMapName()) && npSourceValid(receiptSource, true)) dispatchInbound(bytes, receiptSource, skillEpoch, skillMap);
       }).catch(function () {});
     } catch (e) {}
   }
