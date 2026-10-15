@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         仙境传说 · 原站插件模式（游戏助手）
 // @namespace    dsh.ro-plugin
-// @version      2.38.78
+// @version      2.38.79
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js
-// @description  在 post.lastro.cn / game.lastro.cn 原站以插件模式启动《仙境的传说》ROBrowser 客户端并连接原服务器；数据自动走本地镜像（127.0.0.1:8973）避免加载卡死，支持自动登录。PC 版直接打开 https://post.lastro.cn/ro/api.html 或备用线路 https://game.lastro.cn/ro/api.html?69.8；手机版打开 https://post.lastro.cn/?r=mn/index（登录页可选择平台与线路）。 新增私有本机客户端入口匹配（环回主机 127.0.0.1 / localhost，端口以页面自身 origin 为准、不写死）。
+// @description  提供原站与本机 RO 客户端助手、监控与花瓣导航；支持 JSON 流程及可信用户脚本导入运行，兼容手机版。
 // @author       DSH
 // @match        http://post.lastro.cn/*
 // @match        https://post.lastro.cn/*
@@ -657,7 +657,7 @@
   //   放行三类：① 本机私有客户端（环回主机 127.0.0.0/8 · localhost · ::1，端口以页面自身 origin 为准、不写死 8971）
   //             且路径为 /client/api.html 或 /client/api-old.html
   //             （V2.38.47 补路径判定：只判 host+port 时 127.0.0.1:8971/ 的登录页也会起助手，用户实报「注入到登录页而不是游戏页」）；
-  //             ② lastro.cn 域名下 URL 含 /ro/api（api.html / api-old.html）；③ 手机版客户端 URL 含 r=mn（用户未否决，保留放行并修好不抛）。
+  //             ② lastro.cn 域名下 URL 含 /ro/api（api.html / api-old.html）；③ query 参数 r=mn 的官方或真实本机游戏宿主页。
   // V2.38.78：本机客户端判定 —— 页面闸门与 IS_LOCAL_HOST 共用同一套判据，避免两处口径漂移。
   function roAssistIsLocalClientPage(loc) {
     try {
@@ -695,16 +695,17 @@
       var loc = window.location || {};
       var host = String(loc.hostname || "").toLowerCase();
       var href = String(loc.href || "");
-      // ① 本机私有客户端：环回主机 + 本机客户端页面（根页 / 游戏宿主页 / 带客户端自证标记的页面）。
-      //    V2.38.78：启动器打开的是 http://127.0.0.1:8971/（根页），旧判据只认 /client/api.html ——
-      //      本机入口因此必须绕官网主页才能起助手（用户实报）。现在本机入口与游戏宿主页同判：
-      //      ① 路径认：/ · /index.html · /client/api(-old).html · /ro/api(-old).html；
-      //      ② 路径不认识时看页面自证（launcher.css / client.ico / client/Config.js / client/Online.js / window.ROConfig*）。
-      //      手机版（URL 含 r=mn）不并入本机入口，判据照旧。
+      // ① 本机私有客户端：环回主机 + 本机客户端页面（游戏宿主页 / 根页自证）。
+      //    V2.38.78：启动器打开的是 http://127.0.0.1:8971/（根页），旧判据只认 /client/api.html，本机入口必须绕官网才能起助手（用户实报）。
+      //      现在：/client/api(-old).html · /ro/api(-old).html 直接认；其余路径（含根页 / 与 /index.html）必须页面自证
+      //      （client/Config.js / client/Online.js / window.ROConfig*），皮肤、favicon 和标题不作游戏证据。
+      //      手机版启动复用无查询视图判断游戏宿主页，不改变原本机入口分类。
       var isLoopback = /^(127(\.\d{1,3}){3}|localhost|\[::1\]|::1)$/.test(host);
       if (isLoopback && roAssistIsLocalClientPage(loc)) return true;
       if (/(^|\.)lastro\.cn$/.test(host) && href.indexOf("/ro/api") >= 0) return true;
-      if (href.indexOf("r=mn") >= 0) return true;
+      if (/(?:^\?|&)r=mn(?:\/index|%2[Ff]index)?(?:&|$)/.test(String(loc.search || "")) &&
+          (/(^|\.)lastro\.cn$/.test(host) || (isLoopback &&
+           roAssistIsLocalClientPage({hostname:loc.hostname, pathname:loc.pathname, href:""})))) return true;
       return false;
     } catch (e) { return false; }
   }
@@ -742,7 +743,7 @@
   }
   var LS_KEY = "dsh_ro_plugin_v1";
   var VERSION_RE = /\?([0-9.]+)/;
-  var VER = "2.38.78"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
+  var VER = "2.38.79"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
   try { window.__dshCombinedActive = true; } catch (e) {} // V2.30.0 防双浮层让位旗标：独立版词条色脚本见旗标即让位
   // ==================== 统一采集器注册表（dsh-collect v1 · 内部命名空间，不新增 window 全局）====================
   // 五方法：register 注册 / sample 采集 / query 查询 / refresh 刷新 / release 释放
@@ -756,7 +757,7 @@
     function post(url, body, cb) {
       try {
         if (typeof fetch !== "function") { if (cb) cb(false); return; }
-        fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+        fetch(url, { method: "POST", headers: { "Content-Type": body && body.t === "unified-probe" ? "text/plain; charset=utf-8" : "application/json" }, body: JSON.stringify(body) })
           .then(function (r) { if (cb) cb(!!(r && r.ok)); })
           .catch(function () { if (cb) cb(false); });
       } catch (e) { if (cb) cb(false); }
@@ -784,7 +785,6 @@
   })();
 
 
-  // V2.11.0：仓库+背包读取全局变量
   var inventoryReadTimer = null; // 仓库读取定时器
   var inventoryReadChar = null; // 触发读取时的角色名
 
@@ -2653,18 +2653,13 @@ function createRoItemCapture(env) {
       //   + 尾刀线；瞬移间隔控件已上移到「防御瞬移总开关」之前一行
       '<div class="row"><span class="lb">BOSS 出现</span><select id="dsh-z-bossact" style="flex:0 0 130px"><option>瞬移</option><option>优先攻击</option><option>等待残血补尾刀</option><option selected>保持距离逃离</option></select>' +
       '<span class="lb" style="min-width:40px">判定距离</span><input id="dsh-z-bossdist" type="number" value="14" min="5" max="40" style="flex:0 0 44px"><span style="color:#5a6b7f;font-size:11px">格</span>' +
-      '<button class="ghost" id="dsh-z-bossdiag" style="flex:0 0 auto;padding:0 8px;font-size:11px">首领诊断</button><span class="st">用法：点「首领诊断」后把下面文本框里的内容复制出来（只读）</span></div>' +
-      '<div class="row"><textarea id="dsh-z-bossdiagbox" readonly style="width:100%;height:56px;font-size:10px;font-family:monospace"></textarea></div>' +
+      '</div>' +
       // V2.38.20：保持距离上下界——下界默认 10、上界默认 14；上界联动首领判定距离
       //   （实现取 上界/判定距离/寻怪范围-1 的最小值，保证上界 < 寻怪范围；越界钳制并给一次可见提示）
       '<div class="row"><span class="lb">保持距离</span><input id="dsh-z-bosskeepmin" type="number" value="10" min="1" max="40" style="flex:0 0 40px"><span style="color:#5a6b7f">~</span><input id="dsh-z-bosskeepmax" type="number" value="14" min="1" max="40" style="flex:0 0 40px"><span style="color:#5a6b7f">格（上界默认跟随判定距离，且必须小于寻怪范围）</span></div>' +
       // V2.38.21：保持距离采样（默认关 · 仅本机内存）与保持距离自适应（默认关）——采样只管诊断记录，
       //   自适应只用自己的近期观测窗口在 [下界, 上界] 内微调；两者互不依赖，关闭时都不做任何额外动作
-      '<div class="row"><label class="switch"><input id="dsh-z-bosskeepsmp" type="checkbox">保持距离采样</label>' +
-      '<label class="switch"><input id="dsh-z-bosskeepauto" type="checkbox">保持距离自适应</label>' +
-      '<button class="ghost" id="dsh-z-bosskeepsmpcopy" style="flex:0 0 auto;padding:0 8px;font-size:11px">复制采样</button>' +
-      '<span class="st" style="font-size:10px">只在本机内存，关掉就一点不记</span></div>' +
-      '<div class="row"><textarea id="dsh-z-bosskeepsmpbox" readonly style="width:100%;height:56px;font-size:10px;font-family:monospace"></textarea></div>' +
+      '<div class="row"><label class="switch"><input id="dsh-z-bosskeepauto" type="checkbox">保持距离自适应</label></div>' +
       '<div class="row"><span class="lb">尾刀线</span><input id="dsh-z-bosshp" type="number" value="30" min="1" max="99" style="flex:0 0 40px"><span style="color:#5a6b7f">%（各职业自填）</span></div>' +
       '<div class="row"><span class="lb">HP低于</span><input id="dsh-z-hpfly" type="number" value="20" style="flex:0 0 40px"><span style="color:#5a6b7f">%瞬移</span>' +
       '<span class="lb" style="min-width:50px">SP低于</span><input id="dsh-z-spfly" type="number" value="10" style="flex:0 0 40px"><span style="color:#5a6b7f">%瞬移</span></div>' +
@@ -2672,9 +2667,6 @@ function createRoItemCapture(env) {
       '<span class="lb" style="min-width:50px">无法瞬移</span><select id="dsh-z-keep" style="flex:0 0 70px"><option selected>无视</option><option>逃脱</option></select></div>' +
       '<div class="row"><span class="st" id="dsh-defstate" style="font-size:11px">防御状态：-</span></div>' +
       // V2.34.0 A7：战斗判定诊断（默认关；复用 __dshDiag/__dshBattle 机制，不联网不写文件）
-      '<div class="row"><label class="switch"><input id="dsh-z-diag" type="checkbox">战斗判定诊断(默认关)</label>' +
-      '<button class="ghost" id="dsh-z-diagcopy" style="flex:0 0 auto;padding:0 8px;font-size:11px">复制诊断</button></div>' +
-      '<div class="row"><textarea id="dsh-z-diagbox" readonly style="width:100%;height:56px;font-size:10px;font-family:monospace"></textarea></div>' +
       '<div class="sec">坐下（参考内挂 · 助手自实现）</div>' +
       '<div class="row"><label class="switch"><input id="dsh-z-sit" type="checkbox" checked>自动坐下</label>' +
       '<span class="lb" style="margin-left:auto;min-width:26px">HP</span><input id="dsh-z-sithplo" type="number" value="30" style="flex:0 0 38px"><span style="color:#5a6b7f">~</span><input id="dsh-z-sithphi" type="number" value="80" style="flex:0 0 38px"><span style="color:#5a6b7f">%</span></div>' +
@@ -2703,11 +2695,6 @@ function createRoItemCapture(env) {
       '<div class="sec">目标范围</div>' +
       '<div class="row"><label class="switch"><input id="dsh-z-allmobs" type="checkbox" checked>打全部怪（仅在未设锁定名单时生效）</label></div>' +
       '<div class="row"><span class="st">名单为空时：勾选=助手主动攻击全部怪；取消=助手不主动选目标（自研直走即不主动攻击；内挂/混合模式下内挂自身仍会攻击全部）。名单非空时：只主动攻击名单内怪物，且会自动取消勾选；名单清空后会自动重新勾上。首领不受名单约束，只按上面的「BOSS 出现」裁决。还击、群殴瞬移、解围技能不受此设置影响。</span></div>' +
-      '<details style="margin:6px 0"><summary>战斗诊断（默认关 · 不改行为）</summary>' +
-      '<div class="row"><label class="switch"><input id="dsh-bt-diag" type="checkbox">启用诊断日志</label></div>' +
-      '<div class="row" style="flex-wrap:wrap;gap:4px"><button class="ghost" id="dsh-bt-snap" style="flex:0 0 auto;padding:0 8px;font-size:11px">快照</button><button class="ghost" id="dsh-bt-mark" style="flex:0 0 auto;padding:0 8px;font-size:11px">标记测试</button></div>' +
-      '<div class="row"><span class="st" id="dsh-bt-state" style="font-size:10px">诊断: 关</span></div>' +
-      '<div id="dsh-bt-log" style="font-size:10px;max-height:150px;overflow:auto;background:#f4f6f8;border:1px solid #d8e0e8;border-radius:4px;padding:4px;font-family:monospace;white-space:pre-wrap;line-height:1.5">诊断日志: 关</div></details>' +
       '</div>' +
       '<div class="row"><span class="st" style="font-size:10px">技能设置（一级窗口 · 可拖动浮窗）</span>' +
       '<button class="ghost" id="dsh-fw-btn-zskill" data-fw="zskill" style="flex:0 0 auto;padding:0 8px;font-size:11px">浮窗</button></div>' +
@@ -2762,12 +2749,14 @@ function createRoItemCapture(env) {
       '<div class="row"><span class="lb">新增技能默认间隔</span><input id="dsh-askint" type="number" value="120" min="0" max="86400" style="flex:0 0 62px"><span class="st">秒（每个技能可在下方单独修改；0=关闭纯定时，状态消失补仍有效）</span>' +
       '<span class="lb" style="min-width:52px">SP不低于</span><input id="dsh-asksp" type="number" value="30" style="flex:0 0 44px"><span class="st">%</span>' +
       '<label class="switch" style="margin-left:auto"><input id="dsh-asken" type="checkbox">启用自动释放</label></div>' +
+      '<div class="row"><span class="lb">补buff兜底间隔</span><input id="dsh-combo-gap" type="number" value="800" min="200" max="5000" style="flex:0 0 66px"><span class="st">毫秒：服务器没下发该技能后摇时按它排队</span><button class="ghost" id="dsh-combo-diag" style="margin-left:auto">补 buff 结果</button></div>' +
       '<div class="box"><div class="b-hd">技能释放列表 <span class="tag green" id="dsh-askcount" style="float:right">0 项</span></div>' +
       '<div id="dsh-asklist"><span class="st">空（点选技能加入，可拖拽调序）</span></div>' +
       '<div class="row" style="margin-top:2px"><button class="ghost" id="dsh-askup" style="flex:0 0 auto">↑上移</button>' +
       '<button class="ghost" id="dsh-askdown" style="flex:0 0 auto">↓下移</button>' +
       '<button class="ghost" id="dsh-askdel" style="flex:0 0 auto">删除选中</button></div></div>' +
       '<div class="log" id="dsh-bufflog" style="margin-top:2px">辅助技能：未启用</div>' +
+      '<div class="log" id="dsh-combo-log" style="margin-top:2px;white-space:pre-wrap;max-height:96px;overflow:auto">补 buff 结果：（还没执行过组合）</div>' +
       '<div class="row"><span class="lb" style="min-width:48px">当前状态</span><span class="st" id="dsh-statusview" style="flex:1;line-height:1.6">未读取（游戏画面就绪后显示）</span>' +
       '<button class="ghost" id="dsh-statehelp" style="flex:0 0 auto">状态速查</button></div>' +
       '</div>' +
@@ -2780,16 +2769,6 @@ function createRoItemCapture(env) {
       '<input id="dsh-scanint" type="number" value="0.5" min="0.3" step="0.1" style="flex:0 0 44px"><span style="color:#5a6b7f">s（最低0.3）</span></div>' +
       '<div class="sec">附近怪物（实时 · <span id="dsh-scanst">未启动</span>）</div>' +
       '<div class="box" style="margin-top:2px"><div id="dsh-scanlist" style="font-size:11px;max-height:120px;overflow:auto">未启动侦查</div></div>' +
-      '</div>' +
-      // V2.38.23 探针：客户端视线函数探针（一级窗口 · 可拖动浮窗）——只做报告，绝不自动把 zLosClear 换成客户端函数
-      '<div class="row"><span class="st" style="font-size:10px">视线函数探针（点「开始探测」才跑一次 · 只报告不自动切换）</span>' +
-      '<button class="ghost" id="dsh-fw-btn-losprobe" data-fw="losprobe" style="flex:0 0 auto;padding:0 8px;font-size:11px">浮窗</button></div>' +
-      '<div id="dsh-fw-losprobe">' +
-      '<div class="sec">视线函数探针</div>' +
-      '<div class="row"><button class="ghost" id="dsh-losprobe-start" style="flex:0 0 auto">开始探测</button>' +
-      '<button class="ghost" id="dsh-losprobe-copy" style="flex:0 0 auto">复制报告</button></div>' +
-      '<div class="row"><span class="st" id="dsh-losprobe-status">未探测（绝不自动运行）</span></div>' +
-      '<div class="row"><textarea id="dsh-losprobe-out" readonly style="width:100%;height:240px;font-size:10px;font-family:monospace"></textarea></div>' +
       '</div>',
     assist: '' +
       '<div class="a-layout">' +
@@ -2838,6 +2817,10 @@ function createRoItemCapture(env) {
       '<div class="row"><label class="switch"><input id="dsh-z-returnauto" type="checkbox" checked>回到目标图自动开启助手挂机（默认开）</label></div>' +
       '<div class="row"><label class="switch"><input id="dsh-z-deathguard" type="checkbox" checked>连续死亡自动下线（5 分钟死 3 次，默认开）</label></div>' +
       '<div class="log">在目标图开着自动战斗时若角色死亡：助手自动点「重新开始」回城复活（点不动会重试，最多 4 次，仍失败就等你手点），坐下回满血后传回目标地图。回图后按上面的开关继续：勾选=自动开助手挂机；不勾=按死亡前的方式恢复（助手/内挂）。状态不确定或超时即停。<br>连续死亡自动下线：5 分钟内死亡 3 次（只统计助手或内挂在跑时）就停掉助手/内挂，并按正确下线方式自动下线——地图内 ESC →「选择角色」→ 角色选择界面右下角「取消」→ 确认结束游戏；某一步走不完会提示你手动下线。</div>' +
+      '<div class="sec">背包快照定期上报（V2.15.27）</div>' +
+      '<div class="row"><label class="switch"><input id="dsh-invshot" type="checkbox">开启定期上报（默认关 · 按需开启）</label>' +
+      '<span class="lb" style="margin-left:8px">间隔</span><input id="dsh-invshotint" type="number" value="120" style="flex:0 0 44px"><span style="color:#5a6b7f">秒</span></div>' +
+      '<div class="row"><span class="st" id="dsh-invshotlog" style="font-size:10px"></span></div>' +
       '<div class="sec">辅助对象 · 自动跟随玩家</div>' +
       '<div class="row"><span class="lb">跟随目标</span><select id="dsh-followtarget" style="flex:0 0 auto;max-width:140px"><option value="">选择玩家…（侦测）</option></select>' +
       '<button class="ghost" id="dsh-followscan" style="flex:0 0 auto">刷新</button></div>' +
@@ -2866,7 +2849,7 @@ function createRoItemCapture(env) {
       '<div class="row"><span class="lb" style="min-width:52px">自定义高亮</span><input id="dsh-hlrule" type="text" placeholder="ID[颜色]逗号分隔，如 970[yellow]；回车添加" style="flex:1 1 auto;min-width:0"></div>' +
       '<div class="box"><div class="b-hd">高亮名单 <span class="tag blue" id="dsh-hlcount" style="float:right">0 条</span></div>' +
       '<div id="dsh-hllist" style="font-size:11px;max-height:110px;overflow:auto"><span class="st">空（输入 ID[颜色] 添加，赏金材料默认黄）</span></div></div>' +
-      '<div class="log">按赏金任务收集品清单（92 件，V2.6.5 按游戏内导出重建）给物品栏物品槽加金边框+数量变金（V1.8.4：选择器按实测物品栏结构 .item[data-itid] 重写，v0.13.10 探针取证）。仓库槽由助手按实例索引补充物品 ID 后同步标色；装备槽暂不覆盖。</div>' +
+      '<div class="log">按赏金任务收集品清单（92 件，V2.6.5 按游戏内导出重建）给物品栏物品槽加金边框+数量变金。仓库槽由助手按实例索引补充物品 ID 后同步标色；装备槽暂不覆盖。</div>' +
       '</div>' +
             '<div class="sub-page" data-subpage="ap-mvp">' +
       '<div class="sec">MVP 计时（公告栏 #i1 → MVP 日志自动校准 · 点击地图名传送）</div>' +
@@ -2887,7 +2870,7 @@ function createRoItemCapture(env) {
       '</div>' +
       // 子页7：物品（拾取 + 背包整理，V2.15.1 自拾取页搬入）
       '<div class="sub-page" data-subpage="ap-item">' +
-      '<div class="sec" style="display:flex;align-items:center;gap:6px"><span style="flex:1">物品 · 拾取与整理</span>' +
+      '<div class="sec" style="display:flex;align-items:center;gap:6px"><span style="flex:1">物品 · 拾取</span>' +
       '<button class="ghost" id="dsh-fw-btn-item" data-fw="item" style="flex:0 0 auto;padding:0 8px;font-size:11px">浮窗</button></div>' +
       '<div id="dsh-fw-item">' +
 '<div class="sec">① 百分比拾取（直接联动内挂）</div>' +
@@ -2909,15 +2892,13 @@ function createRoItemCapture(env) {
       '<div class="row"><label class="switch"><input id="dsh-picken" type="checkbox" disabled>启用指定ID自动拾取（走路拾取）</label><span class="tag" id="dsh-pickoff" style="flex:0 0 auto">暂时下线</span><span class="st" id="dsh-pickstate" style="margin-left:auto"></span><span class="st" id="dsh-picklog"></span></div>' +
       '<div class="row"><label class="switch"><input id="dsh-pickwalk" type="checkbox" checked disabled>距离不足自动走过去捡</label></div>' +
       '<div class="row"><label class="switch"><input id="dsh-picksafe" type="checkbox" checked disabled>危险时不走过去捡（Boss/低血/低SP 在场）</label></div>' +
-      '<div class="log">走路拾取（指定ID自动拾取）已暂时下线：白名单里已选好的物品ID会保留，但脚本不会再去捡、也不会走过去捡。掉落树放在这里方便你查掉落、先把物品ID加进白名单，功能恢复后立即生效。白名单与下方「背包整理 / 丢弃黑名单」是两件事。</div>' +
+      '<div class="log">走路拾取（指定ID自动拾取）已暂时下线：白名单里已选好的物品ID会保留，但脚本不会再去捡、也不会走过去捡。掉落树放在这里方便你查掉落、先把物品ID加进白名单，功能恢复后立即生效。</div>' +
       '<div class="row"><input id="dsh-mobsearch" type="text" placeholder="搜索怪物名/ID…（全量图鉴）">' +
       '<button class="ghost" id="dsh-mobsearchbtn" style="flex:0 0 auto">搜索</button>' +
       '<button class="ghost" id="dsh-mobsearchclr" style="flex:0 0 auto">清空</button></div>' +
       '<div id="dsh-drop-tree" style="font-size:12px">' +
       '<div class="st">怪物掉落树：点「本图怪物掉落」直接看当前地图怪 → 展开勾选物品加入白名单；也可搜索。</div></div>' +
-      '<div class="sec">背包整理（丢弃黑名单 · 类别规则）</div>' +
-      '<div class="row"><span class="st" style="font-size:12px">自动丢弃与丢弃名单已拆到独立浮窗（逐角色保存 · 默认关闭；改规则后需重新预览授权）。</span>' +
-      '<button class="ghost" id="dsh-fw-btn-bagclean" data-fw="bagclean" data-fwlabel="自动丢弃 · 丢弃名单" style="flex:0 0 auto;padding:0 8px;font-size:12px">自动丢弃 · 丢弃名单</button></div>' +
+
       '</div>' +
       '<div class="sec">目标锁定条 / 队伍面板</div>' +
       '<div class="row"><span class="st" style="font-size:11px">V2.29.0 起改为全透明悬浮层：直接在游戏画面上拖动，位置自动保存；在 功能菜单 勾选「目标状态 / 队伍血条」显示；队友色块点击即锁定。</span></div>' +
@@ -3007,8 +2988,7 @@ function createRoItemCapture(env) {
       '<div style="position:relative;flex:1 1 150px;min-width:120px"><input id="dsh-map" placeholder="输入地图名/拼音（读地图后联想）" autocomplete="off" style="width:100%;box-sizing:border-box;padding:3px 22px 3px 6px">' +
       '<span id="dsh-maptog" title="展开/收起联想" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);cursor:pointer;color:#5a6b7f;font-size:11px;user-select:none">▾</span>' +
       '<div id="dsh-maplist" style="display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;z-index:99;background:#fff;border:1px solid #b8c6d4;border-radius:4px;max-height:180px;overflow:auto;box-shadow:0 3px 8px rgba(0,0,0,.18)"></div></div></div>' +
-      '<div class="row" style="margin-top:8px;gap:7px"><button class="ghost" id="dsh-mapload" style="flex:0 0 auto">读地图</button><button id="dsh-tp-map" style="flex:0 0 auto">传送</button><button class="ghost" id="dsh-tp-walk" style="flex:0 0 auto">走去</button><button class="ghost" id="dsh-geardiag" title="读不到装备栏时点这里，把结果发我" style="flex:0 0 auto">装备诊断</button><span class="st" id="dsh-tpmsg2" style="font-size:11px"></span></div>' +
-      '<div id="dsh-geardiagbox" style="display:none;margin-top:6px"><textarea id="dsh-geardiagout" readonly rows="5" style="width:100%;box-sizing:border-box;font-size:10px;line-height:1.35"></textarea></div>' +
+      '<div class="row" style="margin-top:8px;gap:7px"><button class="ghost" id="dsh-mapload" style="flex:0 0 auto">读地图</button><button id="dsh-tp-map" style="flex:0 0 auto">传送</button><button class="ghost" id="dsh-tp-walk" style="flex:0 0 auto">走去</button><span class="st" id="dsh-tpmsg2" style="font-size:11px"></span></div>' +
       '<div class="st" id="dsh-route" style="font-size:11px;margin-top:6px">路线：-</div>' +
       '<div class="sec">指定坐标（同图走路 / 跨图助手直发）</div>' +
       '<div class="row" style="align-items:center;flex-wrap:wrap;gap:7px"><span class="lb" style="min-width:34px;margin:0">地图</span>' +
@@ -3075,9 +3055,6 @@ function createRoItemCapture(env) {
       '<div class="row"><span class="lb">状态</span><span id="dsh-status" class="warn">等待启动…</span></div>' +
       '<div class="row"><span class="lb">大小</span><span class="st">右下角 ↘ 拖动手柄可拉伸</span></div>' +
       '<div class="row"><span class="lb">快捷键</span><span class="st">在「功能菜单」里逐个功能设置（点悬浮球打开菜单，每行右侧的键位按钮）</span></div>' +
-      '<div class="sec">键位检测</div>' +
-      '<div class="row"><span class="st" id="dsh-hkprobe" style="font-size:11px;word-break:break-all">最近按键：还没有收到按键（把浏览器标签页点到最前面再按）</span></div>' +
-      '<div class="log">按任意键会显示在这里：键码 / 按键 / 修饰键 / 是否命中功能。用来判断快捷键问题是「收不到按键」还是「判定错了」。命中但功能没反应，说明该功能的总开关被关掉了。</div>' +
       '<div class="log">V2.18.0：快捷键改为在「功能菜单」里按功能设置 —— 左键点键位按钮 → 按下组合键（支持 Ctrl/Alt/Shift/Win + 键，功能键 F1~F12 也可）；Esc 取消；右键键位按钮清除；20 秒不按自动取消。所有快捷键都是单键切换（按一次开、再按一次关）。同一组合不可重复绑定；功能总开关关掉后该功能的快捷键也不响应；输入框内打字时不触发。注意：浏览器标签页必须在最前面才收得到按键。</div>' +
       '<div class="sec">登录验证自动过</div>' +
       '<div class="row"><label class="switch"><input id="dsh-capauto" type="checkbox" checked>自动过验证</label><span class="st" id="dsh-capstate" style="font-size:10px;margin-left:auto">待命</span></div>' +
@@ -3728,6 +3705,7 @@ function createRoItemCapture(env) {
       var opBox = roAlphaSlider(win, "fw-" + id);
       var x = document.createElement("button");
       x.textContent = "";  // RO 原生关闭球（位图），不用 × 字符
+      x.className = "ro-fw-close";
       x.title = "收回浮窗（回到设置抽屉原位）";
       x.style.cssText = "flex:0 0 auto;width:11px;height:11px;min-width:11px;padding:0;border:0;border-radius:50%;" +
         "background:var(--dsh-close) no-repeat;background-size:11px 11px;cursor:pointer;font-size:0;line-height:0;color:transparent;";
@@ -3770,6 +3748,7 @@ function createRoItemCapture(env) {
         ax: Math.max(0, Math.round((roVw() - gw * roScale()) / 2) + 60),
         ay: Math.max(0, Math.round(roVh() * 0.12))
       });
+      roExpDecorate(id, win);
       return win;
     } catch (e) {
       var bad = fwState[id] && fwState[id].win;
@@ -3791,6 +3770,7 @@ function createRoItemCapture(env) {
       if (!st) return fwError(id, "登记", new Error("模块未登记"), quiet);
       if (fwActualOpen(id)) { fwSyncState(id); return true; }
       if (!st.host || !st.host.isConnected) return fwError(id, "打开", new Error("内容节点未就绪"), quiet);
+      roExpCloseOthers(id);
       if (fwSingleOn()) fwCloseOthers(id);   // V2.38.52：单窗模式
       var win = fwMakeWin(id, st.title);
       if (!win || !st.body) return fwError(id, "创建", new Error("窗口容器未创建"), quiet);
@@ -3804,6 +3784,9 @@ function createRoItemCapture(env) {
       fwPersist();
       try { roBringFront(win); } catch (e0) {}
       try { localStorage.setItem("dsh_ro_fwpos", JSON.stringify((function () { var m = {}; for (var k in fwState) { var w = fwState[k].win; if (w) m[k] = { l: w.offsetLeft, t: w.offsetTop }; } return m; })())); } catch (e1) {}
+      // 浮窗打开后：板面该行立即收起（互斥四项），并把搬迁失败项各重试一次。
+      try { roExpMonSync(); } catch (eMS) {}
+      
       return true;
     } catch (e) { fwOpenIds[id] = false; return fwError(id, "打开", e, quiet); }
   }
@@ -3826,6 +3809,9 @@ function createRoItemCapture(env) {
     try { if (fwActualOpen(id)) return fwClose(id); return fwOpen(id, false); }
     catch (e) { return fwError(id, "切换", e, false); }
   }
+  // 关闭浮窗的每条路径（标题栏 ×、全部收回、单窗互斥）都走 fwClose：包一层，关闭后立即同步板面行状态。
+  var fwCloseHook0 = fwClose;
+  fwClose = function (id) { var r = fwCloseHook0.apply(null, arguments); try { roExpMonSync(); } catch (eMC) {} return r; };
   function fwCloseAll() { for (var id in fwState) if (fwActualOpen(id)) fwClose(id); }
   // V2.23.0：浮窗开启状态持久化 —— 挂机时重开客户端后「当前目标/队伍血条」等浮窗自动回来
   var fwRestored = false;
@@ -3882,7 +3868,7 @@ function createRoItemCapture(env) {
     if (!dock) { dock = document.createElement("div"); dock.id = "dsh-txcap-dock"; dock.style.display = "none"; document.documentElement.appendChild(dock); }
     host = document.createElement("div"); host.id = "dsh-fw-txcap";
     host.innerHTML = '<div class="sec">数据抓包（真机对比用）</div>' +
-      '<div class="row" style="gap:6px;flex-wrap:wrap"><button id="dsh-txcap" style="flex:0 0 auto">开始抓包</button><button class="ghost" id="dsh-txstop" style="flex:0 0 auto">停止</button><button class="ghost" id="dsh-txexp" style="flex:0 0 auto">导出</button><button class="ghost" id="dsh-txdl" style="flex:0 0 auto">下载成文件</button><button class="ghost" id="dsh-spheredump" style="flex:0 0 auto">导出气弹诊断</button></div>' +
+      '<div class="row" style="gap:6px;flex-wrap:wrap"><button id="dsh-txcap" style="flex:0 0 auto">开始抓包</button><button class="ghost" id="dsh-txstop" style="flex:0 0 auto">停止</button><button class="ghost" id="dsh-txexp" style="flex:0 0 auto">导出</button><button class="ghost" id="dsh-txdl" style="flex:0 0 auto">下载成文件</button></div>' +
       '<div class="st" id="dsh-txlog" style="font-size:11px">双向抓包：未开始</div>' +
       '<textarea id="dsh-txout" style="width:100%;height:180px;font-size:10px;font-family:monospace" readonly placeholder="点「导出」后这里出现内容"></textarea>';
     dock.appendChild(host);
@@ -4662,163 +4648,6 @@ function createRoItemCapture(env) {
     return false;
   }
   // ================= V2.38.19 记录类键 END =================
-  // ================= V2.38.23 客户端视线函数探针 =================
-  //   · 只在用户点「开始探测」时执行一次：绝不自动运行、绝不在加载时运行。
-  //   · 只做报告：把页面上下文里可能存在的视线/寻路/地图函数逐个用 try/catch 试调一遍，结果写成可整段复制的文本，
-  //     便于人工对照我们自己的 zLosClear。绝不自动把 zLosClear 换成客户端函数（真机语义未经验证，自动切换风险更大）。
-  //   · 不联网、不写任何存储、不读也不打印任何令牌/口令；任何异常只写进结果区，绝不抛出、绝不打断助手与游戏。
-  var LOSPROBE_ROOTS = ["Altitude", "Map", "PathFinding", "Renderer", "Client", "g", "RO", "Battle", "Session", "Skill", "WM", "Mouse"];
-  var LOSPROBE_MAX = { roots: 12, props: 24, depth: 2, funcs: 40, calls: 24, text: 200, lines: 400 };
-  function losProbeWin() {
-    try { if (typeof window !== "undefined" && window) return window; } catch (e0) {}
-    try { if (typeof globalThis !== "undefined" && globalThis) return globalThis; } catch (e1) {}
-    return null;
-  }
-  // 只给很短很安全的描述，绝不 dump 大对象（防把令牌/口令一类的值带进报告）
-  function losProbeBrief(v) {
-    try {
-      if (v === null) return "null";
-      var t = typeof v;
-      if (t === "number" || t === "boolean") return String(v);
-      if (t === "string") return JSON.stringify(String(v).slice(0, 40));
-      if (t === "undefined") return "undefined";
-      if (t === "function") return "[function " + losProbeSan(v.name || "?") + "]";
-      if (t === "object") {
-        if (Object.prototype.toString.call(v) === "[object Array]") {
-          var a = [];
-          for (var i = 0; i < v.length && i < 4; i++) { var x = v[i]; a.push((typeof x === "number" || typeof x === "boolean") ? String(x) : typeof x); }
-          return "[" + a.join(",") + (v.length > 4 ? ",…" : "") + "] len=" + v.length;
-        }
-        var n = null; try { n = v.constructor && v.constructor.name; } catch (e0) {}
-        return "[" + losProbeSan(n || "object") + "]";
-      }
-      return "[" + t + "]";
-    } catch (e) { return "[?]"; }
-  }
-  // 兜底：报告里绝不出现任何疑似令牌/口令/凭据字样的值，并去掉不可打印字符
-  function losProbeSan(s) {
-    try {
-      return String(s == null ? "" : s).slice(0, LOSPROBE_MAX.text)
-        .replace(/(token|passwd|password|secret|credential|cookie|authorization)\s*[=:]\s*\S+/gi, "$1=<已隐去>")
-        .replace(/[\u0000-\u001f\u007f]/g, " ");
-    } catch (e) { return ""; }
-  }
-  // 逐层浅遍历：只收函数；限制深度/属性数/函数数（有上限，防卡死）
-  function losProbeCollect(root, path, depth, out, seen) {
-    try {
-      if (!root || depth > LOSPROBE_MAX.depth || out.length >= LOSPROBE_MAX.funcs) return;
-      if (seen.indexOf(root) >= 0) return;
-      seen.push(root);
-      var names = [];
-      try { names = Object.getOwnPropertyNames(root); } catch (e0) { names = []; }
-      for (var i = 0; i < names.length && i < LOSPROBE_MAX.props && out.length < LOSPROBE_MAX.funcs; i++) {
-        var k = names[i];
-        if (k === "constructor" || k === "prototype" || k === "__proto__") continue;
-        var v = null; try { v = root[k]; } catch (e1) { continue; }
-        var p = path + "." + k;
-        if (typeof v === "function") out.push({ path: p, kind: "function", name: losProbeSan(v.name || k), val: v });
-        else if (depth + 1 <= LOSPROBE_MAX.depth && v && typeof v === "object") losProbeCollect(v, p, depth + 1, out, seen);
-      }
-    } catch (e) {}
-  }
-  // 参数形状：一律用「当前地图对象 + 当前角色格 / 锁定怪格坐标」，每种形状都试
-  function losProbeShapes(mapObj, ax, ay, bx, by) {
-    return [
-      ["(x1,y1,x2,y2)", [ax, ay, bx, by]],
-      ["([x1,y1],[x2,y2])", [[ax, ay], [bx, by]]],
-      ["(map,x1,y1,x2,y2)", [mapObj, ax, ay, bx, by]],
-      ["(map,{x1,y1,x2,y2})", [mapObj, { x1: ax, y1: ay, x2: bx, y2: by }]],
-    ];
-  }
-  function losProbeRun() {
-    var L = [];
-    var push = function (s) { if (L.length < LOSPROBE_MAX.lines) L.push(losProbeSan(s)); };
-    try {
-      push("视线函数探针报告（V2.38.23 · 只报告 · 绝不自动切换判定口径）");
-      try { push("时间=" + new Date().toLocaleString()); } catch (eT) {}
-      try { push("地图=" + getMapName()); } catch (eM) { push("地图=读取失败"); }
-      var ent = null; try { ent = CLIENT && CLIENT.SS && CLIENT.SS.Entity; } catch (e0) {}
-      var px = null, py = null;
-      try { if (ent && ent.position) { px = Math.round(ent.position[0]); py = Math.round(ent.position[1]); } } catch (e1) {}
-      var gid = null, mx = null, my = null;
-      try { gid = zLock ? zLock.gid : null; } catch (e2) { gid = null; }
-      try { if (gid && typeof zEntOf === "function") { var me = zEntOf(gid); if (me && me.position) { mx = Math.round(me.position[0]); my = Math.round(me.position[1]); } } } catch (e3) {}
-      if (mx == null && px != null) { mx = px; my = py; }   // 没有锁定怪 → 用角色自己（保证参数形状仍可试）
-      push("角色格=" + (px == null ? "不可用（游戏未就绪）" : px + "," + py) + " 锁定怪 gid=" + (gid || "无") + " 怪格=" + (mx == null ? "不可用" : mx + "," + my));
-      if (px == null || mx == null) push("坐标不可用：只列候选（不试调），避免用错参数得出错误结论");
-      var ours = "异常";
-      try { ours = px == null ? "未计算" : String(zLosClear(px, py, mx, my)); } catch (eO) { ours = "异常：" + (eO && eO.message ? eO.message : eO); }
-      push("本地口径对照：zLosClear(" + px + "," + py + " -> " + mx + "," + my + ") = " + ours + "（本机判定，仅供参考）");
-      var mapObj = null;
-      try { if (typeof requireDB === "function") mapObj = requireDB("Renderer/MapRenderer") || requireDB("Renderer/Map/Altitude"); } catch (e4) { mapObj = null; }
-      var W = losProbeWin();
-      push("页面全局对象=" + (W ? "可用" : "不可用") + " 地图对象=" + (mapObj ? "可用" : "不可用"));
-      var found = [], seen = [];
-      if (W) {
-        for (var i = 0; i < LOSPROBE_ROOTS.length && i < LOSPROBE_MAX.roots; i++) {
-          var rn = LOSPROBE_ROOTS[i], rv = null;
-          try { rv = W[rn]; } catch (e5) { rv = null; }
-          if (!rv) continue;
-          push("候选根 " + rn + " -> " + losProbeBrief(rv));
-          if (typeof rv === "function") found.push({ path: rn, kind: "function", name: losProbeSan(rv.name || rn), val: rv });
-          else losProbeCollect(rv, rn, 1, found, seen);
-        }
-      }
-      push("发现候选函数 " + found.length + " 个（上限 " + LOSPROBE_MAX.funcs + "）");
-      for (var k2 = 0; k2 < found.length; k2++) push("  候选 " + found[k2].path + " 类型=" + found[k2].kind + " 函数名=" + found[k2].name);
-      if (px == null || mx == null) { push("坐标不可用 → 不试调任何函数（防误判）。"); return L.join("\n"); }
-      var calls = 0;
-      for (var j = 0; j < found.length && calls < LOSPROBE_MAX.calls; j++) {
-        var shapes = losProbeShapes(mapObj, px, py, mx, my);
-        for (var s = 0; s < shapes.length && calls < LOSPROBE_MAX.calls; s++) {
-          calls++;
-          var rr = "";
-          try { rr = "ok=" + losProbeBrief(found[j].val.apply(null, shapes[s][1])); }
-          catch (e6) { rr = "err=" + (e6 && e6.message ? e6.message : e6); }
-          push("  [" + found[j].path + "] " + found[j].name + " " + shapes[s][0] + " -> " + rr);
-          if (rr.indexOf("ok=") === 0) break;   // 一种形状成功就不再试其它形状（省时间）
-        }
-      }
-      push("探测完成：只做报告，绝不自动把本地 zLosClear 判定换成外部函数。");
-    } catch (e) { push("探针内部异常：" + (e && e.message ? e.message : e)); }
-    return L.join("\n");
-  }
-  function losProbeFill() {
-    try {
-      var txt = losProbeRun();
-      var out = null; try { out = $id("dsh-losprobe-out"); } catch (e0) {}
-      if (out) { out.value = txt; try { out.focus(); out.select(); } catch (e1) {} }
-      var st = null; try { st = $id("dsh-losprobe-status"); } catch (e2) {}
-      if (st) st.textContent = "探测完成（" + (txt ? txt.split("\n").length : 0) + " 行 · 可整段复制）";
-      try { setStatus("视线探针已写入结果区，可整段复制", "ok"); } catch (e3) {}
-      return txt;
-    } catch (e) {
-      try { var out2 = $id("dsh-losprobe-out"); if (out2) out2.value = "探测失败：" + (e && e.message ? e.message : e); } catch (e9) {}
-      return "";
-    }
-  }
-  // 「开始探测」/「复制报告」按钮：只在点击时执行（事件委托，面板重建/浮窗后仍有效）
-  try {
-    document.addEventListener("click", function (e) {
-      var t = e.target;
-      if (!t || !t.id) return;
-      if (t.id === "dsh-losprobe-start") { try { e.stopPropagation(); } catch (e0) {} try { losProbeFill(); } catch (e1) {} return; }
-      if (t.id === "dsh-losprobe-copy") {
-        try { e.stopPropagation(); } catch (e2) {}
-        try {
-          var o = $id("dsh-losprobe-out");
-          if (o) {
-            o.focus(); o.select();
-            var okc = false; try { okc = document.execCommand("copy"); } catch (e3) { okc = false; }
-            var stc = $id("dsh-losprobe-status");
-            if (stc) stc.textContent = okc ? "已复制到剪贴板" : "复制不可用，请手动全选文本框复制";
-            setStatus(okc ? "探针报告已复制" : "复制不可用，请手动全选复制", okc ? "ok" : "warn");
-          }
-        } catch (e4) {}
-      }
-    }, true);
-  } catch (e) {}
-  // ================= V2.38.23 客户端视线函数探针 END =================
   // 三个可浮窗区块注册（V2.10.0）：本图怪物锁定 / 传送功能 / 助手技能设置
   try {
     fwReg("mlock", "攻击名单", function () { return document.getElementById("dsh-fw-mlock"); });
@@ -4832,11 +4661,10 @@ function createRoItemCapture(env) {
     // V2.34.0：原「助手战斗设置」页内三页签拆成三个一级浮窗，各自独立登记
     fwReg("zskill", "技能设置", function () { return document.getElementById("dsh-fw-zskill"); });
     fwReg("znear", "附近怪物实时列表", function () { return document.getElementById("dsh-fw-znear"); });
-    fwReg("losprobe", "视线探针", function () { return document.getElementById("dsh-fw-losprobe"); }); // V2.38.23 客户端视线函数探针（只报告）
     fwReg("aid", "战斗辅助", function () { return document.getElementById("dsh-fw-aid"); });
     // MVP 计时是独立 custom 窗口，由 roModOpen/roModClose 直接管理，不进入标准浮窗登记。
     // V2.15.1 物品（拾取+背包整理）浮窗：标准浮窗（可拖动/透明/×收回）
-    fwReg("item", "物品 · 拾取+背包整理", function () { return document.getElementById("dsh-fw-item"); });
+    fwReg("item", "物品 · 拾取", function () { return document.getElementById("dsh-fw-item"); });
     fwReg("perf", "画面性能", function () { return document.getElementById("dsh-fw-perf"); });    fwReg("memclean", "内存清理", function () { return document.getElementById("dsh-fw-memclean"); }); // V2.38.42
     // V2.29.0：目标锁定条/队伍面板改为独立透明悬浮层（renderTgt/renderParty 直管，功能菜单 roModOn 开关），不再走 fwReg
     fwReg("tpp", "传送点快捷条", function () { return document.getElementById("dsh-fw-tpp"); }); // V2.29.0
@@ -4862,12 +4690,13 @@ function createRoItemCapture(env) {
   var RO_MOD_KEY = "dsh_ro_modules_v1";
   var roModC = null;
   function roMods() {
-    if (roModC) return roModC;
+    if (roModC) { delete roModC["ro-infinite-dojo"]; return roModC; }
     roModC = {};
     try {
       var o = JSON.parse(localStorage.getItem(RO_MOD_KEY) || "{}");
       if (o && typeof o === "object") roModC = o;
     } catch (e) {}
+    delete roModC["ro-infinite-dojo"];
     return roModC;
   }
   // V2.24.0：新增 defOff —— 表里标了 defOff 的功能（首领警报）默认关闭，其余默认开启。
@@ -4884,6 +4713,7 @@ function createRoItemCapture(env) {
     return null;
   }
   function roModSet(id, on) {
+    if (id==="ro-infinite-dojo") return;
     roMods()[id] = !!on;
     try { localStorage.setItem(RO_MOD_KEY, JSON.stringify(roMods())); } catch (e) {}
     try { roMenuRender(); } catch (e) {}
@@ -4899,7 +4729,7 @@ function createRoItemCapture(env) {
     { id: "np",    name: "内挂自动战斗",    kind: "act", noToggle: true, sec: "常用" },
     { id: "zhu",   name: "助手自动战斗",    kind: "act", noToggle: true, sec: "常用" },
     { id: "scr",   name: "脚本执行",        kind: "fw", sec: "常用" },
-    { id: "ro-infinite-dojo", name: "脚本入口（独立版）", kind: "fw", noSwitch: true, openOnly: true, sec: "常用" },
+    // 脚本窗口仅从「脚本执行」打开；握手与窗口 id 保留。
     { id: "arrowrules", name: "换箭设置", kind: "fw", sec: "战斗功能" },
     { id: "mlock", name: "攻击名单",        kind: "fw", sec: "战斗功能" },
     { id: "zhu2",  name: "战斗设置",        kind: "fw", sec: "战斗功能" },
@@ -4911,7 +4741,7 @@ function createRoItemCapture(env) {
     { id:"deathlog", name:"死亡回放", kind:"fw", sec:"战斗辅助" },
     { id: "boss",  name: "首领警报",        kind: "fw", sec: "战斗辅助", defOff: true },
     { id: "askcombo", name: "一键补 buff（技能+物品）", kind: "action", noToggle: true, sec: "战斗辅助" },
-    { id: "item",  name: "物品 · 拾取与整理", kind: "fw", sec: "战斗辅助" },
+    { id: "item",  name: "物品 · 拾取", kind: "fw", sec: "战斗辅助" },
     // V2.38.18：自动丢弃入口（kind=fw 走标准浮窗开关路径；noSwitch 只去掉勾选框——开关与授权在该浮窗内，勾选框会误导）
     { id: "bagclean", name: "自动丢弃 · 丢弃名单", kind: "fw", noSwitch: true, sec: "战斗辅助" },
     // 快捷加入丢弃名单：按住组合键 + 左键的手势键位（没有独立窗口、没有总开关，只有键位按钮；默认 Ctrl+Shift+D）
@@ -4921,7 +4751,6 @@ function createRoItemCapture(env) {
     { id: "tgt",   name: "目标状态",        kind: "fw", sec: "提示" },
     { id: "znear", name: "附近怪物实时列表", kind: "fw", sec: "提示" },
     { id: "perf",  name: "画面性能",        kind: "fw", sec: "其他" },    { id: "memclean", name: "内存清理", kind: "fw", sec: "其他" }, // V2.38.42 定期清理客户端内存
-    { id: "txcap", name: "数据抓包",        kind: "fw", sec: "其他" },
     { id: "mvp",   name: "MVP 计时",        kind: "custom", sec: "其他" },
     { id: "profins", name: "档体检 · 老档归并", kind: "fw", sec: "其他" }, // V2.38.46（任务E）
     { id: "panel", name: "高级设置",        kind: "page", sec: "其他" }
@@ -4957,11 +4786,8 @@ function createRoItemCapture(env) {
     return fwSyncState(id);
   }
   function roModOpen(id) {
-    if (id === "ro-infinite-dojo") {
-      var op = apiOpenWindow(id);
-      if (!op.ok) setStatus(op.error === "unknown-window" ? "脚本入口：独立脚本未安装或未就绪，请启用独立脚本后再打开（不会自动运行）" : "脚本入口：设置浮窗暂时打不开，请稍后重试（不会自动运行）", "warn");
-      return;
-    }
+    roExpCloseOthers(id);
+    // 已注册脚本窗口由脚本执行窗口打开。
     /* V2.38.52：按用户要求删除「加入丢弃名单快捷操作」弹窗；提示改为自动丢弃浮窗内一行小字 */
     var pg = roModPage(id);
     if (pg) {
@@ -4998,9 +4824,14 @@ function createRoItemCapture(env) {
   }
   // V2.24.1：恢复 2.24.0 误删的总调度。菜单每行的「打开」按钮与快捷键 hkAction 都调用它，
   //   缺了它两者全部 ReferenceError → 表现为「所有打开都没反应、所有快捷键全失效」。
-  function roModToggle(id) { if (id === "ro-infinite-dojo") return roModOpen(id); if (roModIsOpen(id)) roModClose(id); else roModOpen(id); }
+    // 悬浮层（tgt/ztip）不走 fwOpen/fwClose：给「打开/关闭」各补一次板面行状态即时同步。幂等，不新增计时器。
+    var roModOpen0 = roModOpen, roModClose0 = roModClose;
+    roModOpen = function (id) { var r = roModOpen0.apply(null, arguments); try { roExpMonSync(); } catch (eMO) {} return r; };
+    roModClose = function (id) { var r = roModClose0.apply(null, arguments); try { roExpMonSync(); } catch (eMC) {} return r; };
+    function roModToggle(id) { if (roModIsOpen(id)) roModClose(id); else roModOpen(id); }
 
   var roMenuEl = null;
+  // Experimental UI only: move existing bound probe nodes, never clone controls or their event handlers.
   function roMenuBuild() {
     if (roMenuEl && roMenuEl.parentNode) return roMenuEl;
     try {
@@ -5047,7 +4878,7 @@ function createRoItemCapture(env) {
   function roMenuToggle() {
     var el = roMenuBuild();
     if (!el) return;
-    if (el.style.display === "none") { el.style.display = "flex"; roMenuRender(); }
+    if (el.style.display === "none") { roExpCloseOthers("menu"); el.style.display = "flex"; roMenuRender(); roExpClamp(el);  }
     else { el.style.display = "none"; }
   }
   function roMenuRow(parent, labelText, ctrl) {
@@ -5082,9 +4913,10 @@ function createRoItemCapture(env) {
     var fwBtn = document.createElement("button"); fwBtn.type = "button"; fwBtn.textContent = "全部收回";
     fwBtn.title = "收回所有已打开的浮窗（回到设置抽屉原位）";
     fwBtn.style.cssText = "flex:0 0 auto;height:20px;font-size:11px;";
-    fwBtn.addEventListener("click", function () { try { fwCloseAll(); } catch (e0) {} });
+    fwBtn.addEventListener("click", function () { roExpCloseAll(); });
     fwRow.appendChild(fwBtn);
     body.appendChild(fwRow);
+    if (roExpCfg) { var newBtn = document.createElement("button"); newBtn.type = "button"; newBtn.textContent = "新UI设置 / 恢复旧入口"; newBtn.addEventListener("click", roExpOpenSettings); roMenuRow(body, "新UI设置", newBtn); }
     var lastSec = null;
     for (var i = 0; i < RO_MODULES.length; i++) {
       (function (m) {
@@ -5209,6 +5041,68 @@ function createRoItemCapture(env) {
     roMenuRow(body, "助手更新（只检查，不自动安装）", updateBtn);
     var captureState=document.createElement("div");captureState.className="ro-info";captureState.id="dsh-item-evidence-state";captureState.textContent="物品采集：仅发送本机，收到写盘确认才算成功";body.appendChild(captureState);
   }
+  // 建立玩家功能菜单。
+  function upInvAttr(el, name) { try { return (el && el.getAttribute) ? el.getAttribute(name) : null; } catch (e) { return null; } }
+  function upInvItid(it) { try { if (!it || typeof it !== "object") return null; var v = (it.ITID != null) ? it.ITID : (it.itemid != null ? it.itemid : null); return (v == null) ? null : String(v); } catch (e) { return null; } }
+  // 全文档唯一 #Inventory：只有「一只容器」时才允许按格号回退到该容器对应格子的 data-itid/实例；
+  //   多个 #Inventory（含他人装备窗克隆）一律不按 id 认，维持 fail-closed（返回 null 即没有回退）。
+  var upInvDomNote = null;
+  function upInvDomRootUnique() {
+    try {
+      upInvDomNote = null;
+      if (!document || typeof document.querySelectorAll !== "function") { upInvDomNote = "本环境读不到 DOM，不按 #Inventory 回退"; return null; }
+      var roots = document.querySelectorAll("#Inventory");
+      var n = roots ? roots.length : 0;
+      if (n === 0) { upInvDomNote = "没有 #Inventory 容器，不按格号回退"; return null; }
+      if (n > 1) { upInvDomNote = "文档里有 " + n + " 个 #Inventory（含他人装备窗克隆），一律不按 id 回退"; return null; }
+      return roots[0] || null;
+    } catch (e) { upInvDomNote = "#Inventory 容器读取失败，不按格号回退"; return null; }
+  }
+  // 只读：容器内找 data-index 等于该格号的那一格，读它自己的 data-itid（唯一可采信的物品号来源）。
+  function upInvDomCellItid(root, idx) {
+    try {
+      if (!root || typeof root.querySelectorAll !== "function") return null;
+      var want = String(Number(idx));
+      var cells = root.querySelectorAll(".item[data-index]");
+      var n = cells ? cells.length : 0;
+      for (var i = 0; i < n && i < 400; i++) {
+        var el = cells[i], si = upInvAttr(el, "data-index");
+        if (si == null) continue;
+        if (String(Number(String(si).trim())) !== want) continue;
+        var it = upInvAttr(el, "data-itid");
+        return (it == null || it === "") ? null : String(it);
+      }
+    } catch (e) {}
+    return null;
+  }
+  function upInvFallbackItem(idx) {
+    try {
+      var root = upInvDomRootUnique();
+      if (!root) return null;
+      var itid = upInvDomCellItid(root, idx);
+      if (itid == null) { upInvDomNote = "#Inventory 内没有写物品号的格子（格号 " + idx + "），不按 id 回退"; return null; }
+      var it = (typeof bagItemByIndex === "function") ? bagItemByIndex(idx) : null;
+      if (!it || typeof it !== "object") {  return null; }
+      var have = upInvItid(it);
+      if (have == null || have !== String(itid)) {  return null; }
+      
+      return it;
+    } catch (e) { return null; }
+  }
+  function upInvFallbackNote() { try { return upInvDomNote ? ("不按 #Inventory 回退：" + upInvDomNote) : ""; } catch (e) { return ""; } }
+  // 只读诊断：记录某次取值实际命中的是哪一路（不是取值来源，只写诊断字）。
+  function bagPlace(tag, it) {
+    try {
+      if (!it || typeof it !== "object") return false;
+      if (tag === "comp") bagRead.source = "客户端组件实例表.getItemByIndex";
+      else if (tag === "pkt") bagRead.source = "包流表（0x0b09 按格号）";
+      else if (tag === "mod") bagRead.source = "组件模块.getItemByIndex";
+      else bagRead.source = "背包列表扫描";
+      return true;
+    } catch (e) { return false; }
+  }
+
+  try { roMenuBuild(); } catch (e) {}
 
   // 鼠标→触摸模拟层 + 视角控制（手机页 r=mn，V2.38.9）
   // 事实依据（Online_mn.js 逐模块核对，非猜测）与两条路的取舍见上方 V2.38.9 变更摘要第 2/3 条。
@@ -6034,6 +5928,7 @@ function createRoItemCapture(env) {
       if (bn) { bn.className = "qs" + (neiOn === true ? " on" : (neiOn === null ? " unknown" : "")); bn.title = "内挂自动战斗：" + (neiOn === null ? "状态未知（等待游戏报告，不盲切）" : (neiOn ? "已开（点击关闭）" : "已关（点击开启）")); }
       if (bz) { bz.className = "qs" + (zRunning ? " on" : ""); bz.title = "助手自动战斗：" + (zRunning ? "已开（点击停止）" : "已关（点击启动）"); }
     } catch (e) {}
+    roExpPaint(); // 复用既有UI节拍，不增加采集循环。
   }
   try {
     var qswNei = $id("dsh-qs-nei"), qswZhu = $id("dsh-qs-zhu");
@@ -6053,7 +5948,8 @@ function createRoItemCapture(env) {
   } catch (e) {}
   ball.addEventListener("click", function () {
     if (ball.__dsDragged) { ball.__dsDragged = false; return; } // 拖动松手不弹菜单
-    roMenuToggle();
+    if (roExpOn()) { var showPetals = roExpRing.style.display === "none"; roExpCloseOthers("petals"); roExpRingOpen = showPetals; roExpRing.style.display = roExpRingOpen ? "block" : "none"; roExpLayout(); }
+    else roMenuToggle();
   });
   // V2.24.1：旧版设置界面入口 —— 启动不再自动弹出。
   // V2.29.0：启动一律按收起处理，与历史 collapsed 值解耦（旧逻辑 collapsed===false 会在每次刷新后自动弹出）。
@@ -6238,6 +6134,7 @@ function createRoItemCapture(env) {
       var cfg = hkLoad();
       var hit = null;
       for (var id in cfg) {
+        if (id === "ro-infinite-dojo") continue; // 退役独立入口不抢占按键；脚本执行内 openWindow 保留。
         var hh = cfg[id];
         if (!hh || !hh.key) continue;
         // V2.23.0：四个修饰键各自独立严格比对。旧版把 Ctrl 和 Win 混在一起比，
@@ -6245,38 +6142,16 @@ function createRoItemCapture(env) {
         var match = (!!hh.ctrl === !!e.ctrlKey) && (!!hh.alt === !!e.altKey) && (!!hh.shift === !!e.shiftKey) && (!!hh.meta === !!e.metaKey) &&
           ((hh.key === (e.code || e.key)) || (hh.key === e.key));
         if (!match) continue;
-        if (id === BAG_QUICK_HK_ID) { hit = id; hkProbe(e, id); continue; } // 手势键：keydown 只表示「按住中」（bagQuickKey 处理），绝不触发动作/发包
+        if (id === BAG_QUICK_HK_ID) { hit = id; continue; } // 手势键：keydown 只表示「按住中」（bagQuickKey 处理），绝不触发动作/发包
         e.preventDefault();
         e.stopPropagation();
         hkAction(id);
         hit = id;
         break;
       }
-      if (!hit) hkProbe(e, null);
     } catch (e3) {}
   }, true);
 
-  // V2.23.0 键位检测：记录最近 3 次按键，显示在系统页 —— 用来区分「收不到按键」和「收到了但判定错」
-  var hkProbeLog = [];
-  function hkProbe(e, hitId) {
-    try {
-      var s = "键码 " + (e.code || e.key || "?") + " / " + (e.key || "?");
-      if (e.ctrlKey) s += " +Ctrl";
-      if (e.altKey) s += " +Alt";
-      if (e.shiftKey) s += " +Shift";
-      if (e.metaKey) s += " +Win";
-      s += hitId ? (" → 命中「" + hkName(hitId) + "」") : " → 未绑定";
-      DSHCollect.ringUnshift(hkProbeLog, s, 3);
-      renderHkProbe();
-    } catch (e2) {}
-  }
-  function renderHkProbe() {
-    try {
-      var el = document.getElementById("dsh-hkprobe");
-      if (!el || el.offsetParent === null) return; // 系统页没打开时不碰 DOM（不拖累游戏帧率）
-      el.textContent = hkProbeLog.length ? ("最近按键：" + hkProbeLog.join("　|　")) : "最近按键：还没有收到按键（把浏览器标签页点到最前面再按）";
-    } catch (e2) {}
-  }
   // 悬浮球自动靠边：窗口尺寸变化时保持球在视口内（贴边不丢失）
   function snapBallToEdge() {
     try {
@@ -6959,6 +6834,7 @@ function createRoItemCapture(env) {
   var askDiagOn = false; // V2.15.18：自动技能诊断日志开关（默认关——tickAskSkills 每秒全量 console.log 造成主线程阻塞→物品拖拽卡顿）
   var btRing = []; // 最近 60 条诊断
   function btLog(tag, msg) {
+    return; // Optional diagnostic collector is not shipped in stable.
     try {
       var line = '[' + tag + '] ' + msg;
       DSHCollect.ringPush(btRing, line, 60);
@@ -7142,7 +7018,7 @@ function createRoItemCapture(env) {
     ["dsh-z-deathreturn", "c"], ["dsh-z-returnmap", "v"], ["dsh-z-returnauto", "c"], ["dsh-z-deathguard", "c"],
     ["dsh-z-attint", "v"], ["dsh-z-range", "v"], ["dsh-z-pmrange", "v"], ["dsh-z-mgrange", "v"], ["dsh-z-minrange", "v"], ["dsh-z-mapbound", "c"], ["dsh-z-mapbound-r", "v"], ["dsh-z-mapbound-edge", "v"],
     ["dsh-z-switchdelay", "v"], ["dsh-z-moveint", "v"], ["dsh-z-huntmode", "v"], ["dsh-z-takeover", "v"], ["dsh-z-follow", "c"], ["dsh-z-next", "c"],
-    ["dsh-arrowen", "c"],
+    ["dsh-arrowen", "c"], ["dsh-invshot", "c"], ["dsh-invshotint", "v"],
     ["dsh-autoskill", "v"], ["dsh-autoskilllv", "v"], ["dsh-autoskillpro", "v"],
 
     ["dsh-automatic", "v"], ["dsh-touchskill", "v"], ["dsh-touchskillop", "c"],
@@ -7279,6 +7155,7 @@ function createRoItemCapture(env) {
     } catch (e) { return false; }
   }
   function applyProfileUI() {
+    try{if(typeof arrowSyncProfile==="function")arrowSyncProfile();}catch(eArrow){}
     try {
       try { migrateZControlsAll(); } catch (em) {}
       // V2.32.1：重置回 HTML 默认值（checked/selected/value 属性），而非一刀切清空——修「防御瞬移总开关等默认勾选项被重置成关闭」
@@ -7313,6 +7190,11 @@ function createRoItemCapture(env) {
           } catch (eqk) {}
         }
       }
+      // Diagnostic probes are per-session opt-in even if older profiles had saved them enabled.
+      try { var oldDiag = $id("dsh-z-diag"); if (oldDiag) oldDiag.checked = false;
+        var oldSample = $id("dsh-z-bosskeepsmp"); if (oldSample) oldSample.checked = false;
+        var oldBattle = $id("dsh-bt-diag"); if (oldBattle) oldBattle.checked = false;
+        btDiagOn = false; diagAutoProbeOn = false; } catch (eProbeOff) {}
       // V2.38.41：healFirst 存的是 saved.healFirst（非 saved.ui 键），切角色后须显式回填复选框，否则显示不随档刷新
       try { var hfEl = $id("dsh-healfirst"); if (hfEl) hfEl.checked = saved.healFirst === true; } catch (ehf) {}
       // V1.9.4：高亮规则名单（localStorage dsh_ro_hlrules）随角色档重建样式与列表
@@ -7751,7 +7633,9 @@ function createRoItemCapture(env) {
       var key = profileKeyFor(cid); // V2.38.46：统一档键（新 OneID / 旧 ch<cid>）
       claimProfileForChar(key, cid, gid);
       var curKey = activeProfileKey(), curP = profiles[curKey];
-      if (curKey === key && curP && gidInt(curP.charId) === cid && lastCharId === cid && lastCharGid === gid) {
+      if (curKey === key && curP && gidInt(curP.charId) === cid && lastCharId === cid && resolveSelfIdentity().known && key === resolveSelfIdentity().oneId) {
+        // Same OneID: a new scene entity is not a new character/login.
+        lastCharGid = gid; curP.gid = gid > 0 ? gid : curP.gid;
         var nmKeep = selfName(); // 档已对齐：只顺手刷新显示名，绝不重跑切档
         if (nmKeep && curP.name !== nmKeep) { curP.name = nmKeep; try { saveProfiles(); } catch (eN) {} }
         return;
@@ -7761,9 +7645,7 @@ function createRoItemCapture(env) {
       //   否则「A 死 2 次 → 切到 B → B 再死 1 次」会累计到 3 次把 B 自动下线；deathGuardDone 同理会让本页面内永久不再保护。
       try { deathGuardAt = []; deathGuardDone = false; deathGuardDead = false; } catch (eDG) {}
       try { dlogReset("切换角色"); } catch (eDL) {}
-      var npZeroWasOn = false; try { npZeroWasOn = (npBattleState() === true); } catch (e0) {} // V2.38.2：换角色=挂机结束，先记下旧角色内挂是否确认在跑（复位之后就查不到了）
-      // V2.38.34 审计 P2：置零必须排在复位之前——复位会把 npBattleKnown 置回未知，之后置零走到 npRequestBattle 只会拿到 unknown，一个包都不发（2.38.32 对外行为回归）
-      try { if (npZeroWasOn) npZeroBattle("换角色"); } catch (e0) {} // 此刻读到的仍是旧角色的真状态：发出这一个包，随后由复位整份作废
+      // The current entity may already belong to the new role; never send its predecessor shutdown toggle.
       try { npResetBattleState(); } catch (e0) {} // 换角色：旧角色排队意图绝不能落到新角色
       if (typeof selfSpirits !== "undefined" && selfSpiritCount(ent) === null) selfSpirits = { aid: 0, num: 0, map: "" };
       try { captureAll(); } catch (e) {} // 旧档先落盘
@@ -9366,12 +9248,15 @@ function createRoItemCapture(env) {
     } catch (e) { return { wt: -1, itid: null, why: "异常:" + (e && e.message ? e.message : e), seen: "" }; }
   }
   // V2.38.50：只有角色装备栏箭矢格能证明当前箭；背包只补读该格同序号的数据，绝不扫描穿戴标记兜底。
-  // 只有当前自身 Equipment 的正式 equip 更新能为 detached 根建立会话见证。
+  // 当前自身 Equipment 的正式更新与首次原生槽位读取建立角色绑定；换图不沿用旧数量。
   var arrowEquipOwners = new WeakMap(), arrowEquipHooked = new WeakSet();
+  function arrowEquipIdentityKey() {
+    try { var id=resolveSelfIdentity();return id&&id.known===true&&Number(id.charId)===selfCharId()?String(id.oneId||""):""; } catch(e) { return ""; }
+  }
   function arrowEquipRootOwned(EQ, ri) {
     try {
       var root=ri&&ri.el;
-      if(!EQ||EQ!==gearEquipmentComp()||!root||!CLIENT.SS||!CLIENT.SS.Entity||!clientReady())return false;
+      if(!EQ||EQ!==gearEquipmentComp()||!root||!CLIENT.SS||!CLIENT.SS.Entity)return false;
       var host=root.nodeType===11?root.host:root;
       if(!host||!/^Equipment(?:V[0-4]|_v[0-4])?$/.test(host.id||"")||gearDomExcluded(host))return false;
       if(ri.how==="getRoot")return typeof EQ.getRoot==="function"&&gearDomEl(EQ.getRoot())===root;
@@ -9380,22 +9265,39 @@ function createRoItemCapture(env) {
   }
   function arrowEquipOwnerCurrent(EQ, ri) {
     try {
-      var own=arrowEquipOwners.get(EQ),cid=selfCharId();
-      return !!(own&&cid>0&&own.cid===cid&&own.ent===CLIENT.SS.Entity&&own.epoch===identityEpoch&&own.root===ri.el&&arrowEquipRootOwned(EQ,ri));
+      var own=arrowEquipOwners.get(EQ),cid=selfCharId(),key=arrowEquipIdentityKey();
+      return !!(own&&cid>0&&key&&own.key===key&&own.cid===cid&&own.ent===CLIENT.SS.Entity&&own.epoch===identityEpoch&&own.root===ri.el&&arrowEquipRootOwned(EQ,ri));
     }catch(e){return false;}
   }
   function arrowEquipHook(EQ) {
     try {
-      if(!EQ||arrowEquipHooked.has(EQ)||typeof EQ.equip!=="function")return;
+      if(!EQ||typeof EQ.equip!=="function")return;
+      // Late attachment: select only the current native Equipment slot; inventory supplies that exact index, never wear flags.
+      if(!arrowEquipOwners.has(EQ)&&clientReady()){
+        var ri0=gearEqRootInfo(EQ),cid0=selfCharId(),key0=arrowEquipIdentityKey();
+        if(cid0>0&&key0&&arrowEquipRootOwned(EQ,ri0)){
+          var seed={cid:cid0,key:key0,ent:CLIENT.SS.Entity,epoch:identityEpoch,root:ri0.el,items:{}};
+          ["ammo","weapon"].forEach(function(cls){
+            var idx0=gearDomIdx(ri0.el,cls),it0=null;
+            if(!Number.isInteger(idx0)||idx0<1||idx0>65535)return;
+            try{if(typeof EQ.getItemByIndex==="function")it0=gearPickItem(EQ.getItemByIndex(idx0));}catch(eGet){}
+            if(!it0)it0=bagItemByIndex(idx0);
+            var id0=gearItid(it0);
+            if(it0&&Number(it0.index)===idx0&&id0!=null)seed.items[idx0]={id:id0,item:it0};
+          });
+          if(Object.keys(seed.items).length)arrowEquipOwners.set(EQ,seed);
+        }
+      }
+      if(arrowEquipHooked.has(EQ))return;
       var equip=EQ.equip,unEquip=EQ.unEquip,onRemove=EQ.onRemove;
       var wrapped=function(item){
-        var ent=null,cid=0,epoch=-1;
-        try {ent=CLIENT.SS&&CLIENT.SS.Entity;cid=selfCharId();epoch=identityEpoch;}catch(eBefore){}
+        var ent=null,cid=0,epoch=-1,key="";
+        try {ent=CLIENT.SS&&CLIENT.SS.Entity;cid=selfCharId();epoch=identityEpoch;key=arrowEquipIdentityKey();}catch(eBefore){}
         var result=equip.apply(this,arguments);
         try {
           var ri=gearEqRootInfo(EQ),idx=item&&Number(item.index),id=gearItid(item);
-          if(this===EQ&&cid>0&&ent&&ent===CLIENT.SS.Entity&&cid===selfCharId()&&epoch===identityEpoch&&Number.isInteger(idx)&&idx>0&&idx<=65535&&id!=null&&arrowEquipRootOwned(EQ,ri)&&ri.el.querySelector('.item[data-index="'+idx+'"]')) {
-            var own=arrowEquipOwnerCurrent(EQ,ri)?arrowEquipOwners.get(EQ):{cid:cid,ent:ent,epoch:epoch,root:ri.el,items:{}};
+          if(this===EQ&&cid>0&&key&&key===arrowEquipIdentityKey()&&ent&&ent===CLIENT.SS.Entity&&cid===selfCharId()&&epoch===identityEpoch&&Number.isInteger(idx)&&idx>0&&idx<=65535&&id!=null&&arrowEquipRootOwned(EQ,ri)&&ri.el.querySelector('.item[data-index="'+idx+'"]')) {
+            var own=arrowEquipOwnerCurrent(EQ,ri)?arrowEquipOwners.get(EQ):{cid:cid,key:key,ent:ent,epoch:epoch,root:ri.el,items:{}};
             own.items[idx]={id:id,item:item};arrowEquipOwners.set(EQ,own);
           }
         }catch(eWitness){}
@@ -9413,15 +9315,15 @@ function createRoItemCapture(env) {
   function gearAmmoRootTrusted(ri) {
     try {
       var root = ri && ri.el;
-      if (!root) return false;
+      if (!root || !clientReady()) return false;
       if (ri.how === "getRoot" || ri.how === "ui") {
         var EQ=gearEquipmentComp();
         if(!arrowEquipRootOwned(EQ,ri))return false;
+        if(arrowEquipOwners.has(EQ)&&!arrowEquipOwnerCurrent(EQ,ri))return false;
         return root.isConnected===true || arrowEquipOwnerCurrent(EQ,ri);
       }
       if(root.isConnected!==true)return false;
-      // 手机桥接取不到组件时，只认当前自身完整且唯一的 Equipment；Equipment_ 是他人装备克隆。
-      if ((ri.how !== "id" && ri.how !== "evidence") || root.id !== "Equipment" || !clientReady() || !CLIENT.SS || !CLIENT.SS.Entity || gearDomExcluded(root)) return false;
+      if ((ri.how !== "id" && ri.how !== "evidence") || root.id !== "Equipment" || !CLIENT.SS || !CLIENT.SS.Entity || gearDomExcluded(root)) return false;
       var roots = document.querySelectorAll('[id="Equipment"]');
       if (roots.length !== 1 || roots[0] !== root) return false;
       var probe = gearDomProbe(root);
@@ -9468,23 +9370,30 @@ function createRoItemCapture(env) {
     if (last && last.ent === (CLIENT.SS && CLIENT.SS.Entity) && last.key === activeProfileKey() && last.epoch === (typeof identityEpoch === "undefined" ? 0 : identityEpoch)) return last.itid;
     return null;
   }
+  function arrowAmmoReadResult(a, ri) {
+    return a;
+  }
   function readEquippedAmmo() {
-    var failed = { index:null, count:null, itid:null, src:"读取失败", known:false, reason:"unreadable" };
+    var failed = { index:null, count:null, itid:null, src:"读取失败", known:false, reason:"unreadable" },ri=null;
+    function finish(a){return arrowAmmoReadResult(a,ri);}
+    function fail(reason){failed.reason=reason;return finish(failed);}
     try {
-      var EQ = gearEquipmentComp(), ri = gearEqRootInfo(EQ), root = ri.el;
-      if (!gearAmmoRootTrusted(ri)) return failed;
+      arrowEquipHookTick();
+      var EQ = gearEquipmentComp();ri=gearEqRootInfo(EQ);var root=ri.el;
+      if(!clientReady())return fail("not-ready");
+      if(!root)return fail("no-root");
+      if (!gearAmmoRootTrusted(ri)) return fail("untrusted-root");
       var box = root.querySelector(".ammo");
-      if (!box || typeof box.querySelectorAll !== "function") return failed;
+      if (!box || typeof box.querySelectorAll !== "function") return fail("missing-slot");
       var cells = box.querySelectorAll(".item[data-index]");
       if (cells.length !== 1) {
-        if (cells.length > 1) { failed.reason = "ambiguous"; return failed; }
-        return arrowAmmoSlotEmpty() ? { index:null, count:0, itid:null, src:"装备栏空槽", known:true } : failed;
+        if (cells.length > 1) return fail("ambiguous");
+        return arrowAmmoSlotEmpty() ? finish({ index:null, count:0, itid:null, src:"装备栏空槽", known:true }) : fail("empty-unconfirmed");
       }
       var idx = gearDomIdx(root, "ammo");
-      if (idx == null || idx < 1 || idx > 65535) return failed;
+      if (idx == null || idx < 1 || idx > 65535) return fail("bad-index");
       var eqIt = null, direct = null, bagIt = null;
       try { eqIt = gearEqItemByIndex(EQ, idx); } catch (e1) {}
-      // 直接槽位接口只能为装备栏已经确定的同序号补值；不得抢先选另一叠箭。
       try { if (EQ && typeof EQ.isInEquipList === "function") direct = gearPickItem(EQ.isInEquipList(32768)); } catch (e2) {}
       if (!direct || direct.index == null || Number(direct.index) !== idx) direct = null;
       try { bagIt = bagItemByIndex(idx); } catch (e3) {}
@@ -9494,16 +9403,15 @@ function createRoItemCapture(env) {
         if (!it || (it.index != null && (typeof it.index === "boolean" || Number(it.index) !== idx))) continue;
         var itemId = gearItid(it);
         if (itemId == null) continue;
-        if (id != null && Number(id) !== Number(itemId)) { failed.reason = "conflict"; return failed; }
+        if (id != null && Number(id) !== Number(itemId)) return fail("conflict");
         id = itemId;
         var a = arrowAmmoEvidence(it, i === 2 ? "装备栏箭矢格/同序号数量" : "装备栏箭矢格/装备组件", idx);
-        if (a && a.reason === "nonArrow") return a;
+        if (a && a.reason === "nonArrow") return finish(a);
         if (a && a.known === true) valid[i] = a;
       }
-      if (!gearAmmoRootTrusted(ri) || gearDomIdx(root, "ammo") !== idx) return failed;
-      // 同序号背包数量随消耗更新，优先补读；箭种/实例的选择始终来自装备栏格子。
-      return arrowRememberAmmo(valid[2] || valid[0] || valid[1] || failed);
-    } catch (e) { return failed; }
+      if (!gearAmmoRootTrusted(ri) || gearDomIdx(root, "ammo") !== idx) return fail("changed-slot");
+      return finish(arrowRememberAmmo(valid[2] || valid[0] || valid[1] || failed));
+    } catch (e) { return fail("exception"); }
   }
   function arrowAmmoWhy(a) {
     if (a && a.reason === "ambiguous") return "（装备栏箭矢格有多个物品，无法确认）";
@@ -9627,6 +9535,16 @@ function createRoItemCapture(env) {
   function arrowIdentityInvalidate(why){
     arrowSupply=null;arrowPending=null;arrowSelfPending=null;arrowQuiverAt=0;zArrow.lastAmmo=null;
     arrowStableKey="";arrowStableAt=0;arrowStickyBoss=null;
+    try{
+      var EQ=gearEquipmentComp(),ri=gearEqRootInfo(EQ),own=EQ&&arrowEquipOwners.get(EQ);
+      if(EQ&&why!=="master-off"){
+        if(why==="map-change"&&own&&own.cid===selfCharId()&&own.key&&own.key===arrowEquipIdentityKey()&&own.ent===CLIENT.SS.Entity&&own.root===ri.el&&own.epoch+1===identityEpoch&&arrowEquipRootOwned(EQ,ri)){
+          own.epoch=identityEpoch;
+          // The same native slot survives a map change; its old quantity does not.
+          Object.keys(own.items).forEach(function(idx){var row=own.items[idx];row.item={ITID:row.id,index:Number(idx),count:null};});
+        }else arrowEquipOwners.set(EQ,{cid:0,key:"",ent:null,epoch:-1,root:ri.el,items:{}});
+      }
+    }catch(eEquipReset){}
     try{arrowSupplyLog("会话/地图切换，箭矢状态已作废（"+why+"）");}catch(e){}
   }
   // Shared supply wait only; selection and the two switches remain independent.
@@ -9758,6 +9676,38 @@ function createRoItemCapture(env) {
   }
   masterTickReg(function () { try { tickArrow(); } catch (e) {} try { arrowBagDiagRender(); } catch (e) {} });
   // V2.38.38-arrow9：总开关控件已搬进「换箭设置」浮窗，建窗时应用存档值（旧扁平键 saved.arrowEn===false 由 arrowManageSaved 兼容）
+
+  // ---------------- 背包快照定期上报（V2.15.27：复用仓库查询读取，到点上报道本机采集服务）----------------
+  var invShotLast = 0, invShotSent = 0, invShotFail = 0;
+  function renderInvShot() {
+    try { var el = $id("dsh-invshotlog"); if (el) el.textContent = "已上报 " + invShotSent + " 次" + (invShotFail ? "，失败 " + invShotFail + " 次" : ""); } catch (e) {}
+  }
+  function tickInvShot() {
+    try {
+      // V2.38.77：本机背包上报并入统一探针总开关，默认关闭；总开关没开一个包都不发。
+      
+      if (!clientReady()) return;
+      var en = $id("dsh-invshot"); if (!en || !en.checked) return;
+      var int = parseInt($id("dsh-invshotint") ? $id("dsh-invshotint").value : "120", 10);
+      if (!(int > 0)) int = 120;
+      var now = Date.now();
+      if (now - invShotLast < int * 1000) return;
+      invShotLast = now;
+      try { readStorageAndInventory(); } catch (e) {} // 复用仓库查询读取（背包必有，仓库需开窗）
+      var data = {};
+      try { data = JSON.parse(localStorage.getItem("dsh_ro_inventory_v1") || "{}"); } catch (e) {}
+      var account = (typeof getInventoryAccount === "function") ? getInventoryAccount() : "";
+      var charName = (typeof getCurrentCharName === "function") ? getCurrentCharName() : "";
+      var acc = (data[account] || {}), ch = (acc.characters || {})[charName] || {};
+      var bag = ch.bag || null, sto = acc.storage || null;
+      if (!bag && !sto) return;
+      if (typeof fetch !== "function") return;
+      DSHCollect.post(INGEST_URL, { type: "invshot", account: account, charName: charName, bag: bag, storage: sto, ts: new Date().toISOString() }, function (ok) { if (ok) invShotSent++; else invShotFail++; renderInvShot(); });
+    } catch (e) {}
+  }
+  masterTickReg(function () { try { tickInvShot(); } catch (e) {} });
+  try { renderInvShot(); } catch (e) {}
+  var iv0 = $id("dsh-invshot"); if (iv0) iv0.checked = (saved.invshot === true); // V2.38.77：默认关闭，只有明确存过「开」才重新勾上
 
   // ---------------- B5：自动使用技能（点选技能栏主动辅助 · 调序）----------------
   var askList = (function () {
@@ -9987,18 +9937,83 @@ function createRoItemCapture(env) {
       }
     } catch (e) {}
   }
-  // 一键补 buff 组合：手动快捷键触发，按 askList 顺序强制施放全部 buff（无视状态判活/间隔），
-  // 每技能约 300ms 链式施放；不受 dsh-asken 总开关影响；组合进行中再按忽略（防重入）。
+  // 一键补 buff 组合：手动快捷键触发，按 askList 顺序施放全部 buff（无视状态判活）。
+  // V2.38.77.7 重写：① 每条等「服务器下发的真实后摇」skillDelay[skid]（拿不到用兜底间隔，窗口可调，默认 800ms）
+  //   过去才放下一条 —— 旧版硬连发 300ms，后摇没过去，第 2 条及以后的包被服务端丢掉（用户实报「只放第一个」）。
+  //   ② 逐条记录发送时刻/后摇/前后状态，结束给一条可复制总结（生效 / 未见变化 / 无法判定）。
+  //   ③ 组合进行中可被打断；不受 dsh-asken 总开关影响。
   var castComboBusy = false;
+  var comboDiag = [];          // 最近一次组合的逐条记录（诊断）
+  var comboLastReport = "";    // 最近一次组合的总结（可复制）
+  function comboGapMs() {
+    var v = Number(saved && saved.comboGapMs);
+    if (!isFinite(v) || v < 200) v = 800;
+    if (v > 5000) v = 5000;
+    return v;
+  }
+  function comboSrvDelay(skid) {
+    try { var d = (typeof skillDelay !== "undefined" && skillDelay) ? skillDelay[skid] : null; var n = Number(d); return isFinite(n) && n > 0 ? n : null; } catch (e) { return null; }
+  }
+  function comboDiagText() {
+    if (!comboDiag.length) return comboLastReport || "（还没有执行过补 buff 组合）";
+    var rows = comboDiag.map(function (d) {
+      return "[" + (d.i + 1) + "] " + d.name + "(skid " + d.skid + ")" +
+        " 发送于 " + (d.t / 1000).toFixed(2) + "s" +
+        " 后摇 " + (d.delay == null ? "无(用具兜底)" : d.delay + "ms") +
+        " 实际间隔 " + d.gap + "ms" +
+        " 状态 " + d.before + "→" + d.after +
+        " 判定 " + d.verdict +
+        (d.err ? " 错误 " + d.err : "");
+    });
+    return "补 buff 结果（最近一次 · " + comboDiag.length + " 条）\n" + rows.join("\n") + "\n" + (comboLastReport || "");
+  }
+  function comboShowReport() {
+    var txt = comboDiagText(), el = $id("dsh-combo-log");
+    if (el) el.textContent = txt;
+    try { console.log("[补buff诊断]\n" + txt); } catch (e) {}
+    return txt;
+  }
   function castBuffCombo() {
     if (castComboBusy) { setStatus("补 buff 组合进行中，请稍候", "warn"); return; }
     if (!askList || !askList.length) { setStatus("补 buff 组合：buff 列表为空", "warn"); return; }
     if (!clientReady() || !CLIENT.SS || !CLIENT.SS.Entity) { setStatus("补 buff 组合：未进入游戏", "warn"); return; }
     castComboBusy = true;
-    var list = askList.slice(), idx = 0;
+    comboDiag = []; comboLastReport = "";
+    var list = askList.slice(), t0 = Date.now(), i = 0, sent = 0, errCnt = 0;
+    list.forEach(function (s) {
+      s.__stId = s.st ? buffStId(s.st) : -1;
+      s.__before = s.__stId >= 0 ? buffStateOn(s.__stId) : null;
+    });
+    function finish() {
+      setTimeout(function () {
+        var eff = 0, un = 0, uk = 0;
+        comboDiag.forEach(function (d) {
+          var s = list[d.i];
+          if (d.err) { d.verdict = "发送失败"; d.after = "—"; return; }
+          if (!s || s.__stId < 0) { d.after = "无状态ID"; d.verdict = "无法判定"; uk++; return; }
+          var on = buffStateOn(s.__stId);
+          d.after = on ? "在身" : "不在身";
+          if (s.__before !== on) { d.verdict = "已生效"; eff++; }
+          else { d.verdict = "未见变化（疑似被后摇吃掉或状态未识别）"; un++; }
+        });
+        comboLastReport = "本次共 " + list.length + " 条：发送 " + sent + " 条 · 已生效 " + eff + " · 未见变化 " + un +
+          " · 无法判定 " + uk + (errCnt ? (" · 发送失败 " + errCnt) : "") + "（耗时 " + ((Date.now() - t0) / 1000).toFixed(1) + "s）";
+        castComboBusy = false;
+        setStatus("补 buff：" + comboLastReport, un ? "warn" : "ok");
+        comboShowReport();
+        try { tlog("combo-done " + comboLastReport); } catch (e) {}
+      }, 1200);
+    }
     function next() {
-      if (idx >= list.length) { castComboBusy = false; setStatus("补 buff 组合完成", "ok"); return; }
-      var s = list[idx++];
+      if (!castComboBusy) return;
+      if (i >= list.length) { finish(); return; }
+      var idx = i++, s = list[idx];
+      var delay = comboSrvDelay(s.skid);
+      var gap = Math.max(comboGapMs(), delay || 0);
+      var rec = { i: idx, name: (s && s.name) || ("技能" + (s && s.skid)), skid: s && s.skid, lv: s && s.lv,
+        t: Date.now() - t0, delay: delay, gap: gap,
+        before: s && s.__before === null ? "无状态ID" : (s && s.__before ? "在身" : "不在身"), after: "—", verdict: "待判定", err: "" };
+      comboDiag.push(rec);
       try {
         var p = new (czp("USE_SKILL"))();
         p.SKID = s.skid;
@@ -10007,10 +10022,13 @@ function createRoItemCapture(env) {
         if ((s.skid === 5035 || s.skid === 5041) && !p.targetID) throw Error("自身角色 ID 未就绪，拒绝无目标施法");
         dshCastMark(s.skid, s.lv, p.targetID, "combo");
         CLIENT.NM.sendPacket(p);
+        sent++;
+        setStatus("补 buff " + (idx + 1) + "/" + list.length + "：" + rec.name + "（等 " + gap + "ms 放下一条）", "st");
       } catch (e) {
-        try { tlog("combo-cast-error skid=" + (s && s.skid) + " " + (e.message || e)); } catch (e2) {}
+        rec.err = String((e && e.message) || e); errCnt++;
+        try { tlog("combo-cast-error skid=" + (s && s.skid) + " " + rec.err); } catch (e2) {}
       }
-      setTimeout(next, 300);
+      setTimeout(next, gap + 50);
     }
     next();
   }
@@ -10094,6 +10112,21 @@ function createRoItemCapture(env) {
   if (saved.askEn === true) { var akeOn = $id("dsh-asken"); if (akeOn) akeOn.checked = true; hookStatusIcons(); }
   else { var akeOff = $id("dsh-asken"); if (akeOff) akeOff.checked = false; }
   onId("dsh-asken", "change", function () { saved.askEn = this.checked; saveSaved(saved); if (this.checked) hookStatusIcons(); renderBuffLog(); });
+  // V2.38.77.7：补 buff 兜底间隔（本机保存）+ 诊断按钮接线
+  (function comboUiInit() {
+    var gi = $id("dsh-combo-gap");
+    if (gi) {
+      gi.value = String(comboGapMs());
+      gi.addEventListener("change", function () {
+        var v = Number(this.value);
+        if (!isFinite(v) || v < 200 || v > 5000) { setStatus("兜底间隔请填 200~5000 毫秒", "warn"); this.value = String(comboGapMs()); return; }
+        saved.comboGapMs = v; saveSaved(saved);
+        setStatus("补 buff 兜底间隔已存：" + v + "ms", "ok");
+      });
+    }
+    var db = $id("dsh-combo-diag");
+    if (db) db.addEventListener("click", function () { comboShowReport(); setStatus("补 buff 结果已输出到下方与浏览器控制台（可复制）", "st"); });
+  })();
   // V1.7.0 一次性清空：多辅助/自动技能 历史数据（用户要求默认清空「助手内按间隔自动施放的增益」）
   // V2.38.2 修复：原来的清空标志只存在【角色档】里（saveSaved 把非登录键全写进 profiles[档].saved），
   //   凡是没带这个标志的角色档，下次加载都会再清一遍 askList 并把启用开关强制关掉 —— 表现就是「buff 技能设置刷新后丢失、要重新写」。
@@ -10144,6 +10177,7 @@ function createRoItemCapture(env) {
   }
   var reconnecting = false;
   function onDisconnect(msg) {
+    try { clearPktIdentity("disconnect"); npServerAutoAtk.blocked = true; } catch (eIdentity) {}
     if (reconnecting) return;
     var doAlert = $id("dsh-alert") && $id("dsh-alert").checked;
     var doReload = !IS_MN && $id("dsh-reconn") && $id("dsh-reconn").checked && saved.account;
@@ -10754,6 +10788,7 @@ function createRoItemCapture(env) {
     } catch (e) { return null; }
   }
   function neiProbe() {
+    return; // Full-page input values are outside privacy allowlist.
     var out = [];
     var items = [];
     try {
@@ -10801,7 +10836,6 @@ function createRoItemCapture(env) {
     ta.focus(); ta.select();
     try { alert(sent ? "探查完成：已发送 " + items.length + " 个控件到本地服务，弹窗内容已全选可复制备用。" : "发送失败（请先启动中心服务 8899）。弹窗内容已全选，请 Ctrl+C 复制发我。"); } catch (e) {}
   }
-  onId("dsh-probe-neidom", "click", function () { neiProbe(); });
   // V2.38.34：内挂自动战斗状态改为「被动采集」——只认服务器推来的报告，助手绝不主动去问服务器。
   //   进图：ZC.NOTIFY_LOADINFO(2805) 整份配置报告（startAutoAtk 即该开关）；
   //   改动：ZC.NOTIFY_RELOADINFOS(2806) 单项推送，id=34 就是同一开关（旧引擎 id→选项名映射已核实）。
@@ -10881,7 +10915,157 @@ function createRoItemCapture(env) {
       }
     } catch (e) {}
   }
-  function npBattleState() { return npBattleKnown ? !!npHuntOn : null; }
+  // Receipt provenance is captured at the game socket event, never reconstructed from latest inbound globals.
+  function npCaptureSource(socket) {
+    var s = npServerAutoAtk, id = resolveSelfIdentity();
+    npBattleIdentityValid();
+    return Object.freeze({ socket: socket, epoch: s.epoch, generation: s.generation || 0, key: id.known ? id.oneId : "", runtime: npRuntimeKey });
+  }
+  function npSourceValid(source, transportOnly) {
+    var s = npServerAutoAtk;
+    if (!source || source.socket !== s.socket || source.epoch !== s.epoch || source.generation !== (s.generation || 0) || source.runtime !== npRuntimeKey) return false;
+    if (transportOnly) return true; // login/zone identity packets still need to reach the existing identity collector
+    return !!(npBattleIdentityValid() && source.key && source.key === resolveSelfIdentity().oneId && npBattleTransportReady());
+  }
+  function npReceiptSource(pkt, capture) {
+    if (!pkt || typeof pkt !== "object") return null;
+    var s = npServerAutoAtk;
+    if (!s.receipts) s.receipts = new WeakMap();
+    if (capture && !s.receipts.has(pkt)) { s.receipts.set(pkt, s.fieldSource || null); s.fieldSource = null; }
+    return s.receipts.get(pkt) || null;
+  }
+  function npBindGameSocket(inst, binding) {
+    var s = npServerAutoAtk;
+    if (!inst || !binding || binding.generation !== s.generation) return false;
+    binding.socket = inst; s.socket = inst;
+    var previousBinding = inst.__npReceiptBinding;
+    if (previousBinding && previousBinding.runtime === npRuntimeKey && previousBinding.active) return true;
+    if (previousBinding && previousBinding.revoke) previousBinding.revoke();
+    var registration = { runtime: npRuntimeKey, active: true, revoke: function () { registration.active = false; npResetBattleState(); s.blocked = true; } };
+    inst.__npReceiptBinding = registration;
+    var events = new WeakMap(), handler = inst.onmessage, proto = Object.getPrototypeOf(inst), nativeSet = null, nativeGet = null;
+    while (proto && !nativeSet) { var descriptor = Object.getOwnPropertyDescriptor(proto, "onmessage"); nativeSet = descriptor && descriptor.set; nativeGet = descriptor && descriptor.get; proto = Object.getPrototypeOf(proto); }
+    function observe(ev) {
+      if (!registration.active || !ev || s.socket !== inst || binding.generation !== s.generation) return null;
+      if (events.has(ev)) return events.get(ev);
+      var source = npCaptureSource(inst); events.set(ev, source);
+      if (ev.data instanceof ArrayBuffer) npTagBattleBuffer(ev.data, source);
+      s.inboundSocket = inst; // diagnostic only
+      onReconInbound(ev.data, inst, source);
+      return source;
+    }
+    function deliver(ev) {
+      var source = observe(ev), read = CLIENT.NM && CLIENT.NM.read;
+      if (npSourceValid(source) && typeof read === "function") {
+        var previous = read.callback;
+        read(function (fp) {
+          if (fp && npSourceValid(source) && npBindMergedBattleBuffer(fp.buffer, ev.data, source)) { s.tailBuffer = fp.buffer; npHookReceiptReaders(fp); }
+          if (typeof previous === "function") previous.call(read, fp);
+        });
+      }
+      try { if (typeof handler === "function") return handler.call(this, ev); }
+      finally { s.fieldSource = null; }
+    }
+    // Preserve the browser's native event-handler slot, not merely the JS property.
+    Object.defineProperty(inst, "onmessage", { configurable: true, enumerable: true,
+      get: function () { var current = nativeGet ? nativeGet.call(inst) : typeof handler === "function" ? deliver : null; return nativeGet && current === deliver ? handler : current; },
+      set: function (next) { handler = next; if (nativeSet) nativeSet.call(inst, typeof next === "function" ? deliver : null); } });
+    if (nativeSet) nativeSet.call(inst, typeof handler === "function" ? deliver : null);
+    inst.addEventListener("open", function () { if (registration.active && s.socket === inst && binding.generation === s.generation) s.blocked = !binding.zone; });
+    inst.addEventListener("error", function () { if (registration.active && s.socket === inst) clearPktIdentity("socket-error"); });
+    inst.addEventListener("close", function () { if (registration.active && s.socket === inst && (!s.handoff || s.handoff.socket !== inst)) clearPktIdentity("socket-close"); });
+    inst.addEventListener("message", observe);
+    return true;
+  }
+  function npTagBattleBuffer(buffer, source) {
+    var s = npServerAutoAtk;
+    if (!(buffer instanceof ArrayBuffer) || !npSourceValid(source, true)) return false;
+    if (!s.buffers) s.buffers = new WeakMap();
+    if (s.buffers.has(buffer)) return s.buffers.get(buffer) === source || npSourceValid(s.buffers.get(buffer));
+    s.buffers.set(buffer, source);
+    // NM.receive uses this buffer's native slice for partial frames and batch yield.
+    try { Object.defineProperty(buffer, "slice", { configurable: true, value: function () {
+      var copy = ArrayBuffer.prototype.slice.apply(this, arguments);
+      if (npTagBattleBuffer(copy, source)) s.tailBuffer = copy;
+      return copy;
+    } }); } catch (e) {} // non-extensible buffers remain readable; no guessed provenance
+    return true;
+  }
+  function npBindMergedBattleBuffer(buffer, incoming, source) {
+    var s = npServerAutoAtk;
+    if (s.buffers && npSourceValid(s.buffers.get(buffer))) return true;
+    var tail = s.tailBuffer, prior = s.buffers && tail && s.buffers.get(tail);
+    if (!npSourceValid(source) || !npSourceValid(prior) || !(incoming instanceof ArrayBuffer) || !tail) return false;
+    var prefixLength = buffer.byteLength - incoming.byteLength;
+    if (!(prefixLength > 0) || prefixLength > tail.byteLength) return false;
+    var bytes = new Uint8Array(buffer), left = new Uint8Array(tail, tail.byteLength - prefixLength), right = new Uint8Array(incoming);
+    for (var i = 0; i < bytes.length; i++) if (bytes[i] !== (i < left.length ? left[i] : right[i - left.length])) return false;
+    s.tailBuffer = null;
+    return npTagBattleBuffer(buffer, source);
+  }
+  function npHookLateTransport(nm) {
+    // Observe only NM-selected game traffic; do not send a bootstrap/probe packet.
+    var scope = nm.__npSendScope || (nm.__npSendScope = { zoneDepth: 0 });
+    function qualify(pkt) {
+      var cz = CLIENT.PS && CLIENT.PS.CZ;
+      return !!(cz && ["REQUEST_TIME", "REQUEST_TIME2", "REQUEST_MOVE", "REQUEST_MOVE2"].some(function (key) { return typeof cz[key] === "function" && pkt instanceof cz[key]; }));
+    }
+    var prior = nm.sendPacket;
+    if (typeof prior === "function" && !prior.__npSocketScope) {
+      var route = { qualify: qualify };
+      var wrapper = function (pkt) {
+        var zone = route.qualify(pkt); if (zone) scope.zoneDepth++;
+        try { return prior.apply(this, arguments); } finally { if (zone) scope.zoneDepth--; }
+      };
+      wrapper.__npSocketScope = route; nm.sendPacket = wrapper;
+    } else if (prior && prior.__npSocketScope) prior.__npSocketScope.qualify = qualify;
+    var proto = window.WebSocket && window.WebSocket.prototype, send = proto && proto.send;
+    if (typeof send !== "function") return;
+    if (send.__npLateSocket) { send.__npLateSocket.bind = bind; return; }
+    var slot = { bind: bind };
+    var wrapped = function () { slot.bind(this); return send.apply(this, arguments); };
+    wrapped.__npLateSocket = slot; proto.send = wrapped;
+    function bind(socket) {
+      var s = npServerAutoAtk, id = resolveSelfIdentity();
+      if (!scope.zoneDepth || !id.known || !CLIENT.SS || !CLIENT.SS.Entity || !socket || socket.readyState !== 1 || s.socket || s.generation || s.blocked || s.connecting) return;
+      clearPktIdentity("late-game-binding"); s.generation = (s.generation || 0) + 1;
+      npBindGameSocket(socket, { zone: true, generation: s.generation }); s.blocked = false;
+    }
+  }
+  function npHookReceiptReaders(reader) {
+    try {
+      var proto = reader && Object.getPrototypeOf(reader);
+      if (!proto || !reader.buffer) return false;
+      ["readString", "readUChar", "readLong"].forEach(function (key) {
+        var read = proto[key]; if (typeof read !== "function") return;
+        if (read.__npReceiptReader) { read.__npReceiptReader.capture = capture; return; }
+        var slot = { capture: capture };
+        var wrapped = function () { var value = read.apply(this, arguments); slot.capture(this); return value; };
+        wrapped.__npReceiptReader = slot; proto[key] = wrapped;
+      });
+      function capture(fp) {
+        var s = npServerAutoAtk;
+        s.fieldSource = s.buffers && fp && s.buffers.get(fp.buffer) || null;
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+  function npBattleIdentityValid() {
+    try {
+      var id = resolveSelfIdentity(), s = npServerAutoAtk;
+      // Full OneID loss revokes actions once; Entity/GID scene gaps alone do not.
+      if (!id.known || (s.ownerKey && s.ownerKey !== id.oneId)) {
+        if (!s.identityLost) { npResetBattleState(); s.identityLost = true; s.ownerKey = ""; }
+        return false;
+      }
+      s.identityLost = false; s.ownerKey = id.oneId;
+      return !!(id.oneId === activeProfileKey() && CLIENT.SS && CLIENT.SS.Entity && !s.blocked && (!pktCharId || pktCharId === id.charId));
+    } catch (e) { return false; }
+  }
+  function npBattleTransportReady() { var s = npServerAutoAtk; return !!(!s.handoff && s.socket && s.socket.readyState === 1 && !s.blocked); }
+  function npBattleState() {
+    return npBattleIdentityValid() && npBattleTransportReady() && npBattleKnown && npServerAutoAtk.key === resolveSelfIdentity().oneId ? !!npHuntOn : null;
+  }
   function npEffectiveHuntOn() {
     // V2.38.41：切换方向依据——报告已知用权威值；报告未到但刚发过 toggle 且在乐观窗口内，用最近一次已发意图；
     // 两者都不满足则退回报告值（初始 false）。只影响「切到相反方向」的意图计算，绝不授权盲发包。
@@ -10977,6 +11161,13 @@ function createRoItemCapture(env) {
   }
   function npStopDebtArm(reason) {
     var p = npAssistantOnSend, key = activeProfileKey();
+    if (reason === "map-change") {
+      var id = resolveSelfIdentity();
+      if (!id.known || id.oneId !== key || npServerAutoAtk.key !== key || !npBattleKnown || !npHuntOn || npAckWait || npOffWait) return false;
+      if (npShutdownDebt && npShutdownDebt.reason === reason && npShutdownDebt.key === key && npShutdownDebt.epoch === npServerAutoAtk.epoch) return true;
+      npShutdownDebt = { key: key, epoch: npServerAutoAtk.epoch, session: npRuntimeKey, seq: null, reason: reason, at: Date.now(), attempted: false };
+      return true;
+    }
     if (!p || !npOwnerIdentityValid(key) || p.key !== key || p.epoch !== npServerAutoAtk.epoch || p.session !== npRuntimeKey) return false;
     if (reason === "stopZhu" && !npZeroEnabled()) { npStopDebtClear(); return false; }
     npShutdownDebt = { key: key, epoch: p.epoch, session: p.session, seq: p.seq, reason: reason, at: Date.now(), attempted: false };
@@ -10995,9 +11186,9 @@ function createRoItemCapture(env) {
     }
     var key = activeProfileKey();
     if (d.epoch !== npServerAutoAtk.epoch || d.session !== npRuntimeKey || key !== d.key || !npOwnerIdentityValid(key) ||
-        !npAssistantOnSend || npAssistantOnSend.seq !== d.seq) { npStopDebtClear(); return; }
-    if (d.reason === "stopZhu" ? (zRunning || !npZeroEnabled()) : (npHuntMode() === "np" || isHybrid())) { npStopDebtClear(); return; }
-    if (externalAutomationOwns("battle") || (typeof apiCombatActive === "function" && apiCombatActive())) { npStopDebtClear(); return; }
+        (d.reason !== "map-change" && (!npAssistantOnSend || npAssistantOnSend.seq !== d.seq))) { npStopDebtClear(); return; }
+    if (d.reason !== "map-change" && (d.reason === "stopZhu" ? (zRunning || !npZeroEnabled()) : (npHuntMode() === "np" || isHybrid()))) { npStopDebtClear(); return; }
+    if (d.reason !== "map-change" && (externalAutomationOwns("battle") || (typeof apiCombatActive === "function" && apiCombatActive()))) { npStopDebtClear(); return; }
     if (npAckWait || npOffWait) return; // 关闭包仍在途时等服务器确认，不补第三次翻转
     d.attempted = true; // 重入、原始包/解析包的重复观察都只能补一次
     var result = npHuntStop("late-stop:" + d.reason, true);
@@ -11009,10 +11200,10 @@ function createRoItemCapture(env) {
       dshDiag("np-ack-mismatch", note);
       if (at - npAckAnomalyAt < (reason === "unknown-state" ? 30000 : 2000)) return;
       npAckAnomalyAt = at;
-      DSHCollect.post("http://127.0.0.1:8899/api/probe-collect", { t: "np-ack-mismatch", ver: VER, at: at, detail: note });
     } catch (e) {}
   }
-  function npOffAck(text, fromRaw, receivedAt) {
+  function npOffAck(text, fromRaw, receivedAt, receiptSource) {
+    if (!npSourceValid(receiptSource)) return;
     var t = String(text == null ? "" : text);
     if (t.charCodeAt(t.length - 1) === 0) t = t.slice(0, -1); // 仅容忍游戏包末尾的单个 NUL，绝不修剪空格或消除包内字节
     if (t.indexOf(String.fromCharCode(0)) !== -1) return;
@@ -11020,6 +11211,7 @@ function createRoItemCapture(env) {
     if (!on && t !== NP_ATK_CHAT_OFF && t !== NP_ATK_CHAT_OFF2) return; // 掉落/经验/玩家发言都不属于开关回执
     var at = typeof receivedAt === "number" ? receivedAt : Date.now();
     if (!fromRaw && npRawAckRepeat && npRawAckRepeat.text === t && at - npRawAckRepeat.at >= 0 && at - npRawAckRepeat.at < 200) { npRawAckRepeat = null; return; }
+    
     var a = npAckWait;
     if (a) {
       var age = at - a.at;
@@ -11035,10 +11227,10 @@ function createRoItemCapture(env) {
       return;
     }
     if (fromRaw) npRawAckRepeat = { text: t, at: at };
-    try { npApplyBattleState(on, "chat-notice" + (fromRaw ? "-packet" : "-parsed")); } catch (eN) {}
+    try { npApplyBattleState(on, "chat-notice" + (fromRaw ? "-packet" : "-parsed"), receiptSource); } catch (eN) {}
   }
   // 网络帧到达的本机时间早于 ChatBox requestAnimationFrame 批量绘制时间；包中没有服务器逐句时间。
-  function npRawBattleNotice(bytes, op) {
+  function npRawBattleNotice(bytes, op, receiptSource) {
     if (op !== 142 || !bytes || bytes.byteLength < 5 || bytes.byteLength > 80 || typeof TextDecoder !== "function") return;
     try {
       var view = ArrayBuffer.isView(bytes) ? new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength) : new DataView(bytes);
@@ -11046,7 +11238,10 @@ function createRoItemCapture(env) {
       var u8 = new Uint8Array(view.buffer, view.byteOffset + 4, view.byteLength - 4);
       if (u8[u8.length - 1] === 0) u8 = u8.subarray(0, u8.length - 1);
       if (u8.indexOf(0) >= 0) return;
-      npOffAck(new TextDecoder("utf-8", { fatal: true }).decode(u8), true, Date.now());
+      var text;
+      try { text = new TextDecoder("utf-8", { fatal: true }).decode(u8); }
+      catch (eUtf) { text = new TextDecoder("gb18030", { fatal: true }).decode(u8); }
+      npOffAck(text, true, Date.now(), receiptSource);
     } catch (e) {}
   }
   function npAckStruct() {
@@ -11060,24 +11255,12 @@ function createRoItemCapture(env) {
   function npHookBattleAck() {
     try {
       var S = npAckStruct();
-      if (!S) return false;
-      if (npAckHooked && S.prototype.__npAckPatched) return true; // 每次都校验：客户端若重新注册 PacketStructure（新原型），必须能重新接管
-      if (S.prototype.__npAckPatched) { npAckHooked = true; return true; }
-      Object.defineProperty(S.prototype, "msg", {
-        configurable: true, enumerable: true,
-        get: function () { try { return npAckMsgStore ? npAckMsgStore.get(this) : this.__npAckMsg; } catch (eG) { return this.__npAckMsg; } },
-        set: function (v) {
-          try { if (npAckMsgStore) npAckMsgStore.set(this, v); else this.__npAckMsg = v; } catch (eS1) { try { this.__npAckMsg = v; } catch (eS2) {} }
-          try { npOffAck(v); } catch (e1) {}
-        }
-      });
-      S.prototype.__npAckPatched = true;
-      npAckHooked = true;
-      tlog("np-ack hook ok");
-      return true;
-    } catch (e) { tlog("np-ack hook failed " + (e && e.message)); return false; }
+      npAckHooked = npChainProto(S, "msg", "__npAckPatched", function (pkt, value) { npOffAck(value, false, undefined, npReceiptSource(pkt)); });
+      return npAckHooked;
+    } catch (e) { return false; }
   }
   function npSendBattle(want, source, beforeToggle, preSend) {
+    if (!npBattleIdentityValid() || !npBattleTransportReady() || npBattleState() === null) return "unknown";
     if (npBattleKnown && npHuntOn === want) return "already";
     if (beforeToggle && beforeToggle() === false) return "failed";
     if (preSend && preSend() === false) return "failed";
@@ -11112,12 +11295,13 @@ function createRoItemCapture(env) {
   }
   // 身份真换代（换角色 / 回角色列表 / 新连接）：采集状态与在途关闭确认一起作废。
   function npResetBattleState() {
-    npOffCancel(); npClearBattleIntent(); npDropServerAutoAtk(); npBattleLastSentAt = -Infinity; npLastIntent = null;
+    npOffCancel(); npClearBattleIntent(); npDropServerAutoAtk(); npBattleLastSentAt = -Infinity; npLastIntent = null; npRawAckRepeat = null; npServerAutoAtk.tailBuffer = null;
     try { npAtkSeedKey = null; npAtkSeedAt = 0; npVerifyUnresolved = false; npAckClear(); npStopDebtClear(); npAssistantOnSend = null; } catch (eSeed) {} // V2.38.47：换角色必须重新播种 + 丢掉旧角色的回执等待
     npOffArmAt = 0; npOffArmSrc = ""; npOffChatWin = -1; npOffChatMissWin = -1; npAckWarnWin = -1; // V2.38.33：换角色/复位必须解除武装并清时间片，否则旧角色那一次关闭动作的武装会活到新角色（第六轮 SC-6）
   }
   function npDropServerAutoAtk() {
-    npServerAutoAtk.value = null; npServerAutoAtk.at = 0; npServerAutoAtk.src = "";
+    npServerAutoAtk.value = null; npServerAutoAtk.at = 0; npServerAutoAtk.src = ""; npServerAutoAtk.key = "";
+    npServerAutoAtk.handoff = null;
     npServerAutoAtk.epoch++; // 世代 +1：换代前到手的状态/在途确认一律不兑现
     npBattleKnown = false; npHuntOn = false; npBattleConfirmedAt = 0;
   }
@@ -11139,6 +11323,7 @@ function createRoItemCapture(env) {
   }
   function npAtkRecSave(on) {
     try {
+      if (!npBattleIdentityValid()) return false;
       var p = npAtkRecProfile(true); if (!p) return false;
       p.npAtk = { on: on ? 1 : 0, at: Date.now(), epoch: npServerAutoAtk.epoch, session: npRuntimeKey };
       saveProfiles(); // 未识别身份时由 profWriteGuard 挡住（只读不写），这里不再重复判定
@@ -11148,7 +11333,7 @@ function createRoItemCapture(env) {
   function npAtkRecLoad() {
     try {
       var p = npAtkRecProfile(false), r = p && p.npAtk;
-      if (!r || typeof r !== "object") return null;
+      if (!npBattleIdentityValid() || !npBattleTransportReady() || !r || typeof r !== "object" || r.pending === true) return null;
       var at = Number(r.at) || 0;
       if (!at || at < npRuntimeAt || r.session !== npRuntimeKey || r.epoch !== npServerAutoAtk.epoch || (Date.now() - at) > NP_ATK_REC_MAX_AGE) return null; // 不采信上次页面/上个连接的旧回执
       if (r.on !== 0 && r.on !== 1 && r.on !== false && r.on !== true) return null;
@@ -11168,7 +11353,7 @@ function createRoItemCapture(env) {
   //   否则会拿发包前的档记录把状态改成「已知旧值」，绕过下面 npRequestBattle 的乐观方向保护，
   //   再发一次 toggle 就把 toggle 型开关翻回去（连点纪律在 10514 已写明）。
   function npSeedAllowed() {
-    if (npBattleKnown || npOffWait || npAckWait) return false;
+    if (!npBattleIdentityValid() || !npBattleTransportReady() || npBattleKnown || npOffWait || npAckWait || npVerifyUnresolved) return false;
     if (npLastIntent !== null && npBattleLastSentAt > 0 && (Date.now() - npBattleLastSentAt) < NP_TOGGLE_GRACE) return false;
     return true;
   }
@@ -11190,7 +11375,7 @@ function createRoItemCapture(env) {
   function npAtkRecClear() {
     try {
       var p = npAtkRecProfile(false); if (!p || !p.npAtk) return false;
-      delete p.npAtk;
+      p.npAtk.pending = true; // Keep the last historical observation, but never seed it after an unconfirmed toggle.
       saveProfiles();
       return true;
     } catch (e) { return false; }
@@ -11224,7 +11409,10 @@ function createRoItemCapture(env) {
   }
   // 服务器自动战斗状态的唯一落点：2805 整份配置、2806 单项推送、引擎自己的 vbk.setloadInfo，
   //   以及 V2.38.47 新增的两句服务器回执（开启/关闭自动战斗）都走这里。
-  function npApplyBattleState(on, source) {
+  function npApplyBattleState(on, source, receiptSource) {
+    if (!npBattleIdentityValid() || !npBattleTransportReady()) return;
+    if (source !== "profile-record" && !npSourceValid(receiptSource)) return;
+    npServerAutoAtk.key = resolveSelfIdentity().oneId;
     npServerAutoAtk.value = !!on; npServerAutoAtk.at = Date.now(); npServerAutoAtk.src = String(source || "");
     npHuntOn = !!on; npBattleKnown = true; npBattleConfirmedAt = Date.now();
     try { dshDiag("np-battle-report", { on: !!on, source: source, epoch: npServerAutoAtk.epoch, pendingOff: !!npOffWait }); } catch (eDiag) {}
@@ -11257,7 +11445,7 @@ function createRoItemCapture(env) {
   // V2.38.47：状态未知时每 5 秒尝试播种一次（复用 1 秒 master 拍，不新增定时器）。
   try { masterTickReg(function () { try { if (npSeedAllowed()) npSeedStateOnce(); } catch (e) {} }); } catch (eTick) {}
   function npAutoAtkOn2805(pkt) {
-    try { var v = pkt ? pkt.startAutoAtk : undefined; if (v === 0 || v === 1) npApplyBattleState(v === 1, "loadinfo-2805"); } catch (e) {}
+    try { var v = pkt ? pkt.startAutoAtk : undefined; if (v === 0 || v === 1) {  npApplyBattleState(v === 1, "loadinfo-2805", npReceiptSource(pkt)); } } catch (e) {}
   }
   // 旧引擎 ZC.NOTIFY_RELOADINFOS 的 id→选项名映射里，唯一的自动战斗项就是 34
   //   （Online.js ZC.NOTIFY_RELOADINFOS{id,value} → vbk.setReloadInfo switch case 34 → .openattack → x.startAutoAtk）。
@@ -11267,7 +11455,7 @@ function createRoItemCapture(env) {
     try {
       if (!pkt || Number(pkt.id) !== NP_RELOAD_ID_AUTOATK) return;
       var v = Number(pkt.value);
-      if (v === 0 || v === 1) npApplyBattleState(v === 1, "reloadinfo-2806");
+      if (v === 0 || v === 1) {  npApplyBattleState(v === 1, "reloadinfo-2806", npReceiptSource(pkt)); }
     } catch (e) {}
   }
   // 原型属性旁听：包结构在构造函数里 this.字段 = reader.read...()，赋值链命中原型 setter，
@@ -11276,24 +11464,20 @@ function createRoItemCapture(env) {
   function npChainProto(S, key, mark, sink) {
     try {
       if (!S || !S.prototype) return false;
-      if (S.prototype[mark] === sink) return true; // 已装且客户端没重新注册过
-      var d = Object.getOwnPropertyDescriptor(S.prototype, key);
+      var slot = S.prototype[mark];
+      if (slot && slot.set === (Object.getOwnPropertyDescriptor(S.prototype, key) || {}).set) { slot.sink = sink; slot.capture = npReceiptSource; return true; }
+      var d = Object.getOwnPropertyDescriptor(S.prototype, key), box = new WeakMap();
       var upGet = d && d.get, upSet = d && d.set;
-      var box = new WeakMap();
-      Object.defineProperty(S.prototype, key, {
-        configurable: true, enumerable: true,
-        get: function () {
-          try { if (box.has(this)) return box.get(this); } catch (e1) {}
-          return upGet ? upGet.call(this) : undefined;
-        },
-        set: function (v) {
-          try { box.set(this, v); } catch (e2) {}
-          if (upSet) { try { upSet.call(this, v); } catch (e3) {} }
-          try { sink(this, v); } catch (e4) {}
-        }
-      });
-      S.prototype[mark] = sink;
-      return S.prototype[mark] === sink; // 显式校验标记真的写进去了（defineProperty 抛错仍由外层 catch 走 fail-closed）
+      slot = { sink: sink, capture: npReceiptSource };
+      slot.set = function (v) {
+        box.set(this, v);
+        if (upSet) upSet.call(this, v);
+        try { slot.capture(this, true); slot.sink(this, v); } catch (e) {}
+      };
+      Object.defineProperty(S.prototype, key, { configurable: true, enumerable: true,
+        get: function () { return box.has(this) ? box.get(this) : upGet ? upGet.call(this) : undefined; }, set: slot.set });
+      S.prototype[mark] = slot;
+      return true;
     } catch (e) { return false; }
   }
   function npPktStruct(name) {
@@ -11308,15 +11492,16 @@ function createRoItemCapture(env) {
     try {
       var c = typeof uiComp === "function" ? uiComp("vbk") : null;
       if (!c || typeof c.setloadInfo !== "function") return false;
-      if (c.setloadInfo.__npConfigRead) return true;
-      var receive = c.setloadInfo;
-      var wrapper = function (pkt) { var r = receive.apply(this, arguments); npAutoAtkOn2805(pkt); return r; };
-      wrapper.__npConfigRead = true; c.setloadInfo = wrapper;
+      if (c.setloadInfo.__npConfigRead) { c.setloadInfo.__npConfigRead.sink = npAutoAtkOn2805; return true; }
+      var receive = c.setloadInfo, slot = { sink: npAutoAtkOn2805 };
+      var wrapper = function (pkt) { var r = receive.apply(this, arguments); slot.sink(pkt); return r; };
+      wrapper.__npConfigRead = slot; c.setloadInfo = wrapper;
       return c.setloadInfo === wrapper;
     } catch (e) { return false; }
   }
   // 幂等：客户端重新注册 PacketStructure（新原型）后必须能重新接管，所以每次调用都校验。
   function npHookServerBattle() {
+    try { npHookTransport(); } catch (eTransport) {}
     var a = npChainProto(npPktStruct("NOTIFY_LOADINFO"), "startAutoAtk", "__npAutoAtkSink", npAutoAtkOn2805);
     var b = npChainProto(npPktStruct("NOTIFY_RELOADINFOS"), "value", "__npReloadSink", npAutoAtkOn2806);
     var c = npHookBattleConfig();
@@ -11325,7 +11510,10 @@ function createRoItemCapture(env) {
   // 决策（唯一入口）：状态可知 → 已关 already 零发包 / 在开最多发一次 toggle；
   //   状态未知（本连接内没见过 2805，或 2806 只推过别的 id，或已被身份换代作废）→ 零 toggle 并如实报未执行。
   function npRequestBattle(want, source, immediate, beforeToggle, preSend) {
+    if (!npBattleIdentityValid() || !npBattleTransportReady()) return "unknown";
+    if (npBattleKnown && npServerAutoAtk.key !== resolveSelfIdentity().oneId) npResetBattleState();
     want = !!want; source = source || "unknown";
+    
     // inc23839: 请求和真实报告分别采样，不猜测线上根因，不授权盲toggle。
     try { dshDiag("np-battle-request", { want: want, source: source, state: npBattleState(), report: npServerAutoAtk.src, reportAt: npServerAutoAtk.at, epoch: npServerAutoAtk.epoch, pendingOff: !!npOffWait }); } catch (eDiag) {}
     // V2.38.47：进入决策前先按兜底来源播种一次（角色档记录 > 本次会话聊天框原文），
@@ -11377,6 +11565,7 @@ function createRoItemCapture(env) {
       if (!clientReady()) { npLog("游戏画面还没准备好"); return false; }
       var p = new (czp("WHISPER"))();
       p.receiver = receiver; p.msg = "0";
+      
       CLIENT.NM.sendPacket(p);
       return true;
     } catch (e) { npLog("动作异常: " + e.message); return false; }
@@ -11515,6 +11704,7 @@ function createRoItemCapture(env) {
       var t = e.target;
       if (!t || !t.matches || !t.matches("#vbk input.openattack")) return;
       npBattleKnown = false; // 玩家点击只表示意图，未获服务器配置报告
+      try { npAtkRecClear(); } catch (eRec) {}
       npLastIntent = null; npBattleLastSentAt = -Infinity; npVerifyUnresolved = false; npAckClear(); npStopDebtClear(); npAssistantOnSend = null; // 玩家人工切换覆盖助手先前的停机意图
     });
   } catch (e) {}
@@ -11780,11 +11970,18 @@ function createRoItemCapture(env) {
 
   // V2.38.24 B：卡死计时采样提到主循环（1s masterTick）——关掉侦查扫描时也能「卡住→计时→瞬移」。
   //   与 scanOnce 同口径：坐标没变才开始计时，一变就清零，坐着不算卡死（采样写回口径必须唯一，防永不判卡死/每 4s 空飞）。
+  function zStationaryWaitMs() {
+    var el = $id("dsh-z-stucksec"), n = el ? parseInt(el.value, 10) : 4;
+    return (Number.isFinite(n) && n >= 0 ? Math.min(600, n) : 4) * 1000;
+  }
   function zStuckSample() {
     try {
       var ent = CLIENT.SS && CLIENT.SS.Entity;
       if (!ent || !ent.position) return;
       var px = ent.position[0], py = ent.position[1];
+      var scope = String(activeProfileKey() || "") + "|" + String(getMapName() || "");
+      if (!zRunning || !activeProfileKey() || !getMapName() || !Number.isFinite(px) || !Number.isFinite(py)) { zLastPos = null; zStuckSince = null; zStuckSample.scope = ""; return; }
+      if (zStuckSample.scope !== scope) { zLastPos = null; zStuckSince = null; zStuckSample.scope = scope; npVerifyStallSeen = false; npVerifyLastAt = 0; }
       if (zLastPos && px === zLastPos[0] && py === zLastPos[1]) { if (!zStuckSince) zStuckSince = Date.now(); }
       else { zStuckSince = null; }
       zLastPos = [px, py];
@@ -12767,7 +12964,7 @@ function createRoItemCapture(env) {
   var ZKEEP_SMP_MAX = 200;
   var zKeepSmp = { on: false, ring: [], at: 0, lastHit: false, lastPress: false, entered: 0, lastEnterAt: 0 };
   function zKeepSmpSync() {
-    try { var el = $id("dsh-z-bosskeepsmp"); zKeepSmp.on = !!(el && el.checked); } catch (e) { zKeepSmp.on = false; }
+    try { var el = $id("dsh-z-bosskeepsmp"); zKeepSmp.on = false; } catch (e) { zKeepSmp.on = false; }
     return zKeepSmp.on;
   }
   function zKeepSmpClear() {
@@ -12974,154 +13171,6 @@ function createRoItemCapture(env) {
     }, true);
   } catch (e) {}
   // ================= V2.38.20 BOSS 保持距离 END =================
-  // ================= V2.34.0 A7 / V2.34.1：战斗判定诊断（默认关 · 每秒一拍 · 环形 200 条 · 复用现成机制）+ 死亡自动取证（仅在角色死亡/满 10 分钟/手动按钮时 POST 到本机 127.0.0.1:8899，不出外网）=================
-  var zDiagAt = 0; var zDiagDead = 0;
-  var zDiagPostAt = 0;
-  function zDiagPost(tag) {
-    try {
-      if (typeof fetch !== "function") return;
-      var arrP = window.__dshZDiag || [];
-      if (!arrP.length) return;
-      var entP = CLIENT.SS && CLIENT.SS.Entity, whoP = "";
-      try { whoP = (entP && entP.display && entP.display.name) || ""; } catch (e0) {}
-      var cfgP = {};
-      try {
-        cfgP = { flymode: $id("dsh-z-flymode") ? $id("dsh-z-flymode").value : "", flyint: $id("dsh-z-flyint") ? $id("dsh-z-flyint").value : "", flygrp: $id("dsh-z-flygrp") ? !!$id("dsh-z-flygrp").checked : null, grpn: $id("dsh-z-grpn") ? $id("dsh-z-grpn").value : "", hpfly: $id("dsh-z-hpfly") ? $id("dsh-z-hpfly").value : "", flystuck: $id("dsh-z-flystuck") ? !!$id("dsh-z-flystuck").checked : null, stucksec: $id("dsh-z-stucksec") ? $id("dsh-z-stucksec").value : "", idleflysec: $id("dsh-z-idleflysec") ? $id("dsh-z-idleflysec").value : "", flykill: $id("dsh-z-flykill") ? !!$id("dsh-z-flykill").checked : null, ona: $id("dsh-z-ona") ? $id("dsh-z-ona").value : "" };
-      } catch (eC) {}
-      DSHCollect.post("http://127.0.0.1:8899/api/probe-collect", { t: tag || "zdiag", ver: VER, who: whoP, at: Date.now(), cfg: cfgP, arr: arrP.slice(-200) });
-    } catch (e) {}
-  }
-  function zDiagSnapNow() {
-    var nowD = Date.now(), hf = zHitFresh(nowD);
-    var mobsD = (scanMobs && scanMobs.length) ? scanMobs : lastMobs;
-    var entD = CLIENT.SS && CLIENT.SS.Entity, lifeD = entD && entD.life, posD = entD && entD.position;
-    var mobSnap = [];
-    try {
-      for (var mi = 0; mi < mobsD.length && mobSnap.length < 6; mi++) {
-        var md = mobsD[mi];
-        if (!md || !(md.dist >= 0)) continue;
-        // V2.34.3：前 5 项顺序不变（有脚本按索引 0/1 读）；末尾追加曼哈顿距离与格子距离（取不到 -1）
-        var mdGrid = -1;
-        try {
-          var mdE = zEntOf(md.GID);
-          if (mdE && mdE.position && posD) mdGrid = zRangeDist(mdE.position, posD);
-        } catch (eG) {}
-        mobSnap.push([md.mid != null ? md.mid : 0, Math.round(md.dist), md.isBoss ? 1 : 0, zEntHpPct(md.GID), String(md.name || ""), Math.round(md.dist), mdGrid]);
-      }
-    } catch (eM) {}
-    return {
-      t: nowD,
-      hp: lifeD && lifeD.hp != null ? Number(lifeD.hp) : -1,
-      hpMax: lifeD && lifeD.hp_max != null ? Number(lifeD.hp_max) : -1,
-      sp: lifeD && lifeD.sp != null ? Number(lifeD.sp) : -1,
-      spMax: lifeD && lifeD.sp_max != null ? Number(lifeD.sp_max) : -1,
-      map: (function () { try { return getMapName(); } catch (e0) { return ""; } })(),
-      x: posD ? Math.round(posD[0]) : -1,
-      y: posD ? Math.round(posD[1]) : -1,
-      running: !!zRunning,
-      npHunt: !!npHuntOn,
-      dead: !!(entD && (entD.isDeath || (entD.ACTION && entD.action === entD.ACTION.DIE))),
-      flyAt: zLastFlyReasonAt || 0,
-      mobs: mobSnap,
-      s26: (function () { try { return learnedSkillLv(26); } catch (e0) { return -1; } })(),
-      wing: (function () { try { var w = findFlyWing(); return w ? String(w.itid || w.index || 1) : ""; } catch (e0) { return ""; } })(),
-      flyFail: flyFailCount || 0,
-      onaMode: ($id("dsh-z-ona") && $id("dsh-z-ona").value) || "还击",
-      beingHit: (nowD - zHpWatch.lastHitAt) < 3000,
-      zAllMobs: !$id("dsh-z-allmobs") || $id("dsh-z-allmobs").checked,
-      target: zLastTargetGID != null ? zLastTargetGID : null,
-      zLockGid: zLock.gid != null ? gidInt(zLock.gid) : null,
-      zLockDone: !!zLock.done,
-      lockMidMiss: zLockMidMissCount, // V2.38.16 F3：锁定目标 mid 取不到（只能按普通怪处理）的段数
-      escapePend: escapePending(),
-      sitting: isSitting(),
-      hitByCount: hf.n,
-      nearestHitDist: hf.nearest,
-      grpCount: zGrpCount(mobsD).n,
-      qoaCount: zLastQoaCount,
-      bossAct: zLastBossAct,
-      bossHp: zLastBossHp,
-      flyReason: zLastFlyReason,
-      flyFailUntil: flyFailUntil || 0,
-      lastFly: lastFly || 0,
-      sitWhy: zSitWhy,
-      atkWhy: zAtkWhy,
-      // V2.34.5：档案诊断（当前档键/档数/界面是否已按档填充/名单归属与规模）
-      prof: (function () { try { return { k: activeCharKey, n: Object.keys(profiles).length, ready: profUIApplied, lock: Object.keys(lockList || {}).length, ask: (askList || []).length }; } catch (eP) { return null; } })()
-    };
-  }
-  function zDiagTick() {
-    try {
-      if (!($id("dsh-z-diag") && $id("dsh-z-diag").checked)) return;
-      var nowD = Date.now();
-      if (zDiagAt && nowD - zDiagAt < 900) return;
-      zDiagAt = nowD;
-      var s = zDiagSnapNow();
-      var arr = window.__dshZDiag || (window.__dshZDiag = []);
-      DSHCollect.ringPush(arr, s, 200);
-      if ((s.hp === 0 || s.dead) && !zDiagDead) { zDiagDead = 1; zDiagPost("zdiag-death"); }
-      else if (s.hp > 0 && !s.dead && zDiagDead) { zDiagDead = 0; }
-      try { if (btDiagOn) btLog('zdiag', JSON.stringify(s)); } catch (e1) {}
-      if (nowD - zDiagPostAt > 600000) { zDiagPostAt = nowD; zDiagPost("zdiag-10min"); }
-    } catch (e) {}
-  }
-  try { masterTickReg(function () { try { zDiagTick(); } catch (e) {} }); } catch (e) {}
-  // 04-02 锁怪射程只读取证：仅在“档内有未学技能且它足以抬高射程”时上报一次到本机。
-  var zRangeProbeSig = "", zRangeProbeAt = 0;
-  function zRangeProfileProbe() {
-    try {
-      if (!zRunning || !clientReady() || String(selfName() || "").trim() !== "04-02") return;
-      var cid = selfCharId(), ent = CLIENT.SS && CLIENT.SS.Entity;
-      if (!(cid > 0) || !ent || !ent.position) return;
-      var el = $id("dsh-skillorder"), order = el ? parseSkillOrder(el.value || "") : [];
-      if (!order.length) return;
-      var pm = parseInt($id("dsh-z-pmrange") && $id("dsh-z-pmrange").value, 10) || 0;
-      var real = realAtkRange(), base = real > 0 ? real : (pm > 0 ? pm : 2);
-      if (pm > 2 && base > pm) base = pm;
-      var suspect = [];
-      for (var i = 0; i < order.length; i++) {
-        var o = order[i], have = learnedSkillLv(o.skid), sr = getSkillRange(o.skid, o.lv);
-        if (have <= 0 && sr + 1 > base) suspect.push({ id: o.skid, configuredLv: o.lv, learnedLv: have, configuredRange: sr + 1 });
-      }
-      if (!suspect.length) return;
-      var sig = String(cid) + ":" + JSON.stringify(suspect);
-      if (sig === zRangeProbeSig && Date.now() - zRangeProbeAt < 60000) return;
-      zRangeProbeSig = sig; zRangeProbeAt = Date.now();
-      var prof = profiles[activeCharKey] || {}, target = zLock && zLock.gid ? zEntOf(zLock.gid) : null;
-      DSHCollect.post("http://127.0.0.1:8899/api/probe-collect", {
-        t: "zrange-profile-0402", at: Date.now(), ver: VER,
-        who: "04-02", charId: cid, profile: {
-          keyMatches: profileKeyMatches(activeCharKey, cid), trusted: profileTrusted(activeCharKey),
-          name: String(prof.name || ""), charId: prof.charId || 0, migrated: !!prof._claimedFrom
-        },
-        attack: { physical: pm, serverRange: real, base: base, effective: calcAtkRange(), invalidSkills: suspect },
-        lock: { gid: zLock.gid || 0, selfPos: ent.position.slice(0, 2), targetPos: target && target.position ? target.position.slice(0, 2) : null,
-          distance: target && target.position ? zRangeDist(target.position, ent.position) : null,
-          los: (function () { try { return target && target.position ? zLosClear(Math.round(ent.position[0]), Math.round(ent.position[1]), Math.round(target.position[0]), Math.round(target.position[1])) : null; } catch (eL) { return null; } })() },
-        chase: { since: zWalkState && zWalkState.chaseSince || 0, dist: zWalkState && zWalkState.chaseDist || 0,
-          replan: !!(zWalkState && zWalkState.chaseReplan), lastMove: zWalkState && zWalkState.lastMove || 0 },
-        action: String(zMon && zMon.action || ""), reason: String(zAtkWhy || "")
-      });
-    } catch (e) {}
-  }
-  try { masterTickReg(function () { zRangeProfileProbe(); }); } catch (e) {}
-  // 「复制诊断」按钮：把 __dshZDiag 的 JSON 写进只读 textarea（事件委托，面板重建/换页后仍有效）
-  try {
-    document.addEventListener("click", function (e) {
-      var t = e.target;
-      if (!t || t.id !== "dsh-z-diagcopy") return;
-      try {
-        var arr2 = window.__dshZDiag || [];
-        var box = $id("dsh-z-diagbox");
-        var txt2 = "";
-        try { txt2 = "=== 装备/背包读取诊断 ===\n" + gearDiagText() + "\n\n=== 助手动作日志（" + arr2.length + " 条）===\n" + JSON.stringify(arr2); }
-        catch (e3) { txt2 = "=== 助手动作日志（" + arr2.length + " 条）===\n" + JSON.stringify(arr2); }
-        if (box) { box.value = txt2; box.focus(); box.select(); }
-        zDiagPost("zdiag-manual");
-        setStatus("诊断已写入文本框（装备/背包读取 + " + arr2.length + " 条动作日志），可手动复制", "ok");
-      } catch (e2) {}
-    }, true);
-  } catch (e) {}
   // V2.38.15：首领诊断（只读）——把首领裁决链摊开成一段可复制的文字；只看不发、不写任何状态。
   function zBossDiagText() {
     var L = [], br = String.fromCharCode(10);
@@ -13347,7 +13396,7 @@ function createRoItemCapture(env) {
         if (wingfb && useItemByIndex(wingfb.index)) {
           zWalkState.dir = Math.floor(Math.random() * 8); zWalkState.dirAt = Date.now(); // 瞬移后随机换方向，避免走回原地
           zWalkState.lastPos = null; zWalkState.stuckCnt = 0; zWalkState.tried = 0;
-          zTravelWingPendingStock = flyWingReserveNow() > 0 ? zTravelWingSeenStock : null;
+          zTravelWingPendingStock = flyWingReserveNow() > 0 && !wingfb.reusable ? zTravelWingSeenStock : null;
           zFlyLastVia = "wing";
           tlog("fly-item-" + wingfb.itid);
           return true;
@@ -13360,7 +13409,7 @@ function createRoItemCapture(env) {
         if (wing && useItemByIndex(wing.index)) {
           zWalkState.dir = Math.floor(Math.random() * 8); zWalkState.dirAt = Date.now(); // 瞬移后随机换方向，避免走回原地
           zWalkState.lastPos = null; zWalkState.stuckCnt = 0; zWalkState.tried = 0;
-          zTravelWingPendingStock = flyWingReserveNow() > 0 ? zTravelWingSeenStock : null;
+          zTravelWingPendingStock = flyWingReserveNow() > 0 && !wing.reusable ? zTravelWingSeenStock : null;
           zFlyLastVia = "wing";
           tlog("fly-item-" + wing.itid);
           return true;
@@ -13399,8 +13448,10 @@ function createRoItemCapture(env) {
         if (FLY_WING_DENY_IDS.indexOf(itid) >= 0) continue; // 蝴蝶 / 回城类 + 12212：按 ID 二次排除（显式覆盖也不能翻案）
         var info = null;
         try { info = DB && typeof DB.getItemInfo === "function" && DB.getItemInfo(itid); } catch (e) {}
-        var nm = (info && (info.identifiedDiSPlayName || info.name)) || "";
+        var nm = (info && (info.identifiedDisplayName || info.identifiedDiSPlayName || info.name)) || "";
         var index = it.index != null ? it.index : i;
+        var itemType = it.type != null ? it.type : it.itemType;
+        if (itemType != null && [0, 2, 11, 18].indexOf(Number(itemType)) < 0) continue; // 已知非使用道具不得因旧 ID 注释被选中
         if (override) { if (override.indexOf(itid) >= 0) return { index: index, itid: itid, name: nm }; continue; }
         if (!nm) continue;                                    // 未鉴定 / 名称为空：跳过，绝不猜
         if (nm.indexOf("箱子") >= 0) continue;                 // 排除「…个箱子」等容器
@@ -13410,6 +13461,7 @@ function createRoItemCapture(env) {
         var qty = Number(it.count != null ? it.count : it.amount);
         if (Number.isFinite(qty) && qty <= 0) continue; // 背包槽还在但该堆已耗尽
         if (!keep) return { index: index, itid: itid, name: nm }; // 保命档不受预留限制
+        if (Number(itid) === 22104 && nm.replace(/\^[0-9a-fA-F]{6}/g, "").trim() === "魔法苍蝇翅膀") return { index: index, itid: itid, name: nm, reusable: true }; // 仅源中明确列出的魔法翼，不能按魔法二字泛化
         if (!Number.isFinite(qty) || qty < 0) { countUnknown = true; continue; }
         total += qty;
         if (!picked) picked = { index: index, itid: itid, name: nm };
@@ -13510,29 +13562,30 @@ function createRoItemCapture(env) {
       if (idx == null) return null;
       var i = Number(idx);
       if (isNaN(i)) return null;
-      // ⓪ V2.38.10：包流整表优先（手机端唯一可行），拿不到再走原来的组件路线
-      var pit = (typeof bagPktByIndex === "function") ? bagPktByIndex(i) : null;
-      if (pit) return pit;
+      // ① V2.38.77-修法①：优先问客户端组件实例表（与格子 data-index 同一 index 空间）
       var c = bagInvComp();
-      if (c && typeof c.getItemByIndex === "function") { try { var it = c.getItemByIndex(i); if (it) return it; } catch (e1) {} }
+      if (c && typeof c.getItemByIndex === "function") { try { var it = c.getItemByIndex(i); if (it) { bagPlace("comp", it); return it; } } catch (e0) {} }
+      // ② 包流整表按格号（0x0b09/2825 的 index 字段；手机端组件全不可用时的唯一可行路线）
+      var pit = (typeof bagPktByIndex === "function") ? bagPktByIndex(i) : null;
+      if (pit) { bagPlace("pkt", pit); return pit; }
       var mods = ["UI/Components/Inventory/Inventory", "UI/Components/BasicInventory/BasicInventory"];
       for (var m = 0; m < mods.length; m++) {
         var mod = null; try { mod = requireDB(mods[m]); } catch (e2) {}
-        if (mod && typeof mod.getItemByIndex === "function") { try { var it2 = mod.getItemByIndex(i); if (it2) return it2; } catch (e3) {} }
+        if (mod && typeof mod.getItemByIndex === "function") { try { var it2 = mod.getItemByIndex(i); if (it2) { bagPlace("mod", it2); return it2; } } catch (e3) {} }
       }
       var list = bagList();
-      if (list) for (var k = 0; k < list.length; k++) { var x = list[k] || {}; if (Number(x.index) === i) return x; }
+      if (list) for (var k = 0; k < list.length; k++) { var x = list[k] || {}; if (Number(x.index) === i) { bagPlace("scan", x); return x; } }
     } catch (e) {}
     return null;
   }
+
   function bagList() {
+    var list = null;
     var list = null;
     bagRead.source = "读取失败"; bagRead.count = 0; bagRead.arrows = 0;
     try {
-      // ⓪ V2.38.10 最高优先级只读来源：包流整表（0x0b09/2825，34B 记录）——手机端组件全不可用时的唯一可行路线
-      var _bpk = (typeof bagPktSnapshot === "function") ? bagPktSnapshot() : null;   // typeof 守卫：局部切片测试环境可缺
-      // 包流有数据就直接返回：后续任一路线（含无效组件 .list）都不得覆盖或把它清成 null
-      if (_bpk) { var _plist = bagSourceTry("packet.0x0b09", _bpk); if (Array.isArray(_plist) && _plist.length) return _plist; }
+      // ⓪ V2.38.77-修法①：组件路线提前到最前（组件不可用时才退包流表）；包流快照的可用性判据一字不改，
+      //   仍由 bagPktSnapshot()（complete 且条数 > 0 且表非空）决定，手机端组件全不可用 → 下面的包流兜底照旧生效。
       // ① V2.38.4 首选（客户端路线，原样保留兜底）：uiComp("Inventory")（线上唯一可达的路线）
       var _ic = bagInvComp();
       if (_ic) list = bagSourceTry("uiComp.Inventory.list", _ic.list);
@@ -13572,6 +13625,11 @@ function createRoItemCapture(env) {
           if (v && Array.isArray(v)) list = bagSourceTry("CLIENT.SS." + keys[k], v);
         }
       }
+      // ⓪′ 兜底：包流整表（0x0b09/2825，34B 记录）——组件路线全部拿不到时才用，可用性判据不变
+      if (!list) {
+        var _bpk = (typeof bagPktSnapshot === "function") ? bagPktSnapshot() : null;
+        if (_bpk) { var _plist = bagSourceTry("packet.0x0b09", _bpk); if (Array.isArray(_plist) && _plist.length) return _plist; }
+      }
     } catch (e) {}
     if (list) return list;
     bagRead.source = "读取失败"; bagRead.count = 0; bagRead.arrows = 0;
@@ -13585,12 +13643,10 @@ function createRoItemCapture(env) {
   function ammoDiagText() {
     var a = null;
     try { a = readEquippedAmmo(); } catch (e) {}
-    // V2.38.37-arrow2：只读诊断四态 —— 读到 / 证明空槽 / 槽里有东西但不是箭矢（不动作）/ 读不到（不动作）；
-    //   后两种都必须写明「不动作」，否则玩家会以为那是「装备栏没箭」，跟「确认空槽」混为一谈
     if (!a || a.known !== true) {
       if (a && a.reason === "nonArrow") return "装备栏箭矢槽：非箭矢（不动作）";
-      if (a && a.reason === "ambiguous") return "装备栏箭矢槽：读取失败（背包里有多件同样带箭矢槽标记，无法判定；不动作）";
-      return "装备栏箭矢槽：读取失败（不动作）";
+      var why={"not-ready":"游戏尚未就绪","no-root":"装备栏尚未就绪","untrusted-root":"本角色装备栏尚未确认","missing-slot":"未找到箭矢格","ambiguous":"箭矢格有多件物品","empty-unconfirmed":"尚不能确认空槽","bad-index":"箭矢格序号尚未就绪","conflict":"装备栏与物品数据尚未同步","changed-slot":"装备栏正在更新","unreadable":"箭种或数量尚未读到","exception":"装备栏读取异常"};
+      return "装备栏箭矢槽：读取失败（"+(why[a&&a.reason]||"尚未取得当前箭矢")+"；不动作）";
     }
     if (a.itid == null) return "装备栏箭矢槽：空";
     return "装备栏箭矢槽：" + arrowItemName(a.itid) + " ×" + (a.count != null ? a.count : 0);
@@ -13665,7 +13721,8 @@ function createRoItemCapture(env) {
       var map = String(getMapName() || "");
       if (!map || map !== npVerifyStallMap) { npVerifyStallMap = map; npVerifyStallSeen = false; return; }
       if (!zStuckSince) { npVerifyStallSeen = false; return; }
-      if (npVerifyStallSeen || Date.now() - Math.max(zStuckSince, npVerifyModeStartAt) < 3000) return;
+      var waitMs = zStationaryWaitMs();
+      if (!waitMs || npVerifyStallSeen || Date.now() - Math.max(zStuckSince, npVerifyModeStartAt) < waitMs) return;
       var result = npVerifyHuntOn("stationary");
       if (result !== "unsafe" && result !== "queued" && result !== "cooldown") npVerifyStallSeen = true;
     } catch (e) {}
@@ -13714,15 +13771,16 @@ function createRoItemCapture(env) {
     zAttTimer = setInterval(zAttack, sec * 1000);
     setStatus("助手模式已启动（扫描+攻击）· 动作自检 " + _czchk.brief, "ok");
   }
-  function stopZhu() {
+  function stopZhu(mapStopResult) {
     if (zFarPatrol.active) zFarPatrolClear(true); // 停止时撤销本轮远点巡图，不带到下次启动
     if (!deathReturnStopping) deathReturnCancel("手动停止战斗");
     zRunning = false;
     stopScan();
     if (zAttTimer) { clearInterval(zAttTimer); zAttTimer = null; }
     // 内挂机制寻怪：置零开关允许时，记录助手已发「开」的停机债务；超时后真实「开」仍须补关。
-    var npStopResult = "external";
-    if (externalAutomationOwns("battle") || (typeof apiCombatActive === "function" && apiCombatActive())) {
+    var npStopResult = typeof mapStopResult === "string" ? mapStopResult : "external";
+    if (typeof mapStopResult === "string") { /* Reuse the map stop transaction; never issue a second toggle. */ }
+    else if (externalAutomationOwns("battle") || (typeof apiCombatActive === "function" && apiCombatActive())) {
       npStopDebtClear(); // 外部代打持有战斗控制权时，停止助手不能翻转外部的内挂开关
     } else {
       if (npZeroEnabled()) npStopDebtArm("stopZhu"); else npStopDebtClear();
@@ -14986,7 +15044,8 @@ function createRoItemCapture(env) {
       var zAutoFlyOn = !!($id("dsh-z-flystuck") && $id("dsh-z-flystuck").checked) && zFlyKillOnNow && !zSitYieldNow && !zEngagedNow(now) && zEscFlySecNow() > 0 && canTravelFly(); // 脱困只受卡住开关管，无目标开关只管 Y 秒瞬移
       var zIdleFlyOn = !!($id("dsh-z-idlefly") && $id("dsh-z-idlefly").checked) && zFlyKillOnNow && !zSitYieldNow;
       // 内挂回执未知且已停滞：自研移动作为并联兜底；远处旧锁定怪不能持续清空无目标瞬移计时。
-      var npFallbackWalk = npMode && npBattleState() !== true && zStuckSince && now - zStuckSince >= 3000 && !escapePending();
+      var stationaryWaitMs = zStationaryWaitMs();
+      var npFallbackWalk = npMode && (npBattleState() !== true || (flyWingReserveNow() > 0 && !canTravelFly())) && stationaryWaitMs > 0 && zStuckSince && now - Math.max(zStuckSince, npVerifyModeStartAt) >= stationaryWaitMs && !zSitYieldNow && !escapePending() && !externalAutomationOwns("battle") && !(typeof apiDialogOpen === "function" && apiDialogOpen());
       if (npFallbackWalk && !zWalkState.noTargetSince) zWalkState.noTargetSince = zStuckSince; // 远处旧锁定怪刚失效时，从实际停住时算无目标时间，不额外重新等满配置秒数
       function zIdleMoveSecNow() {
         try {
@@ -15018,7 +15077,7 @@ function createRoItemCapture(env) {
           if (zEngagedNow(nowMs)) { zWalkState.noTargetSince = 0; return "ok"; }
           var atkR = calcAtkRange();
           var ht = zLock.gid ? zAtkHpTrack[zLock.gid] : null;
-          if ((ht && nowMs - ht.at < 4000) || scanHasAttackableLockedMob(atkR) || (!npFallbackWalk && scanHasOutOfRangeLockedMob(atkR))) {
+          if ((ht && nowMs - ht.at < 4000) || scanHasAttackableLockedMob(atkR) || (npMode && !npFallbackWalk && scanHasOutOfRangeLockedMob(atkR))) {
             zWalkState.noTargetSince = 0; // 有有效目标 → 无目标计时清零
             return "ok";
           }
@@ -15813,16 +15872,41 @@ function createRoItemCapture(env) {
   }
   // 技能行统一序列化（对象 → textarea 行）：统一 6 段 skid:lv:cond:prob:uses:lock，行尾两空格+技能名做注释
   // prob：0-100（0=从不释放）；uses：本轮上限；lock：每次锁定上限；空段 cond 保留，与 parse 双向兼容
+  // 仅采用既有技能来源表与本服实测状态映射；中文状态名称表不是技能映射。
+  function skillBuffStatus(skid) {
+    if (skid === 34) return buffStId("BLESSING"); // SKILL_STATUS_SRC + MEASURED
+    if (skid === 361) return buffStId("ASSUMPTIO"); // SKILL_STATUS_SRC + MEASURED
+    return -1; // 未核实，不猜编号（261/401 为气球资源技能）
+  }
+  // 仅供已核实的自动关联：无实体读数/服务器记录不能当作状态缺失。
+  function skillBuffState(stId) {
+    try {
+      var ent = CLIENT.SS && CLIENT.SS.Entity, f = DSH_ENT_STATE[stId];
+      if (!ent) return null;
+      if (f) { var v = f(ent); if (v === true || v === 1) return true; if (v === false || v === 0) return false; }
+      var st = buffActive[stId];
+      if (!st) return null;
+      if (st.on === false) return false;
+      return st.on === true && st.endAt > Date.now() ? true : null;
+    } catch (e) { return null; }
+  }
+  function skillSpherePatch(cond, op, n) {
+    var parts = String(cond || "").split(/[,，]/).filter(function (c) { return c && !/^!?球(?:[<>]=?|=)?\d+$/.test(c.trim()); });
+    if (op) parts.push("球" + op + Math.max(0, parseInt(n, 10) || 0));
+    return parts.join(",");
+  }
   function skillEffectiveCond(skid, cond) {
     cond = String(cond || "").trim();
     // 蓄气/狂蓄气单独加入技能顺序且未设置条件时默认「球0」；玩家显式写的条件完全保留。
     if ((skid === 261 || skid === 401) && !cond) return "球0";
+    var buffId = skillBuffStatus(skid);
+    if (!cond && buffId >= 0) return "!" + buffId;
     if (typeof SKILL_REQ === "undefined" || !SKILL_REQ) return cond;
     var req = skillReq(skid), parts = [];
     if (req) { if (req[2] > 0) parts.push("球" + req[2]); if (req[3]) parts.push(statusNameToCond(req[3])); }
     var defaults = parts.join(",");
     if (!cond) return defaults;
-    if (/(?:^|[,，])\s*!?球\d+\s*(?:$|[,，])/.test(cond)) return cond;
+    if (/(?:^|[,，])\s*!?球(?:[<>]=?|=)?\d+\s*(?:$|[,，])/.test(cond)) return cond;
     var sphere = defaults.match(/(?:^|[,，])(球\d+)(?:$|[,，])/);
     return sphere ? cond + "," + sphere[1] : cond;
   }
@@ -15931,9 +16015,12 @@ function createRoItemCapture(env) {
       // V2.38.4：球源词不是释放门槛，也不能当状态名去查 —— 直接跳过，否则含 球源401 的技能会被永远卡死
       if (/^球源/.test(cc)) continue;
       var hit = false;
-      var ms = cc.match(/^球(\d+)$/);
+      var ms = cc.match(/^球(?:([<>]=?|=))?(\d+)$/);
       if (ms && st.spheres == null) return { ok: false, miss: "气弹数量未知" };
-      if (ms) { var wantBall = parseInt(ms[1], 10); hit = wantBall === 0 ? st.spheres === 0 : st.spheres >= wantBall; }
+      if (ms) {
+        var wantBall = parseInt(ms[2], 10), ballOp = ms[1];
+        hit = ballOp === "<" ? st.spheres < wantBall : ballOp === "<=" ? st.spheres <= wantBall : ballOp === ">" ? st.spheres > wantBall : ballOp === "=" ? st.spheres === wantBall : ballOp === ">=" ? st.spheres >= wantBall : wantBall === 0 ? st.spheres === 0 : st.spheres >= wantBall;
+      }
       else {
         var mh = cc.match(/^hp([><=])(\d+)$/);
         if (mh) {
@@ -15956,6 +16043,11 @@ function createRoItemCapture(env) {
       if (cc === "猎鹰") hit = st.falcon === 1;
       // V1.7.6 状态名判定通用化：英文（rAthena SC 名）与中文（含 debuff 别名）→ statusActive（实体字段 + 判活环兜底）
       if (!ms && !mh && !msp && cc !== "爆气" && cc !== "狂暴" && cc !== "灵魂" && cc !== "骑乘" && cc !== "猎鹰") hit = statusActive(cc);
+      // 新关联仅核实了赐福10、圣母之祈福473；未知不能经 ! 反转为可放。
+      if (cc === "10" || cc === "473") {
+        hit = skillBuffState(parseInt(cc, 10));
+        if (hit === null) return { ok: false, miss: "Buff状态未知" };
+      }
       if (neg) hit = !hit;
       if (!hit) return { ok: false, miss: c };
     }
@@ -16121,10 +16213,10 @@ function createRoItemCapture(env) {
       if (ms) {
         var op = ms[1] || ">=";
         var n = parseInt(ms[2], 10);
-        // 球N/球>=N：该技能至少需要N个气弹；球< N/球<=N：低于阈值时补到N个。
-        if (op === "<" || op === "<=") {
-          if (n > need.spheres) need.spheres = n;
-        } else if (n > need.spheres) need.spheres = n;
+        // 少于条件是补球技能自身的释放门槛，不是消耗技能的补球需求。
+        if (op === "<" || op === "<=") continue;
+        if (op === ">") n++;
+        if (n > need.spheres) need.spheres = n;
         continue;
       }
       // hp>/sp> 等阈值条件不参与自动补（由战斗逻辑等待）
@@ -16484,7 +16576,7 @@ function createRoItemCapture(env) {
       if (condStr) { // 手写/自动条件始终生效；开关只控制自动补状态和补球
         var ck = checkSkillCond(condStr);
         if (!ck.ok) {
-          if (ck.miss === "气弹数量未知" && o.skid === 261 && sphereProbeOnce(ent)) return true; // 球0 未知不假装为0，先用一次蓄气同步读数
+          if (ck.miss === "气弹数量未知" && o.skid === 261 && condStr === "球0" && sphereProbeOnce(ent)) return true; // 球0 未知不假装为0，先用一次蓄气同步读数
           if (!blocked) blocked = { o: o, condStr: condStr };
           continue;
         }
@@ -16503,8 +16595,9 @@ function createRoItemCapture(env) {
         continue;
       }
       var bits = skillTypeBits(o.skid);
-      var isSelf = o.skid === 261 || o.skid === 401 || (bits != null && (bits & 4) === 4); // 补球技能必须对自身施放
+      var isSelf = o.skid === 261 || o.skid === 401 || skillBuffStatus(o.skid) >= 0 || (bits != null && (bits & 4) === 4); // 补球技能必须对自身施放
       if (isSelf) {
+        if (!ent.GID) { dshCastSkip(o.skid, "自身GID未知"); continue; }
         try {
           var ps = new (czp("USE_SKILL"))();
           ps.SKID = o.skid;
@@ -16680,8 +16773,14 @@ function createRoItemCapture(env) {
       }
       // V2.34.0：顺序行内可直接改等级（上限=已学等级，读不到不设上限）与释放%
       var lvMax = 0; try { lvMax = learnedSkillLv(o.skid) || 0; } catch (e0) {}
+      var ball = String(o.cond || "").match(/(?:^|[,，])球([<>]=?|=)?(\d+)(?:$|[,，])/);
+      var ballOp = ball ? (ball[1] || (ball[2] === "0" ? "=" : ">=")) : "";
+      var ballOpts = [["", "自动/默认"], ["<", "少于"], [">=", "至少"], ["=", "等于（兼容球0）"], ["<=", "至多"], [">", "多于"]].map(function (p) { return '<option value="' + p[0] + '"' + (p[0] === ballOp ? " selected" : "") + ' >' + p[1] + '</option>'; }).join("");
+      var buffHint = skillBuffStatus(o.skid) >= 0 ? " · 已核实自身Buff" : (o.skid === 261 || o.skid === 401 ? " · 气球资源技能" : " · 状态映射未核实（不猜编号）");
       html += '<div class="prow drag-item" data-drag-i="' + i + '" draggable="true" title="拖动调整顺序"><span class="dh">⠿</span><span class="pidx">' + (i + 1) + '</span>' +
-        '<span class="pnm">' + nm + ' <span class="st">ID' + o.skid + (dispCond ? ' · 需' + dispCond : '') + '</span></span>' +
+        '<span class="pnm">' + nm + ' <span class="st">ID' + o.skid + (dispCond ? ' · 需' + dispCond.replace(/</g, '&lt;') : '') + buffHint + '</span></span>' +
+        '<select data-ball-op="' + o.skid + '" title="气球释放条件" style="flex:0 0 112px">' + ballOpts + '</select>' +
+        '<input data-ball-n="' + o.skid + '" type="number" min="0" value="' + (ball ? ball[2] : 5) + '" title="气球数量" style="flex:0 0 44px">' +
         '<span class="lb">Lv</span><input type="number" min="1"' + (lvMax > 0 ? ' max="' + lvMax + '"' : '') + ' value="' + o.lv + '" data-lv="' + o.skid + '" title="释放等级（直接写回技能顺序）" style="flex:0 0 44px;text-align:center">' +
         '<input type="number" min="0" max="100" value="' + (o.prob != null ? o.prob : 100) + '" data-prob="' + o.skid + '" title="释放百分比" style="flex:0 0 48px;text-align:center">' +
         '<span class="st">%</span>' +
@@ -16690,6 +16789,14 @@ function createRoItemCapture(env) {
     el.innerHTML = html;
     // V2.34.0：等级/释放% 改为 input 即时写回（去抖 300ms）+ blur 归一化。
     //   旧实现只在 change(失焦) 写回，未失焦时 1 秒定时器每 3 秒重建列表 → 输入被旧值弹回。
+    el.querySelectorAll("[data-ball-op], [data-ball-n]").forEach(function (inp) {
+      inp.addEventListener("change", function () {
+        var skid = parseInt(this.getAttribute("data-ball-op") || this.getAttribute("data-ball-n"), 10);
+        var op = el.querySelector('[data-ball-op="' + skid + '"]').value;
+        var n = el.querySelector('[data-ball-n="' + skid + '"]').value;
+        skPatch(skid, function (o) { o.cond = skillSpherePatch(o.cond, op, n); });
+      });
+    });
     el.querySelectorAll("[data-prob]").forEach(function (inp) {
       var skid = parseInt(inp.getAttribute("data-prob"), 10);
       inp.addEventListener("input", function () {
@@ -16998,116 +17105,10 @@ function createRoItemCapture(env) {
     bagCleanChatLast = dedupe;
     return true;
   }
-  // ---------------- 道场入场前物品保护（本轮新增：只活在内存，不落盘、不入 KV_KEYS、不进永久规则） ----------------
-  // 口径：进入道场前抓一份**可信完整**背包快照，按 ITID 记住当时已有的种类；命中即不丢，且优先于道场丢弃黑名单与
-  //   类别规则（含入道场后新获得的同 ITID 物品）。这份记录只活在内存：不写 localStorage / sessionStorage / KV_KEYS，
-  //   不改 bagClean.config、不写角色档，原入场前记录刷新即消失；场内刷新只恢复当前可信完整背包保护，自动丢弃仍关闭并需重新预览授权。
-  // 证据来源（只读）：包流整表 bagPkt（complete 只在收到非空整表时为 true；换图/进区/回角色列表一律 reset）。
-  //   现有 bagListOk() 只验首项且拒空，证明不了整表完整，因此这里不拿它当完整证据。
-  // fail-closed：拿不到可信完整证据、或证据自相矛盾 → 拒绝并说明原因；绝不拿当前背包冒充入场前状态。
-  var dojoGuard = { ok: false, itids: null, n: 0, who: "", map: "", src: "", reason: "尚未在进入道场前采集背包快照" };
-  function dojoGuardWho() { try { return String((CLIENT && CLIENT.SS && CLIENT.SS.GID) || ""); } catch (e) { return ""; } }
-  function dojoGuardMap() { try { return String(getMapName() || ""); } catch (e) { return ""; } }
-  function dojoGuardInDojo() { try { return /dojo|challenge|trial|道场|道場/i.test(dojoGuardMap()); } catch (e) { return false; } }
-  function dojoGuardClear(reason) {
-    dojoGuard.ok = false; dojoGuard.itids = null; dojoGuard.n = 0; dojoGuard.who = ""; dojoGuard.map = ""; dojoGuard.src = "";
-    dojoGuard.reason = String(reason || "尚未在进入道场前采集背包快照");
-  }
-  var dojoBagGuardReport = { sig: "", at: 0 };
-  function dojoGuardFail(why) {
-    dojoGuardClear(why);
-    try { bagCleanChat("物品保护：" + dojoGuard.reason, "guard:" + dojoGuard.reason); } catch (e0) {}
-    // 只送本机；不含物品 ID、装备、角色名、账号或完整包内容。按原因去重，避免重复点开始刷日志。
-    try {
-      var sig = dojoGuard.reason, now = Date.now();
-      if (sig !== dojoBagGuardReport.sig || now - dojoBagGuardReport.at >= 60000) {
-        dojoBagGuardReport.sig = sig; dojoBagGuardReport.at = now;
-        var c = typeof bagInvComp === "function" ? bagInvComp() : null;
-        DSHCollect.post("http://127.0.0.1:8899/api/probe-collect", { t: "dojo-bag-guard", at: now, ver: VER, reason: /没收到过非空背包整表/.test(sig) ? "no-complete-inventory" : "other-guard-rejection",
-          bag: { complete: !!(typeof bagPkt !== "undefined" && bagPkt.complete), op: typeof bagPkt !== "undefined" ? bagPkt.listOp : 0,
-            rows: typeof bagPkt !== "undefined" ? bagPkt.n : 0, session: typeof bagPkt !== "undefined" ? bagPkt.sess : 0,
-            why: typeof bagPkt !== "undefined" ? String(bagPkt.why || "") : "bagPkt unavailable" },
-          inventory: { readable: !!(c && Array.isArray(c.list)), rows: c && Array.isArray(c.list) ? c.list.length : null },
-          framing: { partial: Number(framePartial) || 0, runtimeLenEntries: Number(__zcLenTbl && __zcLenTbl.n) || 0,
-            first471: Number(opStat[471]) || 0, bag2825: Number(opStat[2825]) || 0, gear2873: Number(opStat[2873]) || 0, oldBag2449: Number(opStat[2449]) || 0 } });
-      }
-    } catch (eProbe) {}
-    return { ok: false, reason: dojoGuard.reason };
-  }
-  // 独立无限挑战经门面 dojoGuard 调用的入场前背包校验。只读，不发包；旧内置道场已退役。
-  function dojoGuardCapture(force, restoreCurrent) {
-    var who = dojoGuardWho();
-    if (dojoGuard.ok && !force) {
-      if (dojoGuard.who === who) return { ok: true, reuse: true, n: dojoGuard.n, reason: "" };
-      return dojoGuardFail("角色已变化，入场前快照不再适用（换角色后必须重新采集）");
-    }
-    if (dojoGuardInDojo() && !restoreCurrent) return dojoGuardFail("已在道场地图内且没有可信保护：等待刷新恢复当前背包保护；不自动入场、不启动丢弃");
-    if (!who || !profileTrusted(activeProfileKey())) return dojoGuardFail("当前角色未识别：等待可信角色与完整背包证据");
-    var pkt = null;
-    try { pkt = (typeof bagPkt === "undefined") ? null : bagPkt; } catch (e1) { pkt = null; }
-    if (!pkt) return dojoGuardFail("拿不到背包包流证据（bagPkt 不可用）：无法证明入场前背包完整，已按最保守处理");
-    if (pkt.complete !== true) return dojoGuardFail("没收到过非空背包整表（空背包与「没收到数据」分不清）：无法证明入场前背包完整，已按最保守处理");
-    var n = Number(pkt.n) || 0, list = pkt.list, sess = Number(pkt.sess) || 0;
-    if (sess !== 0) return dojoGuardFail("背包整表分流会话还没结束（证据自相矛盾）：整表可能只到一半，拒绝当作入场前状态");
-    if (!(n > 0)) return dojoGuardFail("整表标记为完整却报告 0 条（证据自相矛盾）：拒绝当作入场前状态");
-    if (!Array.isArray(list) || list.length !== n) return dojoGuardFail("整表条数与内容对不上（证据自相矛盾）：拒绝当作入场前状态");
-    var itids = {}, seenIndex = {}, bad = "";
-    for (var i = 0; i < n; i++) {
-      var it = list[i] || {};
-      var id = bagCleanInt(it.ITID != null ? it.ITID : it.itemid, 1, 2147483647), idx = bagCleanInt(it.index, 1, 65535);
-      if (id === null || idx === null) { bad = "整表里有无格子号或无物品编号的条目（证据不完整）：拒绝当作入场前状态"; break; }
-      if (seenIndex[idx]) { bad = "整表里有重复格子号 " + idx + "（证据自相矛盾）：拒绝当作入场前状态"; break; }
-      seenIndex[idx] = 1; itids[String(id)] = 1;
-    }
-    if (bad) return dojoGuardFail(bad);
-    // 交叉证据（能拿到才比）：客户端 Inventory 组件表里出现包流整表没有的 ITID → 这张整表不是整份 → 证据矛盾
-    var cmp = "";
-    try {
-      if (typeof bagInvComp === "function") {
-        var c = bagInvComp(true), cl = (c && Array.isArray(c.list)) ? c.list : null;
-        if (c && !cl) return dojoGuardFail("客户端背包组件存在但表结构异常：无法交叉核验完整背包");
-        if (cl) for (var j = 0; j < cl.length; j++) {
-          var cid = bagCleanInt(cl[j] && (cl[j].ITID != null ? cl[j].ITID : cl[j].itemid), 1, 2147483647);
-          if (cid !== null && !Object.prototype.hasOwnProperty.call(itids, String(cid))) { cmp = "客户端背包里有包流整表没有的物品 #" + cid; break; }
-        }
-      }
-    } catch (e2) { return dojoGuardFail("客户端背包交叉读取异常：" + String(e2 && e2.message || e2) + "；拒绝建立保护"); }
-    if (cmp) {
-      identityLogLine("dojo-guard-mismatch " + cmp + " pktRows=" + n + " uiRows=" + (cl ? cl.length : 0) + " pktAgeMs=" + (pkt.at ? Date.now() - pkt.at : "unknown"));
-      return dojoGuardFail(cmp + "（证据矛盾）：拒绝当作入场前状态。请在安全地点打开背包等待服务器重发完整物品表，再点开始；若仍提示此错，保持停止，不要关闭保护或自动丢弃");
-    }
-    var kinds = 0; for (var k in itids) if (Object.prototype.hasOwnProperty.call(itids, k)) kinds++;
-    dojoGuard.ok = true; dojoGuard.itids = itids; dojoGuard.n = kinds; dojoGuard.who = who; dojoGuard.map = dojoGuardMap(); dojoGuard.src = "bagPkt.整表";
-    dojoGuard.reason = ""; dojoGuard.restored = restoreCurrent === true;
-    try { identityLogLine("dojo-bag-guard capture kinds=" + kinds + " rows=" + n + " map=" + dojoGuard.map); } catch (e3) {}
-    try { bagCleanChat(restoreCurrent ? "刷新恢复当前背包保护：当前已有 " + kinds + " 种物品按 ITID 永不丢弃（不是原入场前记录）；自动丢弃仍关闭，请重新预览授权" : "入场前物品保护已建立：入场前已有 " + kinds + " 种物品按 ITID 永不丢弃", "guard-ok:" + who + ":" + kinds); } catch (e4) {}
-    return { ok: true, n: kinds, rows: n, reason: "" };
-  }
-  function dojoGuardActive() { return dojoGuard.ok === true && dojoGuard.itids !== null; }
-  // 保护命中：每次丢弃判定都重新调用（预览、计划、逐包重校验、发包前复核都经过这里），不是只在预览时算一次
-  function dojoProtectHit(itid) {
-    if (!dojoGuardActive()) return false;
-    var id = bagCleanInt(itid, 1, 2147483647);
-    if (id === null) return false;
-    if (dojoGuard.who !== dojoGuardWho()) { dojoGuardClear("角色已变化，入场前快照已作废"); return false; }
-    return Object.prototype.hasOwnProperty.call(dojoGuard.itids, String(id));
-  }
-  function dojoGuardLines() {
-    if (!dojoGuard.ok) return ["入场前物品保护：未生效（" + dojoGuard.reason + "）"];
-    return [(dojoGuard.restored ? "刷新恢复当前背包保护：生效 · 不是原入场前记录；当前已有的 " : "入场前物品保护：生效 · 入场前已有的 ") + dojoGuard.n + " 种物品按 ITID 永不丢弃（优先于丢弃黑名单与类别规则）"];
-  }
 
-  // V2.38.20 补门：开启时的门只挡「人已在道场内点开启」，挡不住「场外开启后手动走进道场」——
-  //   已在道场地图内且没有可信入场前记录（dojoGuard.ok 为假）时，一切丢弃执行（自动轮询 / 立即清理）一律拒绝，绝不按名单零保护地丢。
-  //   一旦发现丢弃处于开启状态就立即 disarm（armed/enabled 归零、generation++、清 pending、落盘），并给状态栏 + 本机聊天框说明原因。
-  //   有可信入场前记录时本函数恒为 false：正常道场丢弃照旧（保护优先）；道场判定复用 dojoGuardInDojo()，不做地图名硬编码。
-  function bagCleanDojoBlocked(){
-    if(!dojoGuardInDojo()||dojoGuard.ok)return false;
-    if(bagClean.enabled===true||bagClean.config.armed===true)bagCleanDisarm();
-    bagCleanSay('进入道场但缺少入场前记录，已停止丢弃（'+dojoGuard.reason+'）');
-    bagCleanChat('进入道场但缺少入场前记录，已停止丢弃');
-    return true;
-  }
+
+
+
   function bagCleanProtected(it){
     if(!it)return '数据缺失';
     var equipment=[4,5,8,12].indexOf(Number(it.type))>=0;
@@ -17127,7 +17128,9 @@ function createRoItemCapture(env) {
     cfg=cfg||bagClean.config;typeNames=typeNames||bagCleanTypeNames();if(!it)return {ok:false,reason:'数据缺失'};
     var id=bagCleanInt(it.ITID,1,2147483647),index=bagCleanInt(it.index,1,65535),type=bagCleanInt(it.type,0,255),equipment=[4,5,8,12].indexOf(type)>=0;
     var amount=bagCleanInt(it.count!=null?it.count:(it.amount!=null?it.amount:(equipment?1:NaN)),1,1000000000);if(id===null||index===null||amount===null||type===null)return {ok:false,reason:'索引/物品/数量/类型不明'};
-    if(dojoProtectHit(id))return {ok:false,reason:dojoGuard.restored?'刷新恢复当前背包保护（不是原入场前记录，命中即不丢）':'进入道场前已有（入场前保护：命中即不丢）',id:id,index:index,type:type,amount:amount};
+  // UNIFIED-PROBE-BEGIN guard-describe ORIGINAL:ICAgIGlmKGRvam9Qcm90ZWN0SGl0KGlkKSlyZXR1cm4ge29rOmZhbHNlLHJlYXNvbjpkb2pvR3VhcmQucmVzdG9yZWQ/J+WIt+aWsOaBouWkjeW9k+WJjeiDjOWMheS/neaKpO+8iOS4jeaYr+WOn+WFpeWcuuWJjeiusOW9le+8jOWRveS4reWNs+S4jeS4ou+8iSc6J+i/m+WFpemBk+WcuuWJjeW3suacie+8iOWFpeWcuuWJjeS/neaKpO+8muWRveS4reWNs+S4jeS4ou+8iScsaWQ6aWQsaW5kZXg6aW5kZXgsdHlwZTp0eXBlLGFtb3VudDphbW91bnR9Ow==
+  
+  // UNIFIED-PROBE-END guard-describe
     if(!typeNames[type])return {ok:false,reason:'类型未知，全部保护',id:id,index:index,type:type,amount:amount};
     if(cfg.protectedIds.indexOf(id)>=0)return {ok:false,reason:'类别保护例外（永不丢）',id:id,index:index,type:type,amount:amount};
     var protection=bagCleanProtected(it);if(protection)return {ok:false,reason:protection,id:id,index:index,type:type,amount:amount};
@@ -17152,7 +17155,9 @@ function createRoItemCapture(env) {
   function bagCleanRevalidate(stack,remaining){var count=bagCleanInt(Math.min(stack.amount,remaining,32767),1,32767),current=bagCleanFindCurrent(stack.index),d=bagCleanDescribe(current,bagClean.config);if(count===null||!current||!d.ok||d.index!==stack.index||d.id!==stack.id||d.type!==stack.type||d.key!==stack.key||d.source!==stack.source||d.amount!==stack.amount||d.amount<count)return null;return {item:current,desc:d,count:count};}
   async function bagCleanExecute(done,manual){
     if(bagClean.busy)return;bagClean.busy=true;bagClean.error='';var generation=bagClean.generation,player=CLIENT.SS.Entity,map=getMapName();
-    function valid(){return (manual||bagClean.config.armed)&&generation===bagClean.generation&&player===CLIENT.SS.Entity&&map===getMapName()&&!bagCleanDojoBlocked();}
+  // UNIFIED-PROBE-BEGIN guard-valid ORIGINAL:ICAgIGZ1bmN0aW9uIHZhbGlkKCl7cmV0dXJuIChtYW51YWx8fGJhZ0NsZWFuLmNvbmZpZy5hcm1lZCkmJmdlbmVyYXRpb249PT1iYWdDbGVhbi5nZW5lcmF0aW9uJiZwbGF5ZXI9PT1DTElFTlQuU1MuRW50aXR5JiZtYXA9PT1nZXRNYXBOYW1lKCkmJiFiYWdDbGVhbkRvam9CbG9ja2VkKCk7fQ==
+    function valid(){return (manual||bagClean.config.armed)&&generation===bagClean.generation&&player===CLIENT.SS.Entity&&map===getMapName();}
+  // UNIFIED-PROBE-END guard-valid
     // V2.38.2 提速：快确认轮询（80ms 一次，总超时 1000ms），替代原来固定 800ms×8=6.4s 的等待
     function waitAck(ok,timeoutMs){var limit=timeoutMs||1000,t0=Date.now();return new Promise(function(resolve){function poll(){if(ok())return resolve(true);if(Date.now()-t0>=limit)return resolve(false);setTimeout(poll,80);}poll();});}
     function acked(index,id,before,count){var cur=bagCleanFindCurrent(index);return !cur||Number(cur.ITID)!==id||Number(cur.count!=null?cur.count:cur.amount)<=before-count;}
@@ -17165,7 +17170,9 @@ function createRoItemCapture(env) {
           if(!valid())return;var ct=requireDB('Preferences/Controls');if(ct&&ct.talk)throw Error('NPC 对话尚未结束');
           var want=limits?limits[row.key+'|'+row.source]:row.drop,fresh=bagCleanRevalidate(stack,want);
           if(!fresh){bagCleanSay('索引/ITID/数量/type/保护或规则变化，已跳过陈旧候选');if(limits)limits[row.key+'|'+row.source]=0;continue;}
-          if(dojoProtectHit(fresh.desc.id)){bagCleanSay((dojoGuard.restored?'刷新恢复当前背包保护命中，本次跳过：#':'进入道场前已有的物品受保护，本次跳过：#')+fresh.desc.id);bagCleanChat('物品保护命中：#'+fresh.desc.id+' 本次未丢弃');if(limits)limits[row.key+'|'+row.source]=0;continue;}
+  // UNIFIED-PROBE-BEGIN guard-execute ORIGINAL:ICAgICAgICAgIGlmKGRvam9Qcm90ZWN0SGl0KGZyZXNoLmRlc2MuaWQpKXtiYWdDbGVhblNheSgoZG9qb0d1YXJkLnJlc3RvcmVkPyfliLfmlrDmgaLlpI3lvZPliY3og4zljIXkv53miqTlkb3kuK3vvIzmnKzmrKHot7Pov4fvvJojJzon6L+b5YWl6YGT5Zy65YmN5bey5pyJ55qE54mp5ZOB5Y+X5L+d5oqk77yM5pys5qyh6Lez6L+H77yaIycpK2ZyZXNoLmRlc2MuaWQpO2JhZ0NsZWFuQ2hhdCgn54mp5ZOB5L+d5oqk5ZG95Lit77yaIycrZnJlc2guZGVzYy5pZCsnIOacrOasoeacquS4ouW8gycpO2lmKGxpbWl0cylsaW1pdHNbcm93LmtleSsnfCcrcm93LnNvdXJjZV09MDtjb250aW51ZTt9
+  
+  // UNIFIED-PROBE-END guard-execute
           if(!CLIENT.PS.CZ.ITEM_THROW)throw Error('当前游戏画面不支持丢弃操作');
           var before=fresh.desc.amount,packet=new (czp("ITEM_THROW"))();packet.Index=fresh.desc.index;packet.count=fresh.count;bagCleanSay('清理中：#'+fresh.desc.id+' ×'+fresh.count+'（命中'+fresh.desc.source+'）');CLIENT.NM.sendPacket(packet);did++;
           // V2.38.18 提速：本件发完不再立刻等确认 —— 同一批连发的两件之间零等待，确认并到本批次末尾统一做一次
@@ -17288,11 +17295,15 @@ function createRoItemCapture(env) {
     box.querySelector('[data-bagadd]').onclick=function(){var q=(box.querySelector('[data-bagfind]').value||'').trim(),inv=bagCleanInventory()||[],hits=[],eh=box.querySelector('[data-baghits]');inv.forEach(function(it){var id=bagCleanInt(it&&it.ITID,1,2147483647);if(id===null)return;var nm=getItemName(id)||'';if(!q||String(id)===q||nm.indexOf(q)>=0||String(it.index)===q){if(!hits.some(function(h){return h.id===id;}))hits.push({id:id,nm:nm||('物品 #'+id)});}});hits=hits.slice(0,40);eh.textContent='';if(!hits.length){eh.textContent='背包里没有匹配的物品';return;}eh.appendChild(document.createTextNode('点一下加入丢弃名单：'));hits.forEach(function(h){var b=document.createElement('button');b.className='ghost';b.style.cssText='font-size:12px;margin:1px 3px';b.textContent=h.nm+' #'+h.id;b.onclick=function(){var k=String(h.id);if(Object.prototype.hasOwnProperty.call(bagClean.config.discardRules,k)){bagCleanSay('已在丢弃名单：'+h.nm+' #'+h.id+'（只本地提示：不重复添加、不移除、不改保留数量）');bagCleanChat('已在丢弃名单：'+h.nm+' #'+h.id+'（只本地提示：未做任何改动）');return;}bagClean.config.discardRules[k]=0;changed('已加入丢弃名单：'+h.nm+' #'+h.id);};eh.appendChild(b);});};
     box.querySelector('[data-propick]').onclick=function(){var result=bagCleanProtectionChoices(),q=(box.querySelector('[data-profind]').value||'').trim().toLowerCase(),hits=box.querySelector('[data-prohits]');hits.textContent='';var selected=result.items.filter(function(it){return !q||String(it.id).indexOf(q)>=0||it.name.toLowerCase().indexOf(q)>=0;});if(!selected.length){hits.textContent='没有可读取的匹配物品；请先确认角色和物品栏已加载。'+(result.missing?' 装备栏有 '+result.missing+' 件无法核对编号，已跳过。':'');return;}hits.appendChild(document.createTextNode('点选加入保护名单（不会执行丢弃）：'));selected.forEach(function(it){var b=document.createElement('button');b.className='ghost';b.style.cssText='font-size:12px;margin:2px';b.textContent='['+it.source+'] '+it.name+' #'+it.id;b.onclick=function(){if(bagClean.config.protectedIds.indexOf(it.id)>=0){bagCleanSay('已在保护名单：'+it.name+' #'+it.id);return;}if(bagClean.config.protectedIds.length>=2000){bagCleanSay('保护名单已满，未改动');return;}bagClean.config.protectedIds.push(it.id);changed('已加入永不丢保护：'+it.name+' #'+it.id);b.disabled=true;};hits.appendChild(b);});if(result.missing)hits.appendChild(document.createTextNode('；装备栏 '+result.missing+' 件无法核对编号，已跳过。'));};
     box.querySelector('[data-proadd]').onclick=function(){var id=bagCleanInt(box.querySelector('[data-proid]').value,1,2147483647);if(id===null)return bagCleanSay('请输入有效物品 ID');if(bagClean.config.protectedIds.indexOf(id)<0)bagClean.config.protectedIds.push(id);changed('已加入保护例外：'+(getItemName(id)||'物品')+' #'+id);};
-    box.querySelector('[data-preview]').onclick=function(){var p=bagCleanPreview();if(!p)return;bagCleanConfirm('预览候选',p.lines,'确认本规则集可用于自动丢弃',function(){if(!profileTrusted(activeProfileKey())){bagClean.enabled=false;bagClean.config.armed=false;bagClean.config.enabled=false;bagClean.generation++;bagCleanSave();return bagCleanSay('当前角色未识别（缺少可信入场前记录）：本轮不允许开启自动丢弃，请等角色识别后重新预览确认。');}if(dojoGuardInDojo()&&!dojoGuard.ok){bagClean.enabled=false;bagClean.config.armed=false;bagClean.config.enabled=false;bagClean.generation++;bagCleanSave();return bagCleanSay('已在道场地图内，且没有可信背包保护：拒绝开启自动丢弃。'+dojoGuard.reason);}bagClean.config.armed=true;bagClean.enabled=true;bagClean.config.enabled=true;bagClean.generation++;bagCleanSave();bagCleanSay('预览已确认：自动丢弃已开启（改规则/切档/刷新自动关闭）');if(bagClean.render)bagClean.render();},function(){bagCleanSay('已停止预览确认，未授权。');});};
+  // UNIFIED-PROBE-BEGIN guard-preview ORIGINAL:ICAgIGJveC5xdWVyeVNlbGVjdG9yKCdbZGF0YS1wcmV2aWV3XScpLm9uY2xpY2s9ZnVuY3Rpb24oKXt2YXIgcD1iYWdDbGVhblByZXZpZXcoKTtpZighcClyZXR1cm47YmFnQ2xlYW5Db25maXJtKCfpooTop4jlgJnpgIknLHAubGluZXMsJ+ehruiupOacrOinhOWImembhuWPr+eUqOS6juiHquWKqOS4ouW8gycsZnVuY3Rpb24oKXtpZighcHJvZmlsZVRydXN0ZWQoYWN0aXZlUHJvZmlsZUtleSgpKSl7YmFnQ2xlYW4uZW5hYmxlZD1mYWxzZTtiYWdDbGVhbi5jb25maWcuYXJtZWQ9ZmFsc2U7YmFnQ2xlYW4uY29uZmlnLmVuYWJsZWQ9ZmFsc2U7YmFnQ2xlYW4uZ2VuZXJhdGlvbisrO2JhZ0NsZWFuU2F2ZSgpO3JldHVybiBiYWdDbGVhblNheSgn5b2T5YmN6KeS6Imy5pyq6K+G5Yir77yI57y65bCR5Y+v5L+h5YWl5Zy65YmN6K6w5b2V77yJ77ya5pys6L2u5LiN5YWB6K645byA5ZCv6Ieq5Yqo5Lii5byD77yM6K+3562J6KeS6Imy6K+G5Yir5ZCO6YeN5paw6aKE6KeI56Gu6K6k44CCJyk7fWlmKGRvam9HdWFyZEluRG9qbygpJiYhZG9qb0d1YXJkLm9rKXtiYWdDbGVhbi5lbmFibGVkPWZhbHNlO2JhZ0NsZWFuLmNvbmZpZy5hcm1lZD1mYWxzZTtiYWdDbGVhbi5jb25maWcuZW5hYmxlZD1mYWxzZTtiYWdDbGVhbi5nZW5lcmF0aW9uKys7YmFnQ2xlYW5TYXZlKCk7cmV0dXJuIGJhZ0NsZWFuU2F5KCflt7LlnKjpgZPlnLrlnLDlm77lhoXvvIzkuJTmsqHmnInlj6/kv6Hog4zljIXkv53miqTvvJrmi5Lnu53lvIDlkK/oh6rliqjkuKLlvIPjgIInK2Rvam9HdWFyZC5yZWFzb24pO31iYWdDbGVhbi5jb25maWcuYXJtZWQ9dHJ1ZTtiYWdDbGVhbi5lbmFibGVkPXRydWU7YmFnQ2xlYW4uY29uZmlnLmVuYWJsZWQ9dHJ1ZTtiYWdDbGVhbi5nZW5lcmF0aW9uKys7YmFnQ2xlYW5TYXZlKCk7YmFnQ2xlYW5TYXkoJ+mihOiniOW3suehruiupO+8muiHquWKqOS4ouW8g+W3suW8gOWQr++8iOaUueinhOWImS/liIfmoaMv5Yi35paw6Ieq5Yqo5YWz6Zet77yJJyk7aWYoYmFnQ2xlYW4ucmVuZGVyKWJhZ0NsZWFuLnJlbmRlcigpO30sZnVuY3Rpb24oKXtiYWdDbGVhblNheSgn5bey5YGc5q2i6aKE6KeI56Gu6K6k77yM5pyq5o6I5p2D44CCJyk7fSk7fTs=
+    box.querySelector('[data-preview]').onclick=function(){var p=bagCleanPreview();if(!p)return;bagCleanConfirm('预览候选',p.lines,'确认本规则集可用于自动丢弃',function(){if(!profileTrusted(activeProfileKey())){bagClean.enabled=false;bagClean.config.armed=false;bagClean.config.enabled=false;bagClean.generation++;bagCleanSave();return bagCleanSay('当前角色未识别（缺少可信入场前记录）：本轮不允许开启自动丢弃，请等角色识别后重新预览确认。');}bagClean.config.armed=true;bagClean.enabled=true;bagClean.config.enabled=true;bagClean.generation++;bagCleanSave();bagCleanSay('预览已确认：自动丢弃已开启（改规则/切档/刷新自动关闭）');if(bagClean.render)bagClean.render();},function(){bagCleanSay('已停止预览确认，未授权。');});};
+  // UNIFIED-PROBE-END guard-preview
     box.querySelector('[data-enable]').onchange=function(){var self=this;
       if(!this.checked){bagClean.enabled=false;bagClean.config.enabled=false;bagClean.generation++;bagCleanSave();bagCleanSay('自动丢弃已关闭');return;}
       if(!bagClean.config.armed){this.checked=false;bagClean.enabled=false;var pv=box.querySelector('[data-preview]');if(pv){bagCleanSay('请先预览确认（这是唯一一次确认）');pv.click();}else{bagCleanSay('尚未授权：请先「预览候选」并确认。');}return;}
-      if(dojoGuardInDojo()&&!dojoGuard.ok){this.checked=false;bagClean.enabled=false;bagCleanSay('已在道场地图内，且没有可信背包保护（等待刷新恢复当前背包保护）：拒绝开启自动丢弃。'+dojoGuard.reason);bagCleanChat('拒绝开启自动丢弃：场内缺少入场前背包快照');return;}
+  // UNIFIED-PROBE-BEGIN guard-enable ORIGINAL:ICAgICAgaWYoZG9qb0d1YXJkSW5Eb2pvKCkmJiFkb2pvR3VhcmQub2spe3RoaXMuY2hlY2tlZD1mYWxzZTtiYWdDbGVhbi5lbmFibGVkPWZhbHNlO2JhZ0NsZWFuU2F5KCflt7LlnKjpgZPlnLrlnLDlm77lhoXvvIzkuJTmsqHmnInlj6/kv6Hog4zljIXkv53miqTvvIjnrYnlvoXliLfmlrDmgaLlpI3lvZPliY3og4zljIXkv53miqTvvInvvJrmi5Lnu53lvIDlkK/oh6rliqjkuKLlvIPjgIInK2Rvam9HdWFyZC5yZWFzb24pO2JhZ0NsZWFuQ2hhdCgn5ouS57ud5byA5ZCv6Ieq5Yqo5Lii5byD77ya5Zy65YaF57y65bCR5YWl5Zy65YmN6IOM5YyF5b+r54WnJyk7cmV0dXJuO30=
+  
+  // UNIFIED-PROBE-END guard-enable
       if(!profileTrusted(activeProfileKey())){this.checked=false;bagClean.enabled=false;return bagCleanSay('当前角色未识别（缺少可信入场前记录），本轮不允许开启自动丢弃；请等角色识别后重新预览确认。');}
       bagClean.enabled=true;bagClean.config.enabled=true;bagClean.generation++;bagCleanSave();bagCleanSay('自动丢弃已开启（随时丢弃='+(bagClean.config.anytime===true?'开':'关')+'）');
     };
@@ -17311,7 +17322,9 @@ function createRoItemCapture(env) {
     box.querySelector('[data-file]').onchange=function(){var f=this.files&&this.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(){try{parseAndApply(String(rd.result),f.name||'文件导入');}catch(e){bagCleanSay('导入失败：'+(e.message||'JSON/键/数量/类型不合法'));}};try{rd.readAsText(f,'utf-8');}catch(e2){bagCleanSay('导入失败：文件读取异常');}};
     render();
     // V2.38.2 提速：外层轮询 2000ms → 500ms；每轮最多连丢 4 个不同 index 的堆叠（bagCleanExecute 内部）
-    setInterval(function(){if(!bagClean.config.armed||bagClean.busy)return;if(!profileTrusted(activeProfileKey())){bagCleanDisarm('角色未识别：自动丢弃已停止（识别后需重新预览确认）');return;}if(bagCleanDojoBlocked())return;var w=bagCleanWeight(),free=bagCleanFreeSlots();if(bagCleanNeeded(w,free)){bagClean.pending=true;bagCleanExecute(function(){},null);}},500);
+  // UNIFIED-PROBE-BEGIN guard-poll ORIGINAL:ICAgIHNldEludGVydmFsKGZ1bmN0aW9uKCl7aWYoIWJhZ0NsZWFuLmNvbmZpZy5hcm1lZHx8YmFnQ2xlYW4uYnVzeSlyZXR1cm47aWYoIXByb2ZpbGVUcnVzdGVkKGFjdGl2ZVByb2ZpbGVLZXkoKSkpe2JhZ0NsZWFuRGlzYXJtKCfop5LoibLmnKror4bliKvvvJroh6rliqjkuKLlvIPlt7LlgZzmraLvvIjor4bliKvlkI7pnIDph43mlrDpooTop4jnoa7orqTvvIknKTtyZXR1cm47fWlmKGJhZ0NsZWFuRG9qb0Jsb2NrZWQoKSlyZXR1cm47dmFyIHc9YmFnQ2xlYW5XZWlnaHQoKSxmcmVlPWJhZ0NsZWFuRnJlZVNsb3RzKCk7aWYoYmFnQ2xlYW5OZWVkZWQodyxmcmVlKSl7YmFnQ2xlYW4ucGVuZGluZz10cnVlO2JhZ0NsZWFuRXhlY3V0ZShmdW5jdGlvbigpe30sbnVsbCk7fX0sNTAwKTs=
+    setInterval(function(){if(!bagClean.config.armed||bagClean.busy)return;if(!profileTrusted(activeProfileKey())){bagCleanDisarm('角色未识别：自动丢弃已停止（识别后需重新预览确认）');return;}var w=bagCleanWeight(),free=bagCleanFreeSlots();if(bagCleanNeeded(w,free)){bagClean.pending=true;bagCleanExecute(function(){},null);}},500);
+  // UNIFIED-PROBE-END guard-poll
   }
   // 导入落地（调用方已 validate + normalize）：中文提示含条目数与被跳过的无效条目数
   function bagCleanImportApply(cfg,raw,srcName){
@@ -17345,7 +17358,7 @@ function createRoItemCapture(env) {
     return Object.keys(map).map(function(id){return {itemId:Number(id),keep:map[id]};}).sort(function(a,b){return a.itemId-b.itemId;});
   }
   function dojoPresetProtectReason(id,protIds){
-    if(dojoProtectHit(id))return dojoGuard.restored?'刷新恢复当前背包保护（不是原入场前记录，命中即不丢）':'入场前保护（进入道场前已有，命中即不丢）';
+  
     if((protIds||[]).indexOf(id)>=0)return '类别保护例外（永不丢）';
     var inv=bagCleanInventory()||[],it=null;
     for(var i=0;i<inv.length;i++){if(bagCleanInt(inv[i]&&inv[i].ITID,1,2147483647)===id){it=inv[i];break;}}
@@ -17482,7 +17495,9 @@ function createRoItemCapture(env) {
     lines.push('丢弃黑名单 '+keys.length+' 条'+(cats.length?('；类别规则：'+cats.join('、')):'；无类别规则'));
     keys.forEach(function(k){var id=bagCleanInt(String(k).split(':')[0],1,2147483647);if(id===null)return;var reason=dojoPresetProtectReason(id,prot);lines.push((reason?'[不丢] ':'[可丢] ')+dojoPresetItemName(id)+' '+k+'：保留 '+cfg.discardRules[k]+(reason?('（'+reason+'）'):''));});
     prot.forEach(function(id){lines.push('[保护例外] '+dojoPresetItemName(id)+' #'+id+'：永不丢弃');});
-    lines.push(dojoGuardLines()[0]);
+  // UNIFIED-PROBE-BEGIN guard-enablelines ORIGINAL:ICAgIGxpbmVzLnB1c2goZG9qb0d1YXJkTGluZXMoKVswXSk7
+  
+  // UNIFIED-PROBE-END guard-enablelines
     lines.push('丢弃到地面不可撤销；只有在本窗口点「开启」后才允许后续丢弃。');
     return lines;
   }
@@ -17570,16 +17585,7 @@ function createRoItemCapture(env) {
     }catch(e){}
   }
   bagQuickBind();
-  var dojoGuardRefresh={started:false,eligible:false,who:''};
-  function dojoGuardRefreshTick(){
-    var who=dojoGuardWho();if(!clientReady()||!who||!profileTrusted(activeProfileKey()))return;
-    if(!dojoGuardRefresh.started){dojoGuardRefresh.started=true;dojoGuardRefresh.eligible=dojoGuardInDojo();dojoGuardRefresh.who=who;}
-    if(dojoGuardRefresh.who!==who){dojoGuardRefresh.eligible=false;dojoGuardRefresh.who=who;dojoGuardClear('角色已变化，刷新恢复当前背包保护已作废');return;}
-    if(!dojoGuardRefresh.eligible||!dojoGuardInDojo())return;
-    if(dojoGuard.ok){dojoGuardRefresh.eligible=false;return;}
-    if(dojoGuardCapture(false,true).ok){dojoGuardRefresh.eligible=false;bagCleanDisarm('刷新恢复当前背包保护已建立（不是原入场前记录）；自动丢弃关闭，请重新预览授权。');}
-  }
-  masterTickReg(function(){try{dojoGuardRefreshTick();}catch(e){dojoGuardFail('刷新恢复当前背包保护读取异常：'+String(e&&e.message||e));}});
+
   // ---------------- 拾取页：内挂百分比联动 ----------------
   onId("dsh-lootread", "click", function () {
     try {
@@ -18242,32 +18248,7 @@ function createRoItemCapture(env) {
   });
   // V2.38.57 起：手机版装备栏只读诊断入口。V2.38.60 起改为「点一下就直接发到本机」，
   //   不再要求用户复制粘贴；文本框只作为本机上报失败时的兜底查看手段。
-  onId("dsh-geardiag", "click", function () {
-    try {
-      var txt = gearDiagCollect();
-      var box = $id("dsh-geardiagbox"), ta = $id("dsh-geardiagout");
-      if (box) box.style.display = "block";
-      if (ta) { ta.value = txt; try { ta.focus(); ta.select(); } catch (eS) {} }
-      var reported = false;
-      try { reported = reportDiag("manual", { source: "button" }, function (ok) {
-        var st = $id("dsh-tpmsg2");
-        if (st) st.textContent = "诊断完成" + (ok ? "，本机接收端已确认" : "，本机接收失败；诊断文本保留在下方");
-        var hubStatus = $id("dsh-probe-geardiag-status"); if (hubStatus && st) hubStatus.textContent = st.textContent;
-      }); } catch (eR) {}
-      var brief = "";
-      try {
-        var o = window.__dshGearDiag__;
-        if (o) {
-          var a = o.ammo || {};
-          brief = "｜根=" + (a.how || "无") + (a.connected ? "已挂载" : "未挂载") + " 可信=" + (a.trusted ? 1 : 0) +
-            "｜箭格=" + (a.boxExists ? (a.itemCells != null ? a.itemCells : "?") : "无") +
-            "｜同id=" + ((o.component && o.component.idLikeCount) || 0) +
-            "｜内存箭=" + (o.memAmmo ? (o.memAmmo.has ? "有" : "无") : "?");
-        }
-      } catch (eB) {}
-      $id("dsh-tpmsg2").textContent = "诊断完成" + brief + (reported ? "，等待本机接收确认" : "，本机接收端不可用；诊断文本保留在下方");
-    } catch (e) { $id("dsh-tpmsg2").textContent = "装备诊断异常: " + e.message; }
-  });
+  
   function planRoute(target) {
     try {
       var cur = getMapName();
@@ -18740,11 +18721,9 @@ function createRoItemCapture(env) {
         });
         if (!target) throw new Error("附近没有NPC（先扫描并「走到选中」）");
       }
-      lastTalkNpc = {
-        GID: target.GID,
-        name: target.displayName || target.name || (target.display && target.display.name) || "",
-        pos: (target.position && target.position.length >= 2) ? [target.position[0], target.position[1]] : (selNpc && selNpc.pos ? [selNpc.pos[0], selNpc.pos[1]] : null)
-      };
+      lastTalkNpc = npcObserved(target.GID);
+      var talkScene=npcIdentity();lastTalkNpc.oneId=talkScene.oneId;lastTalkNpc.epoch=talkScene.epoch;lastTalkNpc.map=talkScene.map;
+
       var p = new (czp("CONTACTNPC"))();
       p.NAID = target.GID; p.type = 1;
       CLIENT.NM.sendPacket(p);
@@ -18778,6 +18757,12 @@ function createRoItemCapture(env) {
 
   // ---------------- 菜单侦察（对话采集 · 阶段1） ----------------
   var menuReconGeneration = 0, menuRecon = { NAID: 0, msg: "", items: [], map: "", npcName: "", pos: null, time: 0, generation: 0 };
+  var npcDialogGeneration=0,npcDialog=null;
+  function npcIdentity(){var id=null;try{id=resolveSelfIdentity();}catch(e){}var s={oneId:id&&id.known===true?String(id.oneId||""):"",epoch:typeof identityEpoch==="number"?identityEpoch:null,map:String(getMapName()||"")};if(!s.oneId||!s.map.trim()||!Number.isFinite(s.epoch)){npcDialog=null;menuRecon={NAID:0,msg:"",items:[],map:"",npcName:"",pos:null,time:0,generation:menuReconGeneration};lastTalkNpc=null;apiDojoState=null;if(apiLease){apiLease.selectedNpc=0;apiLease.dialogScene=null;}}return s;}
+  function npcSameScene(row){var s=npcIdentity();return !!(row&&s.oneId&&s.map.trim()&&Number.isFinite(s.epoch)&&row.oneId===s.oneId&&row.epoch===s.epoch&&row.map===s.map);}
+  function npcObserved(naid){var found=null;try{var em=CLIENT.EM||requireDB("Renderer/EntityManager");if(em&&em.forEach)em.forEach(function(e){if(e&&(Number(e.GID)>>>0)===(Number(naid)>>>0)&&(Number(e.objecttype)===6||Number(e.objecttype)===12))found={GID:naid,name:e.displayName||e.name||(e.display&&e.display.name)||"",pos:e.position?[e.position[0],e.position[1]]:null};});}catch(e){}if(!found&&lastTalkNpc&&npcSameScene(lastTalkNpc)&&(Number(lastTalkNpc.GID)>>>0)===(Number(naid)>>>0))found=lastTalkNpc;return found||{GID:naid,name:"",pos:null};}
+  function npcTrack(naid,text){var s=npcIdentity();npcDialog={naid:naid,text:String(text||""),oneId:s.oneId,epoch:s.epoch,map:s.map,generation:++npcDialogGeneration};}
+  function npcNextScript(naid){var p=new (czp("REQ_NEXT_SCRIPT"))();p.NAID=naid;CLIENT.NM.sendPacket(p);}
   var lastTalkNpc = null; // 点「点NPC对话」时记录的目标实体（真实 GID/name/pos，用于菜单反查）
   function decodeMenuMsg(bytes) {
     var end = bytes.length;
@@ -18816,6 +18801,7 @@ function createRoItemCapture(env) {
   var INGEST_URL = "http://127.0.0.1:8974/"; // V2.15.27：PC 网页版直连本机接收服务（ro-collect.cjs 空闲自退随脚本生命周期；旧手机端曾用 Tailscale 域名）
   var collectOnline = null;
   function probeCollect() {
+    return; // No optional second-receiver heartbeat.
     try {
       if (typeof fetch !== "function") return;
       fetch(INGEST_URL).then(function (r) { collectOnline = !!(r && r.ok); renderIngest(); }).catch(function () { collectOnline = false; renderIngest(); });
@@ -18828,6 +18814,7 @@ function createRoItemCapture(env) {
     el.textContent = "采集" + st + " · 上报成功 " + ingestOk + " 条" + (ingestFail ? "，失败 " + ingestFail + " 条" : "");
   }
   function ingest(payload) {
+    return; // Retired optional 8974 transport; unified queue uses existing 8899.
     try {
       if (typeof fetch !== "function") { ingestFail++; renderIngest(); return; }
       DSHCollect.post(INGEST_URL, payload, function (ok) { if (ok) ingestOk++; else ingestFail++; renderIngest(); });
@@ -18837,6 +18824,7 @@ function createRoItemCapture(env) {
   setInterval(function () { try { probeCollect(); } catch (e) {} }, 20000);
   try { probeCollect(); } catch (e) {}
   function pushStep(kind, text, menu, map, npcName, gid, pos) {
+    return; // Retired attributed persistence; unified decoded observer owns NPC evidence.
     var g = (gid != null) ? gid : ((lastTalkNpc && lastTalkNpc.GID != null) ? lastTalkNpc.GID : 0);
     var step = { kind: kind, text: text || "", menu: menu || null, map: map || getMapName(), npcName: npcName || "", gid: g, pos: pos || null, ts: Date.now() };
     reconSteps.push(step);
@@ -18854,62 +18842,43 @@ function createRoItemCapture(env) {
   }
   function onMenuList(bytes) {
     try {
-      if (!bytes || bytes.byteLength < 6) return;
+      if (!bytes || bytes.byteLength < 8) return;
       var dv = new DataView(bytes);
-      if (dv.getUint16(0, true) !== 183) return; // ZC.MENU_LIST（菜单）
-      var NAID = dv.getUint32(2, true);
-      var NAIDs = NAID > 2147483647 ? NAID - 4294967296 : NAID;
-      var msg = decodeMenuMsg(new Uint8Array(bytes, 6, bytes.byteLength - 6));
-      var npcName = "", pos = null;
-      try {
-        if (lastTalkNpc && lastTalkNpc.GID != null) {
-          npcName = lastTalkNpc.name || "";
-          pos = lastTalkNpc.pos;
-          var gid = lastTalkNpc.GID;
-          var gidU = gid < 0 ? gid + 4294967296 : gid;
-          var gidS = gid > 2147483647 ? gid - 4294967296 : gid;
-          var EM = CLIENT.EM || (requireDB("Renderer/EntityManager"));
-          if (EM && EM.forEach) EM.forEach(function (e) {
-            if (e && (e.GID === gid || e.GID === gidU || e.GID === gidS)) {
-              npcName = e.displayName || e.name || (e.display && e.display.name) || npcName;
-              if (e.position) pos = [e.position[0], e.position[1]];
-            }
-          });
-        } else {
-          var EM2 = CLIENT.EM || (requireDB("Renderer/EntityManager"));
-          if (EM2 && EM2.forEach) EM2.forEach(function (e) {
-            if (e && (e.GID == NAID || e.GID == NAIDs)) { npcName = e.displayName || e.name || (e.display && e.display.name) || ""; if (e.position) pos = [e.position[0], e.position[1]]; }
-          });
-        }
-      } catch (e2) {}
+      if (dv.getUint16(0,true)!==183||dv.getUint16(2,true)!==bytes.byteLength) return;
+      var NAID=dv.getUint32(4,true),msg=decodeMenuMsg(new Uint8Array(bytes,8)),seen=npcObserved(NAID);
+      var npcName=seen.name||"",pos=seen.pos;
+
       var items = splitMenu(msg);
-      menuRecon = { NAID: NAID, msg: msg, items: items, map: getMapName(), npcName: npcName, pos: pos, time: Date.now(), generation: ++menuReconGeneration };
+      var menuScene=npcIdentity();
+      menuRecon = { NAID: NAID, msg: msg, items: items, map: menuScene.map, oneId:menuScene.oneId, epoch:menuScene.epoch, npcName: npcName, pos: pos, time: Date.now(), generation: ++menuReconGeneration };
+      npcTrack(NAID,msg);menuRecon.dialogGeneration=npcDialog.generation;
       renderMenuRecon();
-      pushStep("menu", msg, items, menuRecon.map, npcName, (lastTalkNpc && lastTalkNpc.GID != null) ? lastTalkNpc.GID : NAID, pos);
+      pushStep("menu", msg, items, menuRecon.map, npcName, NAID, pos);
+      
     } catch (e) {}
 
   }
   function onSayDialog(bytes) {
     try {
-      if (!bytes || bytes.byteLength < 6) return;
-      var dv = new DataView(bytes);
-      if (dv.getUint16(0, true) !== 180) return; // ZC.SAY_DIALOG（对话正文，任务名/要求在这里）
-      var NAID = dv.getUint32(2, true);
-      var msg = decodeMenuMsg(new Uint8Array(bytes, 6, bytes.byteLength - 6));
+      if (!bytes || bytes.byteLength < 8) return;
+      var dv=new DataView(bytes);
+      if(dv.getUint16(0,true)!==180||dv.getUint16(2,true)!==bytes.byteLength)return;
+      var NAID=dv.getUint32(4,true),msg=decodeMenuMsg(new Uint8Array(bytes,8)),seen=npcObserved(NAID);
       if (!msg) return;
-      var gid = (lastTalkNpc && lastTalkNpc.GID != null) ? lastTalkNpc.GID : NAID;
-      var nm = (lastTalkNpc && lastTalkNpc.name) || "";
-      var ps = (lastTalkNpc && lastTalkNpc.pos) || null;
+      var gid=NAID,nm=seen.name||"",ps=seen.pos;
+      npcTrack(NAID,msg);
+
       // MVP 计时：对话正文含 MVP 日志时自动校准
       console.log('[MVP-DEBUG] onSayDialog called, msg length:', msg ? msg.length : 0);
       if (msg && /MVP.*日志/i.test(msg)) {
         console.log('[MVP-DEBUG] Found MVP log keyword, msg preview:', msg.substring(0, 200));
       }
       mvpReceive(msg);
-      var msgFull = decodeMenuMsgFull(new Uint8Array(bytes, 6, bytes.byteLength - 6)); // 2.15.2 完整多段（含算式段）
+      var msgFull = decodeMenuMsgFull(new Uint8Array(bytes, 8, bytes.byteLength - 8)); // 2.15.2 完整多段（含算式段）
       try { capDiag(bytes, msgFull); } catch (e) {} // 2.15.1-diag 分段诊断
       try { capTrigger(msgFull); } catch (e) {} // V2.14.0 登录验证自动过
       pushStep("dialog", msg, null, getMapName(), nm, gid, ps);
+      
     } catch (e) {}
   }
   // ---------------- V2.14.0 登录验证自动过（中文数字算式 → 填输入框 → 等N秒 → 点下面）----------------
@@ -19099,7 +19068,9 @@ function createRoItemCapture(env) {
   }
   //（onSayDialog 内调用 capTrigger）
   function onCloseDialog() {
+    npcDialog=null;menuRecon={NAID:0,msg:"",items:[],map:"",time:0,generation:++menuReconGeneration};
     try { pushStep("close", "", null, getMapName(), (lastTalkNpc && lastTalkNpc.name) || "", (lastTalkNpc && lastTalkNpc.GID != null) ? lastTalkNpc.GID : 0, null); } catch (e) {}
+    
     reconSteps = [];
   }
   // V2.9.0 任务正文取证：未知 opcode 里含中文的包 → 上报（定位 lastro 自研任务正文包）
@@ -19301,12 +19272,12 @@ function createRoItemCapture(env) {
       blockMcTick();
     } catch (e) {}
   }
-  function dispatchInbound(bytes) {
+  function dispatchInbound(bytes, receiptSource) {
     try {
       if (!bytes || !bytes.byteLength) return;
       // V2.38.4 入站分帧：一条 WebSocket 消息里可能装着多个包。先按运行时长度表逐帧切分，再对每一帧执行下面的 opcode 分派链；
       //   长度表不可用、或首包长度未知时 walkInboundFrames 只回调一次整条消息 —— 与旧实现逐字等价，绝不回归。
-      var walk = walkInboundFrames(bytes, dispatchInboundFrame);
+      var walk = walkInboundFrames(bytes, function (frame, op, off, ok) { dispatchInboundFrame(frame, op, off, ok, receiptSource); });
       if (walk && walk.rest < bytes.byteLength) {
         framePartial++; // 尾部切不出的残包只计数：不做跨消息缓冲（只会漏读，绝不错位串包），下次抓包可见 partial 记录
         if (typeof txCap !== "undefined" && txCap && txCap.on) txCapPushInbound(bytes, -1, walk.rest, true, walk.rest);
@@ -19367,11 +19338,8 @@ function createRoItemCapture(env) {
     try { for (var i = 0; i < len; i++) { var c = dv.getUint8(off + i); if (!c) break; s += String.fromCharCode(c); } } catch (e) {}
     return s;
   }
-  // V2.38.33/V2.38.34：身份换代统一清理口径（换角 / 同角色换图 / 重登 / 新连接共用同一实现）——
-  //   ① 世代 +1（未识别期间缓冲整份作废）；② 内挂采集状态与在途关闭确认按换代真伪分别处理。
-  //   真换代（换角 / 回角色列表 / 新连接）：采集状态与在途确认一起作废。
-  //   换图（同 gid）：只清显示重试类残留，采集状态与在途关闭确认都留着——自动战斗设置是角色级，
-  //     且换图后服务器会再推 2805，等新快照更新即可；这里作废会把刚发起的停战丢掉（第三轮复审 P2）。
+  // Same-role maps preserve reports and in-flight toggles; new login/role invalidates them.
+  // 2805/2806 are optional on this server: absence of a fresh map report does not imply OFF.
   function npIdentityNewSession(why) {
     identityEpoch++;
     try { if (typeof arrowIdentityInvalidate === "function") arrowIdentityInvalidate(why || "identity-reset"); } catch (eA) {}
@@ -19387,6 +19355,7 @@ function createRoItemCapture(env) {
       npIdentityNewSession(why || "identity-reset");
       if (pktCharId > 0) identityLogLine("pkt-clear why=" + why + " was=" + pktCharId);
       pktCharId = 0; pktCharIdAt = 0; pktCharIdMap = ""; pktCharIdSrc = "";
+      npServerAutoAtk.blocked = true;
     } catch (e) {}
   }
   // 113/2757：GID(uint32@2) 就是 char_id；mapName[16]@6（诊断）。收到即视为身份到位，提交交由 1s 身份拍（重活不进收包路径）
@@ -19410,16 +19379,25 @@ function createRoItemCapture(env) {
         npIdentityNewSession("char-change");
       }
       pktCharId = gid; pktCharIdAt = Date.now(); pktCharIdMap = mapName; pktCharIdSrc = src;
+      npServerAutoAtk.blocked = false;
       identityLogLine("pkt-charid " + gid + " op=" + src + " map=" + mapName + " ss=" + cg);
     } catch (e) {}
   }
-  function identityPktHook(bytes, op) {
+  function identityPktHook(bytes, op, receiptSource) {
     try {
       if (typeof op !== "number") return;
       var ops = identityPktOps();
       if (!ops) return;
       if (ops.zone[op]) { onZoneNotifyFrame(bytes, op); return; }
       if (ops.charlist[op]) { clearPktIdentity("charlist"); return; }
+      // Only the currently bound game socket can authorize a map-server handoff.
+      if (op === 146 && bytes && bytes.byteLength === 28 && npBattleIdentityValid() && npServerAutoAtk.socket && npSourceValid(receiptSource)) {
+        var dv = new DataView(bytes), ip = [];
+        for (var i = 22; i < 26; i++) ip.push(dv.getUint8(i));
+        npServerAutoAtk.handoff = { socket: npServerAutoAtk.socket, key: resolveSelfIdentity().oneId, epoch: npServerAutoAtk.epoch, at: Date.now(), host: ip.join("."), port: dv.getUint16(26, true) };
+        var ticket = npServerAutoAtk.handoff;
+        setTimeout(function () { if (npServerAutoAtk.handoff === ticket) clearPktIdentity("handoff-timeout"); }, 10000);
+      }
     } catch (e) {} // 单帧解析异常只丢该帧，绝不影响其它包
   }
   // ---------------- V2.38.4 入站分帧：运行时长度表 + 逐帧遍历（一条消息可能含多个包） ----------------
@@ -19553,11 +19531,11 @@ function createRoItemCapture(env) {
     } catch (e) {}
   }
   // V2.38.4 单帧分派：opcode 判定链与 V2.38.2 逐字一致（条件与顺序不变），可被单独一帧调用；异常只吞掉这一帧
-  function dispatchInboundFrame(bytes, op, frameOff, lenTblOk) {
+  function dispatchInboundFrame(bytes, op, frameOff, lenTblOk, receiptSource) {
     try {
       if (typeof op !== "number") { try { op = new DataView(bytes).getUint16(0, true); } catch (e0) { return; } }
-      identityPktHook(bytes, op); // V2.38.6：手机端 char_id 包流来源（113/2757 记录身份、107 清身份）
-      if (op === 142) { npChatFrameCount++; npRawBattleNotice(bytes, op); } // 只记总帧数与到达时间，不读取/记录聊天内容
+      identityPktHook(bytes, op, receiptSource); // V2.38.6：手机端 char_id 包流来源（113/2757 记录身份、107 清身份）
+      if (op === 142) { npChatFrameCount++; npRawBattleNotice(bytes, op, receiptSource); } // 只记总帧数与到达时间，不读取/记录聊天内容
       // V2.38.7：装备整表 / 穿脱确认包流（只读；单帧异常只丢该帧）。
       //   typeof 守卫：局部切片测试环境里这个函数可能不在同一段代码中，缺了就当没有（绝不抛、绝不影响分帧与身份）。
       if (typeof gearPktHook === "function") gearPktHook(bytes, op);
@@ -19652,25 +19630,67 @@ function createRoItemCapture(env) {
       if (btDiagOn) btLog('post-delay', 'ACK3 skid=' + skid + ' delay=' + dly + 'ms');
     } catch (e) {}
   }
-  function onReconInbound(data) {
-    try { if(typeof arrowEquipHookTick === "function")arrowEquipHookTick(); } catch(eEquipBefore) {} // 新 socket 原始监听先于客户端解析，首个装备更新前接入
+  function onReconInbound(data, socket, receiptSource) {
+    try { if(typeof arrowEquipHookTick === "function")arrowEquipHookTick(); } catch(eEquipBefore) {}
     try {
-      if (data instanceof ArrayBuffer) { dispatchInbound(data); return; }
-      if (data && data.buffer instanceof ArrayBuffer) { dispatchInbound(data.buffer); return; }
-      if (typeof Blob !== "undefined" && data instanceof Blob && data.arrayBuffer) { data.arrayBuffer().then(dispatchInbound); }
+      if (!npSourceValid(receiptSource, true)) return;
+      if (data instanceof ArrayBuffer) { dispatchInbound(data, receiptSource); return; }
+      if (ArrayBuffer.isView(data)) { dispatchInbound(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), receiptSource); return; }
+      if (typeof Blob !== "undefined" && data instanceof Blob && data.arrayBuffer) data.arrayBuffer().then(function (bytes) {
+        if (npSourceValid(receiptSource, true)) dispatchInbound(bytes, receiptSource);
+      }).catch(function () {});
     } catch (e) {}
   }
+  function npHookTransport() {
+    var nm = CLIENT.NM;
+    if (!nm || typeof nm.connect !== "function") return;
+    npHookLateTransport(nm); npHookReceiptReaders();
+    var installed = nm.connect.__npTransport;
+    var original = installed && installed.original || nm.connect;
+    if (installed && installed.original) { installed.route = connect; return; }
+    function connect(host, port, callback, isZone) {
+      var s = npServerAutoAtk, h = s.handoff, id = resolveSelfIdentity();
+      var continuous = !!(isZone && h && h.socket === s.socket && h.key === id.oneId && id.known && h.epoch === s.epoch && Date.now() - h.at >= 0 && Date.now() - h.at < 10000 && String(host) === h.host && Number(port) === h.port);
+      if (!continuous) clearPktIdentity("socket-change");
+      else npIdentityNewSession("map-change");
+      s.handoff = null; s.inboundSocket = null; s.socket = null; s.blocked = true;
+      s.generation = (s.generation || 0) + 1;
+      var binding = { zone: !!isZone, generation: s.generation, socket: null };
+      s.connecting = binding;
+      var callArgs = Array.prototype.slice.call(arguments);
+      callArgs[2] = function (success) {
+        if (s.generation === binding.generation) {
+          if (success && this && this.ws) npBindGameSocket(this.ws, binding);
+          if (!success || !binding.socket) clearPktIdentity("connect-unbound-or-failed");
+          else s.blocked = !binding.zone;
+        }
+        if (typeof callback === "function") return callback.apply(this, arguments);
+      };
+      try {
+        var result = original.apply(this, callArgs);
+        if (!binding.socket) clearPktIdentity("connect-unbound");
+        setTimeout(function () { if (s.generation === binding.generation && (!binding.socket || binding.socket.readyState !== 1)) clearPktIdentity("connect-timeout"); }, 10000);
+        return result;
+      } catch (e) { clearPktIdentity("connect-error"); throw e; }
+      finally { s.connecting = null; }
+    }
+    var route = { original: original, route: connect };
+    var routed = function () { return route.route.apply(this, arguments); };
+    routed.__npTransport = route; nm.connect = routed;
+  }
   function hookMenuRecon() {
-    if (window.__dshMenuReconHooked) return;
+    try { npHookTransport(); } catch (eTransport) {}
     try {
       var N = window.WebSocket;
       if (!N) return;
+      function bindCurrent(inst) { var binding = npServerAutoAtk.connecting; if (binding) npBindGameSocket(inst, binding); }
+      if (N.__npCtorBinding) { N.__npCtorBinding = bindCurrent; return; }
       function PW(url, protocols) {
-        try { clearPktIdentity("new-socket"); } catch (eWS) {} // V2.38.6：新连接 = 身份作废（旧 GID 绝不复用）
         var inst = protocols !== undefined ? new N(url, protocols) : new N(url);
-        try { inst.addEventListener("message", function (ev) { onReconInbound(ev.data); }); } catch (e) {}
+        PW.__npCtorBinding(inst);
         return inst;
       }
+      PW.__npCtorBinding = bindCurrent;
       PW.prototype = N.prototype; PW.CONNECTING = N.CONNECTING; PW.OPEN = N.OPEN; PW.CLOSING = N.CLOSING; PW.CLOSED = N.CLOSED;
       window.WebSocket = PW;
       window.__dshMenuReconHooked = true;
@@ -19692,16 +19712,6 @@ function createRoItemCapture(env) {
     var j = buildMenuJson();
     try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(j); } catch (e) {}
     $id("dsh-menu-recon").textContent = "已生成JSON（已尝试复制到剪贴板）:\n" + j;
-  });
-  // V2.32.2 气弹自采集诊断导出（复制 JSON 到剪贴板，粘贴给助手分析气弹来源）
-  onId("dsh-spheredump", "click", function () {
-    try {
-      var _sl = window.__dshSphereLog || [];
-      var txt = JSON.stringify(_sl, null, 1);
-      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt);
-      try { console.log("[SPHERE-DIAG]", txt); } catch (e) {}
-      setStatus("气弹诊断已复制到剪贴板（" + _sl.length + " 条），粘贴发给助手", "ok");
-    } catch (e) { try { setStatus("导出异常: " + e.message, "err"); } catch (e2) {} }
   });
   // V2.32.2 配置导出/导入（本地化方案 B：跨入口/跨机器备份）
   function collectDshConfig() {
@@ -19767,17 +19777,18 @@ function createRoItemCapture(env) {
       if (isNaN(n) || n < 0) { $id("dsh-cleanlog").textContent = "菜单序号无效"; return; }
       var c = new (czp("CHOOSE_MENU"))();
       c.NAID = menuRecon.NAID; c.num = n + 1; // 协议 1 起(官方 _index+1),界面序号 0 起
+      
       CLIENT.NM.sendPacket(c);
-      $id("dsh-cleanlog").textContent = "已发 CHOOSE_MENU：第 " + (n + 1) + " 项" + (menuRecon.items[n] ? "（" + menuRecon.items[n] + "）" : "");
+      $id("dsh-cleanlog").textContent
+ = "已发 CHOOSE_MENU：第 " + (n + 1) + " 项" + (menuRecon.items[n] ? "（" + menuRecon.items[n] + "）" : "");
     } catch (e) { $id("dsh-cleanlog").textContent = "选菜单异常: " + e.message; }
   });
   onId("dsh-menu-next", "click", function () {
     try {
       if (!clientReady()) throw new Error("游戏画面还没准备好");
       if (!menuRecon.NAID) { $id("dsh-cleanlog").textContent = "先捕获菜单（点NPC对话）"; return; }
-      var p = new (czp("REQ_NEXT_SCRIPT"))();
-      p.NAID = menuRecon.NAID;
-      CLIENT.NM.sendPacket(p);
+      // 下一页发包原语由手动按钮与门面共用。
+      npcNextScript(menuRecon.NAID);
       $id("dsh-cleanlog").textContent = "已发 REQ_NEXT_SCRIPT（下一段对话）";
     } catch (e) { $id("dsh-cleanlog").textContent = "下一段异常: " + e.message; }
   });
@@ -19863,10 +19874,11 @@ function createRoItemCapture(env) {
     } catch (e) { return false; }
   }
   function hookSendPacket() {
-    if (txCap.hooked) return true;
     try {
       if (!CLIENT.NM) { try { clientReady(); } catch (e0) {} }
       if (!CLIENT.NM || typeof CLIENT.NM.sendPacket !== "function") return false;
+      if (!txCap.sendObserved) txCap.sendObserved = new WeakSet();
+      if (txCap.sendObserved.has(CLIENT.NM.sendPacket)) return true;
       var orig = CLIENT.NM.sendPacket;
       CLIENT.NM.sendPacket = function (p) {
         if (blockMcDropCheck(p)) { // V2.38.2 第二层：点击其他玩家的摊位/收购店 → 请求在发出前丢弃（服务器不返列表，窗口不会生成）
@@ -19891,8 +19903,11 @@ function createRoItemCapture(env) {
             if (el && Date.now() - txCap.lastLog > 400) { txCap.lastLog = Date.now(); el.textContent = "出站抓包：进行中，已抓 " + txCap.n + " 个包（缓冲 " + txCap.ring.length + "）"; }
           } catch (e) {}
         }
+        
+        
         return orig.apply(this, arguments);
       };
+      txCap.sendObserved.add(CLIENT.NM.sendPacket);
       txCap.hooked = true;
       return true;
     } catch (e) { return false; }
@@ -19916,7 +19931,7 @@ function createRoItemCapture(env) {
   }
   onId("dsh-txcap", "click", function () {
     if (!hookSendPacket()) { $id("dsh-txlog").textContent = "游戏画面还没准备好：请先进游戏，再点「开始抓包」"; return; }
-    txCap.on = true; txCap.ring = []; txCap.n = 0; txCap.drop = 0; // V2.38.3（D2）：开始抓包清零上一轮的拦截计数
+    txCap.on = false; // Arbitrary raw capture is retired: never collect unrelated chat/secrets.
     $id("dsh-txlog").textContent = "出站抓包：已开始（先进图站稳 20 秒，再点停止）";
   });
   onId("dsh-txstop", "click", function () {
@@ -20235,6 +20250,10 @@ function createRoItemCapture(env) {
       "#dsh-tgt-bar,#dsh-party-float{position:fixed;background:transparent;border:none;box-shadow:none;cursor:grab;z-index:2147481500;user-select:none;-webkit-user-select:none;font-family:'Microsoft YaHei','Segoe UI',sans-serif;box-sizing:border-box}" +
       "#dsh-tgt-bar:active,#dsh-party-float:active{cursor:grabbing}" +
       "#dsh-tgt-bar{display:flex;align-items:center;gap:clamp(6px,0.8vw,12px);width:clamp(240px,26vw,380px)}" +
+      "#dsh-tgt-bar .dsh-tgt-close{position:absolute;top:0;right:0;width:24px;height:24px;min-width:0;padding:0;margin:0;border:0;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font:bold 14px/1 'Microsoft YaHei',system-ui,sans-serif;color:#fff;z-index:3;text-shadow:0 1px 2px rgba(0,0,0,.9)}" +
+      "#dsh-tgt-bar .dsh-tgt-close i{position:absolute;inset:5px;border-radius:50%;background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.34)}" +
+      "#dsh-tgt-bar .dsh-tgt-close span{position:relative}" +
+      "#dsh-tgt-bar .dsh-tgt-close:hover i{background:rgba(0,0,0,.55);border-color:rgba(255,255,255,.6)}" +
       ".dsh-mob-portrait{width:clamp(40px,4vw,48px);height:clamp(40px,4vw,48px);flex:0 0 auto;position:relative;background:transparent}" +
       ".dsh-mob-portrait img{width:100%;height:100%;object-fit:contain;display:block;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8))}" +
       ".dsh-mob-portrait .dsh-mob-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(16px,1.8vw,22px);font-weight:bold;color:#fff;text-shadow:0 1px 2px #000,0 0 6px #000}" +
@@ -20441,6 +20460,7 @@ function createRoItemCapture(env) {
     var el = document.createElement("div");
     el.id = "dsh-tgt-bar";
     el.innerHTML =
+      '<button class="dsh-tgt-close" type="button" title="关闭目标状态" aria-label="关闭目标状态"><i></i><span>&#215;</span></button>' +
       '<div class="dsh-mob-portrait"><img id="dsh-tgt-img" alt="" style="display:none"><div class="dsh-mob-fallback" id="dsh-tgt-fb">?</div></div>' +
       '<div class="dsh-tgt-right">' +
       '<div class="dsh-mob-name-row"><span class="dsh-mob-name" id="dsh-tgt-nm2">未锁定</span><span class="dsh-mob-hp" id="dsh-tgt-hp2"></span></div>' +
@@ -20453,6 +20473,13 @@ function createRoItemCapture(env) {
     var img = el.querySelector("#dsh-tgt-img"), fb = el.querySelector("#dsh-tgt-fb");
     img.addEventListener("load", function () { img.style.display = "block"; fb.style.display = "none"; });
     img.addEventListener("error", function () { img.style.display = "none"; fb.style.display = "flex"; });
+    var tgtCloseBtn = el.querySelector(".dsh-tgt-close");
+    if (tgtCloseBtn) tgtCloseBtn.addEventListener("click", function (ev) {
+      try { if (ev.stopPropagation) ev.stopPropagation(); } catch (eS0) {}
+      try { roModSet("tgt", false); } catch (eS1) {}
+      try { renderTgt(); } catch (eS2) {}
+      try { if (roExpOn()) roExpRebuild(); } catch (eS3) {}
+    });
     dshTgtBar = el;
     return el;
   }
@@ -21402,26 +21429,24 @@ function createRoItemCapture(env) {
         // 地图变更检测（功能性，后台保留）：换图 → 自动刷新 拾取页当前地图 + 本图锁定目录 + 地图怪物表
         try {
           if (!CLIENT.MR) CLIENT.MR = requireDB("Renderer/MapRenderer");
+          if (npShutdownDebt && npShutdownDebt.reason === "map-change" && !npShutdownDebt.attempted && npBattleKnown && npBattleIdentityValid() && npBattleTransportReady()) npStopDebtOnReport(npHuntOn);
           var curMap = CLIENT.MR && CLIENT.MR.currentMap ? String(CLIENT.MR.currentMap).split(".")[0] : "";
           if (curMap && curMap !== _lastMapKey) {
+            var mapChanged = !!_lastMapKey;
             _lastMapKey = curMap; zReinMapAt = Date.now(); // V2.38.4+：换图瞬间时间戳（自动上马判据⑦「换图/瞬移短窗口」用）
             if (selfSpiritCount(CLIENT.SS && CLIENT.SS.Entity) === null) selfSpirits = { aid: 0, num: 0, map: "" };
             dshDiag("map-change", { map: curMap, zRunning: zRunning, npHuntOn: npHuntOn });
             tlog("map-changed " + curMap);
-            // 换图自动停止战斗（用户需求）：不读旧面板猜状态，只看服务器推来的采集状态
+            // First observation initializes the key; only an observed A -> B stops battle.
             try {
-              npCalibrate(); // V2.38.33：历史遗留空实现（面板不再被当成服务器状态），不授权任何动作，保留仅为兼容旧调用序
-              if (zRunning) { stopZhu(); }       // 助手运行中 → 完整停止（内含内挂关闭）
-              // V2.38.34：换图必须停服务器侧自动战斗（含纯内挂模式；置零开关关闭时 stopZhu 也不置零，这里是兜底）——
-              //   决策只看服务器报告过的采集状态：已关 → 零发包（already）；在开 → 最多发一次 toggle；未知 → 零发包并如实说没执行。
-              //   采集状态不因换图作废（角色级设置，服务器换图后会再推 2805），所以刚发起的停战确认不会在这里被抹掉。
-              var npMapStop = npHuntStop("map-change", true);
-              if (npMapStop === "already") setStatus("换图：自动战斗已停止（服务器配置报告确认关闭）", "st");
-              else if (npMapStop === "sent") setStatus("换图：已发送停止自动战斗，等待游戏结果", "st");
-              else if (npMapStop === "queued") setStatus("换图：停止自动战斗尚未确认（已发送关闭，等待游戏确认）", "warn");
-              else if (npMapStop === "failed") setStatus("换图：自动战斗停止未执行（开关发送失败，不盲切开关）", "warn");
-              else setStatus("换图：自动战斗停止状态未知（未执行，还没收到游戏发来的内挂状态）", "warn");
-              tlog("map-changed: battle stop result=" + npMapStop);
+              npCalibrate();
+              if (mapChanged) {
+                npStopDebtArm("map-change");
+                var npMapStop = npHuntStop("map-change", true);
+                npStopDebtResult(npMapStop);
+                if (zRunning) stopZhu(npMapStop);
+                else if (npMapStop !== "already") setStatus("换图已请求停止内挂；关闭未确认，等待游戏回执或手动核实", "warn");
+              }
               // V2.35.2：换图清空瞬移/脱战/卡死残留，避免死后换图继续乱飞
               resetEmergencyEscape(0); escapeBackoffUntil = 0; flyFailCount = 0; flyFailUntil = 0; lastFly = 0;
               zStuckSince = null; zLastPos = null;
@@ -22129,12 +22154,12 @@ function createRoItemCapture(env) {
       if (cnt) cnt.textContent = String(list.length);
       if (!box) return;
       box.innerHTML = "";
-      if (!list.length) { box.innerHTML = '<span class="st">空（粘贴 JSON → 点「导入上面的 JSON」；或用「从文件导入…」／「导入道馆脚本」）</span>'; return; }
+      if (!list.length && !scrUsLoad().length) box.innerHTML = '<span class="st">空（选文件或粘贴 JSON / UserScript 源码后导入）</span>';
       list.forEach(function (it, i) {
         var row = document.createElement("div");
         row.style.cssText = "display:flex;align-items:center;gap:6px;padding:3px 4px;border-bottom:1px solid #eef2f6";
         var nm = document.createElement("span");
-        nm.textContent = (i + 1) + ". " + (it.name || it.templateId || "未命名") + (it.type === "dojo" ? "[道馆]" : "") + " · " + (it.steps ? it.steps.length : 0) + "步" + (it.loop ? "·循环" + it.loop.mode : "") + "·P" + (it.priority != null ? it.priority : 0);
+        nm.textContent = "[JSON] " + (i + 1) + ". " + (it.name || it.templateId || "未命名") + (it.type === "dojo" ? "[道馆]" : "") + " · " + (it.steps ? it.steps.length : 0) + "步" + (it.loop ? "·循环" + it.loop.mode : "") + "·P" + (it.priority != null ? it.priority : 0);
         nm.style.cssText = "flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
         row.appendChild(nm);
         var runB = document.createElement("button");
@@ -22161,9 +22186,10 @@ function createRoItemCapture(env) {
         row.appendChild(delB);
         box.appendChild(row);
       });
+      scrUsRenderList(true);
     } catch (e) {}
   }
-  // V2.36.4：脚本设置弹窗——点「执行」先弹该脚本的设置表单（下拉/勾选/数字），确认后再入队执行
+  // V2.36.4
   function scrEditModal() {
     var m = $id("dsh-scr-modal");
     if (m) return m;
@@ -22626,11 +22652,31 @@ function createRoItemCapture(env) {
     scrLogLine("已入队（第 " + scrQueue.length + " 个待运行 · 串行）");
     scrQueueStart();
   }
+  // V2.38.77.8：导入失败不再把引擎原文抛给用户——先看内容形态，再给中文人话；粘贴与文件两条路共用这一处判断。
+  function scrExplainImportError(raw, err) {
+    var s = String(raw == null ? "" : raw).replace(/^\uFEFF/, "");
+    if (s.indexOf("==UserScript==") >= 0) {
+      return "这是 UserScript 源码，不是 JSON 模板；请使用上方共享导入区，并勾选用户脚本信任确认。";
+    }
+    var head = s.replace(/^\s+/, ""), c = head.charAt(0), pos = "";
+    if (err && err.message) { var m = String(err.message).match(/position\s+(\d+)/i); if (m) pos = "（引擎报第 " + m[1] + " 个字符附近）"; }
+    if (c === "{" || c === "[") {
+      var why = [];
+      if (head.indexOf("//") >= 0 || head.indexOf("/*") >= 0) why.push("里面有注释（JSON 不允许注释）");
+      if (/'/.test(head)) why.push("用了单引号（JSON 只认双引号）");
+      if (/,\s*[}\]]/.test(head)) why.push("多了一个逗号（末尾多逗号）");
+      if (!why.length) why.push("JSON 写法不合法（键名必须双引号、不能有 undefined/NaN、不能少逗号）");
+      return "看着像 JSON，但解析失败" + pos + "。常见原因：" + why.join("；") + "。改完再点一次导入。";
+    }
+    return "既不是 JSON 模板也不是用户脚本：脚本库只吃 JSON 模板（{templateId, steps[]}）。" + pos;
+  }
   function scrImportRaw(name, raw) {
-    var msg = $id("dsh-scr-msg");
-    if (!raw) { if (msg) msg.textContent = "请粘贴 JSON 模板"; return; }
+    var msg = $id("dsh-scr-msg"), text = String(raw == null ? "" : raw).replace(/^\uFEFF/, "").trim();
+    if (text.charAt(0) !== "{" && text.charAt(0) !== "[" && scrUsParseMeta(text).ok) return scrUsImport(name, raw);
+    if (!text) { if (msg) msg.textContent = "请粘贴 JSON 模板或 UserScript 源码"; return false; }
     var obj = null;
-    try { obj = JSON.parse(raw); } catch (e) { if (msg) msg.textContent = "JSON 解析失败: " + e.message; return; }
+    // 解析失败就到此为止：不改任何已存脚本，也绝不把用户脚本源码当成模板存进脚本库。
+    try { obj = JSON.parse(text); } catch (e) { if (msg) msg.textContent = scrExplainImportError(raw, e); return; }
     var items = Array.isArray(obj) ? obj : [obj], list = scrLoad(), ok = 0, err = "";
     items.forEach(function (src, n) {
       var v = scrValidate(src);
@@ -22641,14 +22687,15 @@ function createRoItemCapture(env) {
       ok++;
     });
     if (ok) { scrSave(list); scrRenderList(); }
-    if (msg) msg.textContent = ok ? ("已导入 " + ok + " 个，共 " + list.length + " 个脚本" + (err ? "；" + err : "")) : (err || "没有可导入的脚本");
+    if (msg) msg.textContent = ok ? ("已导入 " + ok + " 个 JSON 模板，共 " + list.length + " 个 JSON 模板" + (err ? "；" + err : "")) : (err || "没有可导入的 JSON 模板");
+    return ok > 0;
   }
   // V2.36.11：脚本只存在浏览器 localStorage，清缓存即丢——支持整表导出为 .json 备份
   function scrExportAll() {
     var msg = $id("dsh-scr-msg");
     try {
       var list = scrLoad();
-      if (!list.length) { if (msg) msg.textContent = "没有可导出的脚本"; return; }
+      if (!list.length) { if (msg) msg.textContent = "没有可备份的 JSON 模板；用户脚本请在各自条目导出为 .user.js"; return; }
       var a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([JSON.stringify(list, null, 2)], { type: "application/json" }));
       a.download = "dsh-scripts-" + new Date().toISOString().slice(0, 10) + ".json";
@@ -22656,35 +22703,395 @@ function createRoItemCapture(env) {
       document.body.appendChild(a);
       a.click();
       setTimeout(function () { try { document.body.removeChild(a); URL.revokeObjectURL(a.href); } catch (e) {} }, 1500);
-      if (msg) msg.textContent = "已导出 " + list.length + " 个脚本：" + a.download;
+      if (msg) msg.textContent = "已备份 " + list.length + " 个 JSON 模板：" + a.download;
     } catch (e) { if (msg) msg.textContent = "导出失败: " + e.message; }
   }
+  // ================= V2.38.77.8 用户脚本容器（自己导入运行）=================
+  // 安全口径（写死在这一层，不给开关）：只跑用户「显式导入 + 手动启用」的脚本；不内置任何脚本；
+  //   绝不自动下载（@require 一条都不取）；不 hook 客户端任何方法、不调用助手自己的游戏发包入口；
+  //   不拦改页面或游戏事件、不新增任何外发端点。脚本能不能做某件事仍由页面自身权限与它自己的
+  //   @match / 页面判据决定（容器不替它绕过页面闸门），也不做脚本之间的权限隔离。
+  // 能力替身（显式提供）：unsafeWindow = window（同页面上下文，本来就是这个 window，等价）；
+  //   GM_xmlhttpRequest / GM.xmlHttpRequest（基于 fetch）；GM_info / GM.info；
+  //   GM_getValue / GM_setValue / GM_deleteValue（含 GM.getValue 等点写法，存 localStorage、按脚本 id 隔离）；
+  //   GM_addStyle / GM.addStyle；GM_log / GM.log。其余接口一律按「不存在」处理（脚本自己会降级），
+  //   导入结果里把「支持的能力 / 不支持的能力」逐条列给用户看。
+  // 已知限制（如实写明，不粉饰）：GM_xmlhttpRequest 没有浏览器扩展特权 —— 没有跨域豁免（照常受 CORS 限制）、
+  //   读不了本机 file:// 文件（一律回 onerror，不假装成功）、cookie 只随同源请求发送，也不支持
+  //   onabort / onprogress / responseType。执行走 new Function（页面必须允许动态执行；被 CSP 挡住时
+  //   明确提示并保持停用），所以用户脚本顶层的 var 不会变成页面全局变量 —— 要挂全局请显式写 window.xxx。
+  var US_KEY = "dsh_userscripts_v1";
+  var US_VAL_PREFIX = "dsh_userval_v1:";
+  // 键名刻意不用 dsh_ro_ 前缀：助手的「导出配置」按该前缀整片收键，用户脚本源码绝不能跟着别人的配置
+  //   备份被带进本机（那等于绕过「每次导入都要勾选」的确认）；与既有脚本库键 dsh_scripts 同一种做法。
+  var US_CAPS = { none: 1, unsafeWindow: 1, GM_xmlhttpRequest: 1, "GM.xmlHttpRequest": 1, GM_info: 1, "GM.info": 1,
+    GM_getValue: 1, GM_setValue: 1, GM_deleteValue: 1, "GM.getValue": 1, "GM.setValue": 1, "GM.deleteValue": 1,
+    GM_addStyle: 1, "GM.addStyle": 1, GM_log: 1, "GM.log": 1 };
+  var US_UNSUPPORTED_NAMES = ["GM_registerMenuCommand", "GM_unregisterMenuCommand", "GM_notification", "GM_openInTab",
+    "GM_setClipboard", "GM_download", "GM_addElement", "GM_webRequest", "GM_cookie", "GM_getResourceText", "GM_getResourceURL"];
+  function scrUsLoad() { try { var a = JSON.parse(localStorage.getItem(US_KEY) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function scrUsSave(a) { try { localStorage.setItem(US_KEY, JSON.stringify(a)); return true; } catch (e) { return false; } }
+  function scrUsPad(n) { return (n < 10 ? "0" : "") + n; }
+  function scrUsTime(t) { var d = new Date(Number(t) || 0); return d.getFullYear() + "-" + scrUsPad(d.getMonth() + 1) + "-" + scrUsPad(d.getDate()) + " " + scrUsPad(d.getHours()) + ":" + scrUsPad(d.getMinutes()); }
+  function scrUsFileName(n) { return String(n == null ? "" : n).replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, " ").trim().slice(0, 80) || "userscript"; }
+  function scrUsSlug(n) { return (String(n == null ? "" : n).replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "userscript").slice(0, 60); }
+  // 只吃 // ==UserScript== 之后连续的行注释（结束标记 // ==/UserScript== 可有可无）；不猜、不联网。
+  function scrUsHeaderText(src) {
+    var s = String(src == null ? "" : src).replace(/^\uFEFF/, ""), at = s.indexOf("// ==UserScript=="), out = "", lines, i, t;
+    if (at < 0) return "";
+    lines = s.slice(at).split(/\r?\n/);
+    for (i = 0; i < lines.length && i < 200; i++) {
+      t = lines[i].replace(/^\s+/, "");
+      if (i > 0 && t.indexOf("//") !== 0) break;
+      out += lines[i] + "\n";
+      if (i > 0 && t.indexOf("// ==/UserScript==") === 0) break;
+    }
+    return out;
+  }
+  // 头缺失才算失败；@grant 不是 none 一律照收（能不能提供由 US_CAPS 决定，缺的按「不存在」处理）。
+  function scrUsParseMeta(src) {
+    var s = String(src == null ? "" : src).replace(/^\uFEFF/, "");
+    if (s.indexOf("==UserScript==") < 0) return { ok: false, why: "no-header" };
+    var head = scrUsHeaderText(s), meta = { name: "", namespace: "", version: "", description: "", match: [], grant: [], require: [], resource: [], runAt: "" };
+    head.split("\n").forEach(function (line) {
+      var k = line.match(/^\s*\/\/\s*@([A-Za-z][\w-]*)\s*(.*)$/);
+      if (!k) return;
+      var key = k[1], val = String(k[2] || "").trim();
+      if (!val) return;
+      if (key === "name") meta.name = val;
+      else if (key === "namespace") meta.namespace = val;
+      else if (key === "version") meta.version = val;
+      else if (key === "description") meta.description = val;
+      else if (key === "match" || key === "include") meta.match.push(val);
+      else if (key === "grant") meta.grant.push(val);
+      else if (key === "require") meta.require.push(val);
+      else if (key === "resource") meta.resource.push(val);
+      else if (key === "run-at") meta.runAt = val;
+    });
+    return { ok: true, meta: meta, header: head };
+  }
+  function scrUsCaps(it) {
+    var sup = [], unsup = [], declared = [], grants = (it && it.grant && it.grant.length) ? it.grant : ["none"], i, k;
+    for (i = 0; i < grants.length; i++) {
+      k = String(grants[i] == null ? "" : grants[i]).trim();
+      if (!k) continue;
+      if (US_CAPS[k]) { if (sup.indexOf(k) < 0) sup.push(k); }
+      else if (declared.indexOf(k) < 0) declared.push(k);
+    }
+    if (!sup.length) sup.push("none（脚本没声明 GM 接口，直接跑）");
+    sup.push("内置替身（没声明也照样可用）：unsafeWindow、GM_xmlhttpRequest / GM.xmlHttpRequest、GM_info、GM_getValue / GM_setValue / GM_deleteValue、GM_addStyle、GM_log");
+    for (i = 0; i < US_UNSUPPORTED_NAMES.length; i++) unsup.push(US_UNSUPPORTED_NAMES[i]);
+    // 本脚本明确声明、但容器不提供的接口要单独标出来（哪怕它已经在上面那张固定表里）。
+    for (i = 0; i < declared.length; i++) { var di = unsup.indexOf(declared[i]), mark = declared[i] + "（本脚本声明了，但容器不提供）"; if (di >= 0) unsup[di] = mark; else unsup.push(mark); }
+    if (it && it.require && it.require.length) unsup.push("@require 自动下载 " + it.require.length + " 条（容器绝不自动下载，脚本可能因此跑不起来）");
+    return { sup: sup, unsup: unsup };
+  }
+  function scrUsCapsText(it) {
+    var c = scrUsCaps(it);
+    return "支持：" + c.sup.join("；") + "。不支持（按「不存在」处理，脚本自己会降级）：" + c.unsup.join("、") + "。";
+  }
+  function scrUsAsk(question) {
+    try { return (typeof window !== "undefined" && window && typeof window.confirm === "function") ? window.confirm(question) === true : false; } catch (e) { return false; }
+  }
+  function scrUsExplainReject(why) {
+    if (why === "empty") return "请先粘贴用户脚本源码，或用「选择文件…」选一份 .user.js（要带 // ==UserScript== 头）。";
+    if (why === "consent") return "请先勾选上面那句确认（用户脚本会以当前页面权限运行、能联网；只导入你信任的脚本）。";
+    if (why === "no-header") return "这不是用户脚本：找不到 // ==UserScript== 头。用户脚本开头要有 // ==UserScript== … // @name … 的注释头；如果这是 JSON 模板，请放进上面的输入框。";
+    return "导入失败：" + String(why || "未知原因");
+  }
+  function scrUsRenderList(append) {
+    if (!append) { scrRenderList(); return; }
+    var host = $id("dsh-scr-list"), cnt = $id("dsh-scr-count");
+    if (!host) return;
+    var list = scrUsLoad();
+    if (cnt) cnt.textContent = String(scrLoad().length + list.length);
+
+    list.forEach(function (it, i) {
+      if (!it) return;
+      var row = document.createElement("div"), caps = scrUsCaps(it);
+      row.className = "row";
+      row.style.margin = "2px 0";
+      var info = document.createElement("span");
+      info.className = "st";
+      info.style.flex = "1 1 auto";
+      info.style.fontSize = "10px";
+      info.textContent = "[UserScript] " + it.name + (it.version ? " v" + it.version : "") + " · " + scrUsTime(it.importedAt) + " · " + (it.enabled === true ? "已启用" : "停用");
+      info.title = "支持：" + caps.sup.join("；") + "\n不支持：" + caps.unsup.join("、");
+      row.appendChild(info);
+      row.appendChild(scrUsBtn(it.enabled === true ? "停用" : "启用", function () { scrUsToggle(i); }));
+      Object.keys(apiScriptWindows).forEach(function(id){var win=apiScriptWindows[id];if(win.sourceId===it.id)row.appendChild(scrUsBtn("打开设置 · "+win.title,function(){var r=apiOpenWindow(id),msg=$id("dsh-scr-msg");if(msg)msg.textContent=r.ok?"已打开「"+win.title+"」设置（不会重复执行脚本）":"打开设置失败："+r.error;}));});
+      row.appendChild(scrUsBtn("删除", function () { scrUsDelete(i); }));
+      row.appendChild(scrUsBtn("导出为 .user.js", function () { scrUsExportOne(i); }));
+      row.appendChild(scrUsBtn("复制源码", function () { scrUsCopy(i); }));
+      host.appendChild(row);
+    });
+    Object.keys(apiScriptWindows).forEach(function(id){var win=apiScriptWindows[id];if(!win.sourceId)host.appendChild(scrUsBtn("打开已注册设置 · "+win.title,function(){var r=apiOpenWindow(id),msg=$id("dsh-scr-msg");if(msg)msg.textContent=r.ok?"已打开「"+win.title+"」设置":"打开设置失败："+r.error;}));});
+  }
+  function scrUsBtn(label, fn) {
+    var b = document.createElement("button");
+    b.className = "ghost";
+    b.style.flex = "0 0 auto";
+    b.textContent = label;
+    b.onclick = fn;
+    return b;
+  }
+  function scrUsValKey(it, key) { return US_VAL_PREFIX + String(it && it.id ? it.id : "unknown") + ":" + String(key); }
+  function scrUsGetValue(it) { return function (key, def) { try { var raw = localStorage.getItem(scrUsValKey(it, key)); return (raw === null) ? def : JSON.parse(raw); } catch (e) { return def; } }; }
+  function scrUsSetValue(it) { return function (key, val) { try { localStorage.setItem(scrUsValKey(it, key), JSON.stringify(val === undefined ? null : val)); return true; } catch (e) { return false; } }; }
+  function scrUsDelValue(it) { return function (key) { try { localStorage.removeItem(scrUsValKey(it, key)); } catch (e) {} }; }
+  function scrUsAddStyle(css) {
+    try {
+      var st = document.createElement("style");
+      st.setAttribute("data-dsh-userscript", "1");
+      st.textContent = String(css == null ? "" : css);
+      (document.head || document.documentElement || document.body).appendChild(st);
+      return st;
+    } catch (e) { return null; }
+  }
+  function scrUsLog(it) {
+    return function () {
+      try { console.log.apply(console, ["[用户脚本 " + ((it && it.name) || "") + "]"].concat(Array.prototype.slice.call(arguments))); } catch (e) {}
+    };
+  }
+  function scrUsInfo(it) {
+    return { script: { name: (it && it.name) || "", namespace: (it && it.namespace) || "", version: (it && it.version) || "",
+        description: (it && it.description) || "", matches: ((it && it.match) || []).slice(), grants: ((it && it.grant) || []).slice(), runAt: "document-idle" },
+      scriptHandler: "DSH RO 助手 · 用户脚本容器", version: (typeof VER === "string" ? VER : ""), scriptMetaStr: ((it && it.header) || "") };
+  }
+  function scrUsXhrBody(status, statusText, responseText, responseHeaders, error) {
+    var b = { readyState: 4, status: status, statusText: statusText, responseText: responseText, responseHeaders: responseHeaders, response: responseText };
+    if (error) b.error = error;
+    return b;
+  }
+  // GM_xmlhttpRequest：基于 fetch 的替身。file:// 一律 onerror（浏览器安全限制，如实回绝，不假装成功）。
+  function scrUsXhr(it) {
+    return function (details) {
+      var d = (details && typeof details === "object") ? details : {}, st = { done: false, ctrl: null, timer: null };
+      function fire(name, body) { var f = d[name]; if (typeof f !== "function") return; try { f(body); } catch (e) { try { console.error("[用户脚本 " + ((it && it.name) || "") + "] " + name + " 回调抛错：", e); } catch (e2) {} } }
+      function abort() { if (st.done) return; st.done = true; if (st.timer) { clearTimeout(st.timer); st.timer = null; } if (st.ctrl) { try { st.ctrl.abort(); } catch (e) {} } }
+      var url = String(d.url == null ? "" : d.url), method = String(d.method || "GET").toUpperCase();
+      if (!url) { setTimeout(function () { if (st.done) return; st.done = true; fire("onerror", scrUsXhrBody(0, "", "", "", "缺少 url")); }, 0); return { abort: abort }; }
+      if (/^\s*(file|filesystem):/i.test(url)) {
+        setTimeout(function () { if (st.done) return; st.done = true; fire("onerror", scrUsXhrBody(0, "", "", "", "浏览器安全限制：网页脚本不允许读取本机 file:// 文件，容器如实回绝，不假装成功")); }, 0);
+        return { abort: abort };
+      }
+      if (typeof fetch !== "function") { setTimeout(function () { if (st.done) return; st.done = true; fire("onerror", scrUsXhrBody(0, "", "", "", "本页没有 fetch，GM_xmlhttpRequest 不可用")); }, 0); return { abort: abort }; }
+      var opts = { method: method, headers: (d.headers && typeof d.headers === "object") ? d.headers : {} };
+      try { if (typeof AbortController === "function") { st.ctrl = new AbortController(); opts.signal = st.ctrl.signal; } } catch (eA) { st.ctrl = null; }
+      if (d.data != null && method !== "GET" && method !== "HEAD") opts.body = d.data;
+      var to = Number(d.timeout || 0);
+      if (to > 0) st.timer = setTimeout(function () { if (st.done) return; st.done = true; if (st.ctrl) { try { st.ctrl.abort(); } catch (e) {} } fire("ontimeout", scrUsXhrBody(0, "", "", "", "超时（" + to + " 毫秒）")); }, to);
+      fetch(url, opts).then(function (res) {
+        return res.text().then(function (text) {
+          if (st.done) return;
+          st.done = true; if (st.timer) { clearTimeout(st.timer); st.timer = null; }
+          var hs = "";
+          try { res.headers.forEach(function (v, k) { hs += k + ": " + v + "\r\n"; }); } catch (eH) {}
+          var body = scrUsXhrBody(res.status, res.statusText || "", text, hs, "");
+          if (res.url) body.finalUrl = res.url;
+          fire("onload", body);
+        });
+      }).catch(function (e) {
+        if (st.done) return;
+        st.done = true; if (st.timer) { clearTimeout(st.timer); st.timer = null; }
+        var m = (e && e.message) ? e.message : String(e);
+        fire("onerror", scrUsXhrBody(0, "", "", "", "请求失败：" + m + "（容器没有浏览器扩展特权：跨域照常受 CORS 限制，也读不了本机文件）"));
+      });
+      return { abort: abort };
+    };
+  }
+  // 执行前的动态执行探测：被 CSP 挡住时 new Function 直接抛，这里如实返回 false。
+  function scrUsCanEval() { try { return (new Function("return 1"))() === 1; } catch (e) { return false; } }
+  var scrUsExecuted=Object.create(null),scrUsExecutingId="",apiScriptWindows=Object.create(null);
+  function scrUsRun(it) {
+    var id=String(it&&it.id||""),previous=scrUsExecutingId;
+    if(!id)return {ok:false,error:"missing-script-id"};
+    if(scrUsExecuted[id])return {ok:true,refreshRequired:true};
+    try {
+      var src = String((it && it.source) || ""), w = (typeof window !== "undefined" ? window : null);
+      var names = ["unsafeWindow", "GM_xmlhttpRequest", "GM_info", "GM_getValue", "GM_setValue", "GM_deleteValue", "GM_addStyle", "GM_log"];
+      var f = new Function(names.join(","), src + "\n//# sourceURL=dsh-us-" + scrUsSlug(it && it.name) + ".user.js");
+      // call(w, …) 让脚本顶层 this === window（与页面上下文一致）；unsafeWindow 直接就是同一个 window。
+      scrUsExecuted[id]=true;scrUsExecutingId=id;
+      f.call(w, w, scrUsXhr(it), scrUsInfo(it), scrUsGetValue(it), scrUsSetValue(it), scrUsDelValue(it), scrUsAddStyle, scrUsLog(it));
+      return { ok: true };
+    } catch (e) { return { ok: false, error: (e && e.message) ? String(e.message) : String(e) }; }
+    finally {scrUsExecutingId=previous;}
+  }
+  function scrUsToggle(i) {
+  // CLEANUP-RELEASE-BEGIN shared-msg-20 ORIGINAL:ICAgIHZhciBtc2cgPSAkaWQoImRzaC11cy1tc2ciKSwgbGlzdCA9IHNjclVzTG9hZCgpLCBpdCA9IGxpc3RbaV07
+    var msg = $id("dsh-scr-msg"), list = scrUsLoad(), it = list[i];
+  // CLEANUP-RELEASE-END shared-msg-20
+    if (!it) return;
+    if (it.enabled === true) {
+      it.enabled = false;
+      if(!scrUsSave(list)){if(msg)msg.textContent="停用失败：本机存储未写入，已存启用状态未变；本页实例仍运行。";return;}scrUsRenderList();
+      if (msg) msg.textContent = "已停用「" + it.name + "」：刷新页面后不再自动运行。已经跑起来的脚本无法真正卸载（它注册的定时器 / 监听会留到刷新为止），停用只是让它下次不跑。";
+      return;
+    }
+    if (!scrUsCanEval()) {
+      if (msg) msg.textContent = "本页不支持内置运行（浏览器内容安全策略禁止动态执行），请单独安装这份脚本。已保持停用（没有改动它的启用状态）。";
+      return;
+    }
+    it.enabled = true;
+    if(!scrUsSave(list)){if(msg)msg.textContent="启用失败：本机存储未写入，没有运行，也不会安排刷新重跑。";return;}
+    var r = scrUsRun(it);scrUsRenderList();
+    if (msg) msg.textContent = r.refreshRequired ? ("已保存启用「"+it.name+"」；本页已经执行过该脚本，刷新页面才会重新启用（本页未重跑）。") : r.ok ? ("已启用「" + it.name + "」并在本页跑了一次；刷新页面后会自动再跑一次。") : ("已保存启用，但这次运行报错：" + r.error + "（刷新页面后会重试；本页不重复运行）");
+  }
+  function scrUsDelete(i) {
+  // CLEANUP-RELEASE-BEGIN shared-msg-20 ORIGINAL:ICAgIHZhciBtc2cgPSAkaWQoImRzaC11cy1tc2ciKSwgbGlzdCA9IHNjclVzTG9hZCgpLCBpdCA9IGxpc3RbaV07
+    var msg = $id("dsh-scr-msg"), list = scrUsLoad(), it = list[i];
+  // CLEANUP-RELEASE-END shared-msg-20
+    if (!it) return;
+    list.splice(i, 1);
+    if(!scrUsSave(list)){if(msg)msg.textContent="删除失败：本机存储未写入，已存脚本未删除。";return;}scrUsRenderList();
+    if (msg) msg.textContent = "已删除「" + it.name + "」。已经跑起来的脚本无法真正卸载，刷新页面才会停；它用 GM_setValue 存的值保留。";
+  }
+  function scrUsClearAll() {
+    var msg = $id("dsh-scr-msg"), list = scrUsLoad();
+    if (!list.length) { if (msg) msg.textContent = "没有可清空的用户脚本"; return; }
+    if (!scrUsAsk("确定清空全部 " + list.length + " 个用户脚本？\n\n已导出的 .user.js 文件不受影响；脚本自己用 GM_setValue 存的值会保留（不删）。\n已经跑起来的脚本无法真正卸载，刷新页面才会停。")) { if (msg) msg.textContent = "已取消（没有清空）"; return; }
+    if(!scrUsSave([])){if(msg)msg.textContent="清空失败：本机存储未写入，已存脚本未删除。";return;}scrUsRenderList();
+    if (msg) msg.textContent = "已清空全部用户脚本（" + list.length + " 个）";
+  }
+  function scrUsExportOne(i) {
+  // CLEANUP-RELEASE-BEGIN shared-msg-22 ORIGINAL:ICAgIHZhciBtc2cgPSAkaWQoImRzaC11cy1tc2ciKSwgaXQgPSBzY3JVc0xvYWQoKVtpXTs=
+    var msg = $id("dsh-scr-msg"), it = scrUsLoad()[i];
+  // CLEANUP-RELEASE-END shared-msg-22
+    if (!it) return;
+    try {
+      var name = scrUsFileName(it.name) + ".user.js";
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([String(it.source == null ? "" : it.source)], { type: "text/javascript" }));
+      a.download = name;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { try { document.body.removeChild(a); URL.revokeObjectURL(a.href); } catch (e) {} }, 1500);
+      if (msg) msg.textContent = "已导出 " + name + "（内容与导入的一字不差）";
+    } catch (e) { if (msg) msg.textContent = "导出失败: " + ((e && e.message) || e); }
+  }
+  function scrUsCopy(i) {
+  // CLEANUP-RELEASE-BEGIN shared-msg-22 ORIGINAL:ICAgIHZhciBtc2cgPSAkaWQoImRzaC11cy1tc2ciKSwgaXQgPSBzY3JVc0xvYWQoKVtpXTs=
+    var msg = $id("dsh-scr-msg"), it = scrUsLoad()[i];
+  // CLEANUP-RELEASE-END shared-msg-22
+    if (!it) return;
+    var src = String(it.source == null ? "" : it.source);
+    function fallback() {
+      try {
+        var ta = document.createElement("textarea");
+        ta.value = src;
+        ta.style.position = "fixed"; ta.style.left = "-9999px";
+        (document.body || document.documentElement).appendChild(ta);
+        ta.select();
+        var ok = false;
+        try { ok = document.execCommand("copy") === true; } catch (e1) { ok = false; }
+        try { (document.body || document.documentElement).removeChild(ta); } catch (e2) {}
+        if (msg) msg.textContent = ok ? ("已复制「" + it.name + "」的源码（" + src.length + " 字符）") : "复制失败：浏览器不允许自动复制，请点「导出为 .user.js」再打开文件";
+      } catch (e3) { if (msg) msg.textContent = "复制失败: " + ((e3 && e3.message) || e3); }
+    }
+    try {
+      if (typeof navigator !== "undefined" && navigator && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        navigator.clipboard.writeText(src).then(function () { if (msg) msg.textContent = "已复制「" + it.name + "」的源码（" + src.length + " 字符）"; }, fallback);
+        return;
+      }
+    } catch (e0) {}
+    fallback();
+  }
+  function scrUsImport(name, raw) {
+    var msg = $id("dsh-scr-msg"), src = String(raw == null ? "" : raw);
+    if (!src.trim()) { if (msg) msg.textContent = scrUsExplainReject("empty"); return false; }
+    var box = $id("dsh-us-confirm");
+    if (!box || box.checked !== true) { if (msg) msg.textContent = scrUsExplainReject("consent"); return false; }
+    box.checked = false;
+    var p = scrUsParseMeta(src);
+    if (!p.ok) { if (msg) msg.textContent = scrUsExplainReject(p.why); return false; }
+    var meta = p.meta;
+    var nm = String(meta.name || name || "").replace(/\.user\.js$/i, "").replace(/\.js$/i, "").trim() || "未命名用户脚本";
+    var ns = String(meta.namespace || ""), list = scrUsLoad(), dup = -1, i;
+    for (i = 0; i < list.length; i++) if (list[i] && list[i].name === nm && String(list[i].namespace || "") === ns) { dup = i; break; }
+    var now = Date.now();
+    var base = { name: nm, namespace: ns, version: String(meta.version || ""), description: String(meta.description || ""),
+      match: meta.match.slice(), grant: meta.grant.slice(), require: meta.require.slice(), header: p.header, source: src, importedAt: now };
+    var entry = null, how = "";
+    if (dup >= 0) {
+      if (scrUsAsk("已经有一个同名的用户脚本：\n\n" + nm + (ns ? "（" + ns + "）" : "（没有 @namespace，按空命名空间算）") + "\n\n确定 = 覆盖更新（用这份替换已存的那份，并保留它当前的启用 / 停用状态）\n取消 = 并存（两份都在，新这份名字后面加序号）")) {
+        entry = base; entry.id = list[dup].id || ("us" + now); entry.enabled = list[dup].enabled === true;
+        list[dup] = entry; how = "已覆盖更新";
+      } else {
+        var n = 2;
+        while (n < 1000) { var clash = false; for (i = 0; i < list.length; i++) if (list[i] && list[i].name === nm + " (" + n + ")") { clash = true; break; } if (!clash) break; n++; }
+        entry = base; entry.name = nm + " (" + n + ")"; entry.id = "us" + now + Math.floor(Math.random() * 1000000).toString(36); entry.enabled = false;
+        list.push(entry); how = "已并存（新那份叫「" + entry.name + "」）";
+      }
+    } else {
+      entry = base; entry.id = "us" + now + Math.floor(Math.random() * 1000000).toString(36); entry.enabled = false;
+      list.push(entry); how = "已导入";
+    }
+    if (!scrUsSave(list)) { if (msg) msg.textContent = "导入失败：本机存储写不进去（可能已满或被浏览器禁用），没有改动已存脚本。"; return false; }
+    scrUsRenderList();
+    var tail = "";
+    if (entry.enabled === true) tail="（保留启用状态；覆盖更新需刷新页面才生效，本页未重跑）";
+    if (msg) msg.textContent = how + "「" + entry.name + (entry.version ? " v" + entry.version : "") + "」（默认停用，点「启用」才会跑）" + tail + "。" + scrUsCapsText(entry);
+    return true;
+  }
+  function scrUsAutostart() {
+    var list = scrUsLoad(), i, on = 0, fail = 0;
+    for (i = 0; i < list.length; i++) if (list[i] && list[i].enabled === true) on++;
+    if (!on) return;
+    if (!scrUsCanEval()) {
+      try { console.warn("[用户脚本] 本页内容安全策略禁止动态执行，已启用的 " + on + " 个用户脚本本次没有运行（没有改动它们的启用状态）；请单独安装这些脚本。"); } catch (e0) {}
+      return;
+    }
+    for (i = 0; i < list.length; i++) {
+      if (!list[i] || list[i].enabled !== true) continue;
+      var r = scrUsRun(list[i]);
+      if (!r.ok) { fail++; try { console.warn("[用户脚本] 「" + list[i].name + "」运行失败：" + r.error); } catch (e1) {} }
+    }
+    try { console.log("[用户脚本] 刷新后自动运行 " + on + " 个已启用脚本，失败 " + fail + " 个。"); } catch (e2) {}
+  }
+  // 门面就绪之后才跑；DOM 还没解析完就等 DOMContentLoaded，避免脚本读到半个页面。
+  function scrUsBootAutostart() {
+    try {
+      if (typeof document !== "undefined" && document && document.readyState === "loading" && typeof document.addEventListener === "function") {
+        document.addEventListener("DOMContentLoaded", function () { setTimeout(function () { try { scrUsAutostart(); } catch (e) {} }, 0); }, { once: true });
+        return;
+      }
+    } catch (e0) {}
+    setTimeout(function () { try { scrUsAutostart(); } catch (e1) {} }, 0);
+  }
+  function scrUsWire() {
+    scrUsRenderList();
+  }
+  // ================= 用户脚本容器 END（下面接着原有的 JSON 模板脚本执行）=================
   function scrEnsureHost() {
     var h = $id("dsh-fw-scr");
     if (h) { scrRenderList(); return h; }
     var dock = $id("dsh-scr-dock");
     if (!dock) { dock = document.createElement("div"); dock.id = "dsh-scr-dock"; dock.style.display = "none"; document.documentElement.appendChild(dock); }
     h = document.createElement("div"); h.id = "dsh-fw-scr";
-    h.innerHTML = '<div class="sec">脚本执行（导入 JSON 模板 · 串行按优先级）</div>'
+    h.innerHTML = '<div class="sec">脚本执行 · 导入 JSON / UserScript</div>'
       + '<div class="row"><span class="lb" style="min-width:42px">脚本名</span><input id="dsh-scr-name" type="text" placeholder="如：日常流程" style="flex:1 1 90px"></div>'
-      + '<textarea id="dsh-scr-json" rows="4" placeholder=\'JSON 模板：{"templateId":"daily","version":1,"steps":[{"action":"walk","params":{"x":100,"y":80}}]}\'></textarea>'
-      + '<div class="row"><button id="dsh-scr-imp">导入上面的 JSON</button><button class="ghost" id="dsh-scr-file">从文件导入…</button><span class="st" id="dsh-scr-msg" style="font-size:10px"></span></div>'
-      + '<div class="row"><button class="ghost" id="dsh-scr-clear">清空输入</button><button class="ghost" id="dsh-scr-backup">备份全部脚本到文件</button></div>'
-      + '<input id="dsh-scr-fileinput" type="file" accept=".json,application/json,text/plain" style="display:none">'
+      + '<textarea id="dsh-scr-json" rows="4" placeholder="粘贴 JSON 模板（支持多条）或带 ==UserScript== 头的用户脚本源码"></textarea>'
+      + '<div class="row"><input id="dsh-us-confirm" type="checkbox" style="flex:0 0 auto"><span class="st" style="font-size:10px">我确认：用户脚本会以当前页面权限运行、能联网，只导入你信任的脚本（每次导入都要先勾选）</span></div>'
+      + '<div class="row"><button id="dsh-scr-imp">导入脚本</button><button class="ghost" id="dsh-scr-file">从文件导入…</button><span class="st" id="dsh-scr-msg" style="font-size:10px"></span></div>'
+      + '<div class="row"><button class="ghost" id="dsh-scr-clear">清空输入</button><button class="ghost" id="dsh-scr-backup">备份 JSON 模板到文件</button></div>'
+      + '<input id="dsh-scr-fileinput" type="file" accept=".json,.js,.user.js,.txt,application/json,text/javascript,application/javascript,text/plain" style="display:none">'
       + '<div class="box"><div class="b-hd">已导入脚本 <span class="tag green" id="dsh-scr-count" style="float:right">0</span></div>'
-      + '<div id="dsh-scr-list" style="font-size:11px;max-height:130px;overflow:auto"><span class="st">空（粘贴 JSON → 点「导入上面的 JSON」；或用「从文件导入…」）</span></div></div>'
+      + '<div id="dsh-scr-list" style="font-size:11px;max-height:130px;overflow:auto"><span class="st">空（选文件或粘贴源码 → 导入脚本）</span></div></div>'
+      + '<div class="log" id="dsh-us-hint" style="font-size:10px;max-height:72px;overflow:auto">JSON 模板和用户脚本都在上方导入。JSON 点「执行」；用户脚本导入后默认停用，点「启用」运行，刷新后已启用脚本自动加载。用户脚本能联网，只导入可信源码，读不了本机 file:// 文件；能力详情见各条目信息。备份：JSON 用「备份 JSON 模板到文件」，用户脚本在各自条目「导出为 .user.js」。停用不能撤销已运行的脚本。</div>'
       + '<div class="row"><span class="lb" style="min-width:42px">运行</span><span class="st" id="dsh-scr-state" style="font-size:11px">未运行</span><button class="ghost" id="dsh-scr-stop" style="flex:0 0 auto;color:#b91c1c;border-color:#e5b3b3">停止</button></div>'
       + '<div class="row"><input id="dsh-scr-pptoken" type="password" placeholder="pushplus token（100轮暂停推送）" autocomplete="off" style="flex:1 1 90px"><button class="green" id="dsh-scr-ppsave" style="flex:0 0 auto">保存推送</button></div>'
       + '<label class="switch"><input id="dsh-scr-ppen" type="checkbox">启用推送</label>'
-      + '<div class="log" id="dsh-scr-log" style="font-size:10px;max-height:72px;overflow:auto">动作：teleport/walk/battleOn/battleOff/useItem/stopMove/check/talk/store/loop/ifWeight；顶层可配 priority/order/loop(count|duration|until)；HP&lt;25% 自动停手。导入：粘贴 JSON 点「导入上面的 JSON」，或用「从文件导入…」选 .json（支持一次多条）；脚本只存在本机浏览器，换电脑前先点「备份全部脚本到文件」。</div>';
+      + '<div class="log" id="dsh-scr-log" style="font-size:10px;max-height:72px;overflow:auto">JSON 模板执行日志；HP&lt;25% 自动停手。</div>';
     dock.appendChild(h);
-    $id("dsh-scr-imp").onclick = function () { var v = $id("dsh-scr-json").value; scrImportRaw(($id("dsh-scr-name").value || "").trim(), v); if (v) $id("dsh-scr-json").value = ""; };
+    $id("dsh-scr-imp").onclick = function () { var ta=$id("dsh-scr-json"); if (scrImportRaw(($id("dsh-scr-name").value || "").trim(), ta.value)) ta.value = ""; };
     $id("dsh-scr-file").onclick = function () { var f = $id("dsh-scr-fileinput"); if (f) f.click(); };
     $id("dsh-scr-fileinput").onchange = function () {
       var f = this.files && this.files[0], msg = $id("dsh-scr-msg");
       if (!f) return;
       var rd = new FileReader();
-      rd.onload = function () { scrImportRaw(String(f.name || "").replace(/\.json$/i, ""), String(rd.result || "")); };
+      rd.onload = function () { if (scrImportRaw(String(f.name || "").replace(/\.json$/i, ""), String(rd.result || ""))) $id("dsh-scr-json").value = ""; };
       rd.onerror = function () { if (msg) msg.textContent = "文件读取失败"; };
       try { rd.readAsText(f, "utf-8"); } catch (e) { if (msg) msg.textContent = "文件读取失败: " + e.message; }
       this.value = "";
@@ -22694,6 +23101,7 @@ function createRoItemCapture(env) {
     $id("dsh-scr-stop").onclick = function () { scrQueue = []; scrRun.stop = true; scrRun.running = false; if (scrRun.timer) { clearInterval(scrRun.timer); scrRun.timer = null; } try { stopWalkXY(); } catch (e) {} scrSetState("已停止", "warn"); scrLogLine("手动停止"); };
     $id("dsh-scr-pptoken").value = notifyLoadToken(); $id("dsh-scr-ppen").checked = notifyPushEnabled();
     $id("dsh-scr-ppsave").onclick = function () { notifySaveToken($id("dsh-scr-pptoken").value); $id("dsh-scr-pptoken").value = notifyLoadToken(); };
+    scrUsWire();
     $id("dsh-scr-ppen").onchange = function () { notifySetPushEnabled($id("dsh-scr-ppen").checked); };
     scrRenderList();
     return h;
@@ -22834,9 +23242,11 @@ function createRoItemCapture(env) {
   // V2.36.13：属性箭的元素顺序（元素码 = 下标）。arrowLoad 在 IIFE 初始化时就要用，必须声明在它前面。
   var ARROW_ELEM_ORDER=["火","水","风","地","毒","圣","暗","念","不死","无"];
   function arrowDefaults(){return {enabled:false,defaultItid:null,byMid:{},byElem:{}};}
-  function arrowLoad(){var d=arrowDefaults(),r=null,raw=null;try{if(typeof saved!=="undefined"&&saved&&saved.arrowRules&&typeof saved.arrowRules==="object")r=saved.arrowRules;}catch(e){}if(!r){try{raw=localStorage.getItem(ARROW_RULES_KEY);r=JSON.parse(raw||"null");}catch(e){}}if(!r&&raw==null){try{var oldc=JSON.parse(localStorage.getItem(CHALLENGE_KEY)||"null");if(oldc&&typeof oldc==="object"){r={enabled:oldc.arrowOn===true,defaultItid:oldc.neutralItid,byMid:oldc.bossByMid};localStorage.setItem(ARROW_RULES_KEY,JSON.stringify(r));}}catch(e2){}}if(!r||typeof r!=="object")return d;d.enabled=r.enabled===true;d.byElem={};if(r.byElem&&typeof r.byElem==="object")Object.keys(r.byElem).forEach(function(k){var eit=arrowPos(r.byElem[k]);if(ARROW_ELEM_ORDER.indexOf(String(k))>=0&&eit)d.byElem[String(k)]=eit;});d.defaultItid=arrowPos(r.defaultItid)||arrowPos(r.neutralItid);var legacy=r.byMid&&typeof r.byMid==="object"?r.byMid:(r.bossByMid&&typeof r.bossByMid==="object"?r.bossByMid:null);if(legacy)Object.keys(legacy).forEach(function(k){var mid=arrowPos(k),v=legacy[k],itid=arrowPos(v&&v.itid!=null?v.itid:v);if(mid&&itid)d.byMid[mid]=itid;});return d;}
+  function arrowLoad(){var d=arrowDefaults(),r=null;try{var id=resolveSelfIdentity(),key=activeProfileKey();if(id&&id.known===true&&key===id.oneId&&profileTrusted(key)&&saved&&saved.arrowRules&&typeof saved.arrowRules==="object")r=saved.arrowRules;}catch(e){}if(!r||typeof r!=="object")return d;d.enabled=r.enabled===true;d.byElem={};if(r.byElem&&typeof r.byElem==="object")Object.keys(r.byElem).forEach(function(k){var eit=arrowPos(r.byElem[k]);if(ARROW_ELEM_ORDER.indexOf(String(k))>=0&&eit)d.byElem[String(k)]=eit;});d.defaultItid=arrowPos(r.defaultItid)||arrowPos(r.neutralItid);var legacy=r.byMid&&typeof r.byMid==="object"?r.byMid:(r.bossByMid&&typeof r.bossByMid==="object"?r.bossByMid:null);if(legacy)Object.keys(legacy).forEach(function(k){var mid=arrowPos(k),v=legacy[k],itid=arrowPos(v&&v.itid!=null?v.itid:v);if(mid&&itid)d.byMid[mid]=itid;});return d;}
   var arrowRules=arrowLoad(),arrowTarget=null,arrowPending=null,arrowStatus="未启用",arrowBlocked=false,arrowReady=false;
-  function arrowSave(){try{if(typeof saved==="undefined"||!saved||typeof saveSaved!=="function"||typeof activeProfileKey!=="function"||typeof loadProfiles!=="function")return false;var raw=JSON.stringify(arrowRules),key=activeProfileKey();if(!raw||!key)return false;saved.arrowRules=JSON.parse(raw);saveSaved(saved);var disk=loadProfiles(),p=disk&&disk[key],stored=p&&p.saved&&p.saved.arrowRules;if(JSON.stringify(stored)!==raw)return false;try{localStorage.setItem(ARROW_RULES_KEY,raw);}catch(e0){}return true;}catch(e){return false;}}
+  var arrowProfileStamp="",arrowProfileSaved=null,arrowProfileKey=null,arrowProfileTrusted=false;
+  function arrowSyncProfile(){var id=null,key="",trusted=false,raw="";try{id=resolveSelfIdentity();key=activeProfileKey();trusted=!!(id&&id.known===true&&id.oneId===key&&profileTrusted(key));raw=trusted?JSON.stringify(saved&&saved.arrowRules||null):"";}catch(e){}var stamp=key+"|"+trusted+"|"+raw;if(stamp===arrowProfileStamp&&saved===arrowProfileSaved)return;arrowProfileStamp=stamp;arrowProfileSaved=saved;arrowProfileKey=trusted?key:null;arrowProfileTrusted=trusted;arrowRules=arrowLoad();arrowTarget=null;arrowPending=null;arrowSelfPending=null;arrowSupply=null;arrowReady=false;arrowBlocked=false;try{var en=$id("dsh-arrow-rules-enabled");if(en)en.checked=arrowRules.enabled;var def=$id("dsh-arrow-rules-item");if(def){arrowFill(def);def.value=arrowRules.defaultItid?String(arrowRules.defaultItid):"";}var master=$id("dsh-arrowen");if(master)master.checked=trusted&&arrowManageSaved();arrowRenderCfg();}catch(e2){}}
+  function arrowSave(){try{if(typeof saved==="undefined"||!saved||typeof saveSaved!=="function"||typeof activeProfileKey!=="function"||typeof loadProfiles!=="function")return false;var raw=JSON.stringify(arrowRules),key=activeProfileKey();var id=resolveSelfIdentity();if(!raw||!key||!id||id.known!==true||id.oneId!==key||!profileTrusted(key))return false;saved.arrowRules=JSON.parse(raw);saveSaved(saved);var disk=loadProfiles(),p=disk&&disk[key],stored=p&&p.saved&&p.saved.arrowRules;if(JSON.stringify(stored)!==raw)return false;arrowProfileStamp=key+"|true|"+raw;return true;}catch(e){return false;}}
    function arrowPersistSay(ok,s){arrowSay(ok?s:"保存失败：当前角色档案未确认写入；本次运行仍保留设置。");}
   // V2.38.37-arrow5 配置合并迁移（只做一次，绝不改变用户现有实际行为）：
   //   总开关 = 原「补箭/续箭」开关（#dsh-arrowen 的存档值 saved.ui["dsh-arrowen"]，缺省=开；兼容旧扁平键 saved.arrowEn）
@@ -22921,7 +23331,7 @@ function createRoItemCapture(env) {
   function arrowUseQuiver(itid){var q=arrowQuiverFor(itid);if(!q)return null;var now=Date.now();if(now-(arrowQuiverAt||0)<3000)return {q:q,used:false};var ok=false;try{ok=useItemById(q.itid);}catch(e){ok=false;}if(ok)arrowQuiverAt=now;return {q:q,used:ok};}
   // V2.36.12 按当前攻击目标换箭：目标 = 助手锁定优先 → 客户端锁定的怪（内挂/手动普攻）→ 最近被我打伤的怪（技能也算）
   function arrowSelfWanted(){try{if(!arrowRules.enabled)return false;var mid=arrowCurrentMid();if(!mid)return false;var list=arrowCandidates(mid,arrowRules),ammo=readEquippedAmmo(),bag=readBagArrows();for(var i=0;i<list.length;i++){if(ammo&&Number(ammo.itid)===list[i].itid&&Number(ammo.count)>0)return true;for(var j=0;j<bag.length;j++){if(Number(bag[j].itid)===list[i].itid)return true;}}return false;}catch(e){return false;}}
-  function arrowSelfTick(now){try{
+  function arrowSelfTick(now){try{arrowSyncProfile();
     if(!arrowRules.enabled||arrowTarget||externalAutomationOwns("arrow")||!clientReady())return;
     // V2.38.37-arrow2：与 tickArrow() 同口径 —— readEquippedAmmo() 没给出 known===true（读不到、也证不出空槽）时，
     //   本拍什么都不做：不发 REQ_WEAR_EQUIP、不使用任何箭矢筒/魔法箭矢筒，只写一条中文提示后 return。
@@ -23009,7 +23419,7 @@ function createRoItemCapture(env) {
     arrowSay(arrowStatus);return h;}
   // V2.38.38：开战判据与「补箭触发线」解耦。能开打 = 当前装备的箭矢可读（known===true）且 count>0（能射）；
   //   ARROW_LOW_AMMO(50) 只是「要不要启动补给」的触发线，不再决定能不能开打；总开关只决定动不动手换箭/开袋/用道具。
-  function arrowTargetTick(now){var arrowFightOk=function(a){return !!(a&&a.known===true&&Number(a.count)>0);};var arrowFightSay=function(a,s){arrowReady=arrowFightOk(a);arrowBlocked=!arrowReady;if(s)arrowSay(s);return !arrowReady;};arrowReady=false;arrowBlocked=!!arrowTarget;if(!arrowTarget||!arrowRules.enabled){arrowBlocked=!!arrowTarget&&arrowRules.enabled;return arrowBlocked;}var ammo=readEquippedAmmo();if(!ammo||ammo.known!==true){arrowSay("读不到装备栏当前箭矢，先不动作");return true;}if(typeof apiGuard==="function"&&apiGuard(arrowTarget.owner,"arrow")){arrowSay("阻塞：箭矢租约失效");return true;}if(!arrowManageOn()){arrowSupply=null;arrowPending=null;return arrowFightSay(ammo,Number(ammo.count)>0?("箭矢管理总开关已关闭：当前箭矢 ×"+Number(ammo.count)+"，照常开战（不换箭、不开袋、不用道具）"):"箭矢管理总开关已关闭：当前箭矢 ×0 射不了，且不换箭不补给，先不开战");}var supplyKey="t"+arrowTarget.mid+"@"+arrowTarget.gid;var specific=arrowRules.byMid?arrowRules.byMid[arrowTarget.mid]:null,specificItid=arrowPos(specific&&specific.itid!=null?specific.itid:specific);if(!mobElemName(arrowTarget.mid)&&!specificItid){arrowPending=null;arrowSupply=null;arrowStableKey="";return arrowFightSay(ammo,"读不到目标属性，保持当前箭，不切箭");}var bagT=readBagArrows();if(bagT&&bagT.known===false){arrowSay("读不到背包箭矢，先不动作");return true;}if(arrowSupplyAdvance(now,ammo,bagT,supplyKey)){if(arrowSupply&&arrowSupply.phase==="hold"){arrowBlocked=false;arrowReady=true;return false;}return arrowFightSay(ammo,arrowFightOk(ammo)?("补给进行中：当前箭矢 ×"+Number(ammo.count)+" 仍可射，照常开战"):null);}var eff=arrowEffectiveMid(arrowTarget.mid,arrowTarget.gid,now),midUse=eff.mid||arrowTarget.mid;if(!arrowStableGate("t"+midUse+"@"+arrowTarget.gid,now)){arrowBlocked=true;return true;}var list=arrowCandidates(midUse,arrowRules),bag=readBagArrows(),pick=null,i=0,j=0;for(i=0;i<list.length;i++){if(ammo&&Number(ammo.itid)===list[i].itid&&Number(ammo.count)>0){pick=list[i];break;}for(j=0;j<bag.length;j++){if(Number(bag[j].itid)===list[i].itid){pick={kind:list[i].kind,itid:list[i].itid,index:bag[j].index};break;}}if(pick)break;}if(!list.length){arrowPending=null;arrowBlocked=false;arrowReady=true;arrowSay("未配置箭矢，保持当前箭");return false;}if(ammo&&pick&&Number(ammo.itid)===pick.itid&&Number(ammo.count)>=ARROW_LOW_AMMO){arrowPending=null;arrowBlocked=false;arrowReady=true;arrowSay("已装备"+arrowKindName(pick.kind)+" #"+pick.itid);return false;}
+  function arrowTargetTick(now){arrowSyncProfile();var arrowFightOk=function(a){return !!(a&&a.known===true&&Number(a.count)>0);};var arrowFightSay=function(a,s){arrowReady=arrowFightOk(a);arrowBlocked=!arrowReady;if(s)arrowSay(s);return !arrowReady;};arrowReady=false;arrowBlocked=!!arrowTarget;if(!arrowTarget||!arrowRules.enabled){arrowBlocked=!!arrowTarget&&arrowRules.enabled;return arrowBlocked;}var ammo=readEquippedAmmo();if(!ammo||ammo.known!==true){arrowSay("读不到装备栏当前箭矢，先不动作");return true;}if(typeof apiGuard==="function"&&apiGuard(arrowTarget.owner,"arrow")){arrowSay("阻塞：箭矢租约失效");return true;}if(!arrowManageOn()){arrowSupply=null;arrowPending=null;return arrowFightSay(ammo,Number(ammo.count)>0?("箭矢管理总开关已关闭：当前箭矢 ×"+Number(ammo.count)+"，照常开战（不换箭、不开袋、不用道具）"):"箭矢管理总开关已关闭：当前箭矢 ×0 射不了，且不换箭不补给，先不开战");}var supplyKey="t"+arrowTarget.mid+"@"+arrowTarget.gid;var specific=arrowRules.byMid?arrowRules.byMid[arrowTarget.mid]:null,specificItid=arrowPos(specific&&specific.itid!=null?specific.itid:specific);if(!mobElemName(arrowTarget.mid)&&!specificItid){arrowPending=null;arrowSupply=null;arrowStableKey="";return arrowFightSay(ammo,"读不到目标属性，保持当前箭，不切箭");}var bagT=readBagArrows();if(bagT&&bagT.known===false){arrowSay("读不到背包箭矢，先不动作");return true;}if(arrowSupplyAdvance(now,ammo,bagT,supplyKey)){if(arrowSupply&&arrowSupply.phase==="hold"){arrowBlocked=false;arrowReady=true;return false;}return arrowFightSay(ammo,arrowFightOk(ammo)?("补给进行中：当前箭矢 ×"+Number(ammo.count)+" 仍可射，照常开战"):null);}var eff=arrowEffectiveMid(arrowTarget.mid,arrowTarget.gid,now),midUse=eff.mid||arrowTarget.mid;if(!arrowStableGate("t"+midUse+"@"+arrowTarget.gid,now)){arrowBlocked=true;return true;}var list=arrowCandidates(midUse,arrowRules),bag=readBagArrows(),pick=null,i=0,j=0;for(i=0;i<list.length;i++){if(ammo&&Number(ammo.itid)===list[i].itid&&Number(ammo.count)>0){pick=list[i];break;}for(j=0;j<bag.length;j++){if(Number(bag[j].itid)===list[i].itid){pick={kind:list[i].kind,itid:list[i].itid,index:bag[j].index};break;}}if(pick)break;}if(!list.length){arrowPending=null;arrowBlocked=false;arrowReady=true;arrowSay("未配置箭矢，保持当前箭");return false;}if(ammo&&pick&&Number(ammo.itid)===pick.itid&&Number(ammo.count)>=ARROW_LOW_AMMO){arrowPending=null;arrowBlocked=false;arrowReady=true;arrowSay("已装备"+arrowKindName(pick.kind)+" #"+pick.itid);return false;}
 if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,ammo,bag,supplyKey);return arrowFightSay(ammo,arrowFightOk(ammo)?("同种箭低于 "+ARROW_LOW_AMMO+" 支（×"+Number(ammo.count)+"），已启动补给；当前箭仍可射，照常开战"):("同种箭 ×0，已启动补给（未确认成功）；补给期间不开战"));}if(!pick){arrowSupplyStart(list[0].itid,now,ammo,bag,supplyKey);return arrowFightSay(ammo,arrowFightOk(ammo)?("无可用同种箭（当前箭 ×"+Number(ammo.count)+" 仍可射），补给中（未确认成功）"):("当前箭 ×0 且无可用箭矢/箭袋，补给中（未确认成功）：补给不可达时不会静默空转"));}var p=arrowPending;if(p&&p.itid===pick.itid){if(now<p.confirmUntil)return true;if(!p.retryAt){p.retryAt=now+3000;arrowSay("确认超时，3秒后重试");return true;}if(now<p.retryAt)return true;}if(equipArrow(pick.index)){arrowPending={itid:pick.itid,confirmUntil:now+5000,retryAt:0};arrowSay("换箭中"+arrowKindName(pick.kind)+" #"+pick.itid);return true;}arrowSay("阻塞：装备失败");return true;}
   setInterval(function(){var t=Date.now();try{arrowTargetTick(t);}catch(e){}try{arrowSelfTick(t);}catch(e){}},250);
 
@@ -23061,13 +23471,24 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   function apiCurrent(owner,generation){return !!(apiLease&&apiLease.owner===owner&&apiLease.generation===generation);}
   function externalAutomationOwns(scope){return !!(apiLease&&(!scope||apiLease.scopes.indexOf(scope)>=0));}
   function apiEntities(){var out=[];try{var em=CLIENT.EM||(requireDB("Renderer/EntityManager"));if(em&&em.forEach)em.forEach(function(e){if(!e||!e.position)return;var type=Number(e.objecttype),mid=type===5?Number(e._job!=null?e._job:(e.job!=null?e.job:e.mobId)):null;var boss=false;try{var db=getMobDb(),mb=db&&db[mid];boss=!!(mb&&mb.MvpDropsNum>0);}catch(x){}out.push({gid:Number(e.GID),type:type,mid:Number.isFinite(mid)?mid:null,name:String(e.displayName||e.name||(e.display&&e.display.name)||""),position:[Number(e.position[0]),Number(e.position[1])],dead:!!(e.isDeath||e.remove_tick||(e.ACTION&&e.action===e.ACTION.DIE)),isBoss:boss});});}catch(e){}return out;}
-  function apiDialogOpen(){try{var b=requireDB("UI/Components/NpcBox/NpcBox"),m=requireDB("UI/Components/NpcMenu/NpcMenu");return !!((b&&b.ui&&b.ui.is(":visible"))||(m&&m.ui&&m.ui.is(":visible")));}catch(e){return false;}}
-  function apiMenu(){var items=(menuRecon.items||[]).slice(),naid=Number(menuRecon.NAID)||0,time=Number(menuRecon.time)||0,generation=Number(menuRecon.generation)||0;return {naid:naid,items:items,time:time,generation:generation,fingerprint:generation+"@"+time+"|"+naid+"|"+items.map(function(x){return String(x).replace(/\s+/g," ").trim();}).join("|")};}
+  function apiDialogOpen(){return apiDialog().open;}
+  function apiUiVisible(comp){try{if(comp&&comp.ui&&comp.ui.is)return !!comp.ui.is(":visible");return !!(comp&&comp._host&&comp._host.style.display!=="none"&&comp.__active!==false);}catch(e){return false;}}
+  function apiUiRoot(comp){try{return comp&&typeof comp.getRoot==="function"?comp.getRoot():comp&&comp.ui&&comp.ui[0];}catch(e){return null;}}
+  function apiDialog(){var out={open:false,naid:0,fingerprint:"",nextAvailable:false,text:""};try{var b=requireDB("UI/Components/NpcBox/NpcBox"),m=requireDB("UI/Components/NpcMenu/NpcMenu"),box=apiUiVisible(b),menu=apiUiVisible(m),row=npcDialog;if(!npcSameScene(row))return out;var naid=box?(Number(b.ownerID)>>>0):(menu&&npcSameScene(menuRecon)?Number(menuRecon.NAID)>>>0:0);if(!naid||naid!==row.naid||!apiEntities().some(function(e){return (Number(e.gid)>>>0)===naid&&(e.type===6||e.type===12);}))return out;var root=apiUiRoot(b),content=root&&root.querySelector&&root.querySelector(".content"),next=root&&root.querySelector&&root.querySelector(".next"),txt=box&&content?String(content.textContent||""):row.text;out.open=box||menu;out.naid=naid;out.text=txt;out.fingerprint=row.oneId+"@"+row.epoch+"|"+row.map+"|"+row.generation+"|"+naid+"|"+txt;out.nextAvailable=!!(box&&!menu&&next&&!next.disabled&&next.style.display!=="none"&&(!window.getComputedStyle||window.getComputedStyle(next).display!=="none")&&out.fingerprint!==apiDialogUsed);}catch(e){}return out;}
+  var apiDialogUsed="",apiDojoState=null;
+  function apiBindDialog(owner,payload){var bad=apiGuard(owner,"dialog"),d=apiDialog(),m=apiMenu(),naid=payload&&arrowPos(payload.naid),fp=payload&&payload.fingerprint;if(bad)return bad;if(apiLease.released)return {ok:false,error:"lease-required"};if(!naid||!d.open||d.naid!==naid||typeof fp!=="string"||!(fp===d.fingerprint||(m.naid===naid&&m.items.length&&fp===m.fingerprint)))return {ok:false,error:"invalid-dialog"};if(apiLease.selectedNpc&&npcSameScene(apiLease.dialogScene)&&apiLease.selectedNpc!==naid)return {ok:false,error:"foreign-npc"};apiLease.selectedNpc=naid;apiLease.dialogScene=npcIdentity();return {ok:true};}
+  function apiNextDialog(owner,payload){var bad=apiGuard(owner,"dialog"),d=apiDialog(),naid=payload&&arrowPos(payload.naid),fp=payload&&payload.fingerprint;if(bad)return bad;if(apiLease.released)return {ok:false,error:"lease-required"};if(!naid||naid!==apiLease.selectedNpc||!npcSameScene(apiLease.dialogScene)||!d.open||naid!==d.naid||fp!==d.fingerprint||!d.nextAvailable)return {ok:false,error:"invalid-dialog-next"};try{npcNextScript(naid);apiDialogUsed=fp;return {ok:true};}catch(e){return {ok:false,error:"next-failed"};}}
+  function apiDojoNpc(){return apiEntities().some(function(e){return (e.type===6||e.type===12)&&/^(喵达人|猫达人|白猫|白猫达人)$/.test(String(e.name).trim());});}
+  // Synthetic Chinese grammar only; unsupported server wording stays unknown.
+  function apiDojoRoundText(text){var s=String(text||"").replace(/\^[0-9a-f]{6}/gi,"").trim(),m=/^(?:(无限挑战|无限道场|道场|道場)\s*[：:]?\s*)?(?:第\s*([1-9]\d*)\s*[轮层波]\s*(开始|出怪|完成|结束|通过)|(?:完成|通过)\s*第?\s*([1-9]\d*)\s*[轮层波])\s*[！!。.]?(?:\s*[,，：:]?\s*(?:(?:还剩|剩余)\s*[:：]?\s*(\d+)\s*(?:只(?:怪物)?|个怪物)?|下一轮即将开始|请(?:领取奖励|领奖)))?\s*[！!。.]?$/.exec(s);if(!m){var left=/^(?:(无限挑战|无限道场|道场|道場)\s*[：:]?\s*)?(?:还剩|剩余)\s*[:：]?\s*(\d+)\s*(?:只(?:怪物)?|个怪物)?[！!。.]?$/.exec(s);return left&&Number.isSafeInteger(Number(left[2]))?{scoped:!!left[1],phase:null,round:null,remaining:Number(left[2])}:null;}var round=Number(m[2]||m[4]),active=/^(开始|出怪)$/.test(m[3]||""),remaining=active?(m[5]!=null?Number(m[5]):null):0;if(!Number.isSafeInteger(round)||(remaining!==null&&!Number.isSafeInteger(remaining)))return null;return {scoped:!!m[1],phase:active?"active":"idle",round:round,remaining:remaining};}
+  function apiDojoNotice(text,announcement){var p=apiDojoRoundText(text),id=npcIdentity(),current=npcSameScene(apiDojoState);if(!announcement||!p||!id.oneId||!id.map||!Number.isFinite(id.epoch)||!clientReady()||(!current&&(!p.phase||(!p.scoped&&!apiDojoNpc()))))return;var state=current?apiDojoState:{round:null,remaining:null};if(current&&state.round!==null&&p.round!==null&&(p.round<state.round||(p.phase==="idle"&&p.round!==state.round)||(p.phase==="active"&&p.round===state.round&&(state.phase==="idle"||state.phase==="settle"))))return;if(p.phase){state.phase=p.phase;state.round=p.round;state.remaining=p.remaining;}else state.remaining=p.remaining;state.oneId=id.oneId;state.epoch=id.epoch;state.map=id.map;state.confirmed=true;state.source="assistant-notice:announcement";apiDojoState=state;}
+  function apiDojoSnapshot(){var d=apiDialog(),m=apiMenu(),known=npcSameScene(apiDojoState),cat=d.open&&apiEntities().some(function(e){return (Number(e.gid)>>>0)===d.naid&&/^(喵达人|猫达人|白猫|白猫达人)$/.test(String(e.name).trim());}),settle=m.items.some(function(x){return /^(领取奖励|领奖)$/.test(String(x).trim());}),idle=m.items.some(function(x){return /^(继续挑战|下一轮)$/.test(String(x).trim());});if(cat&&m.naid===d.naid&&(settle||idle)&&(!known||apiDojoState.menuFingerprint!==m.fingerprint)){var id=npcIdentity(),parsed=apiDojoRoundText(d.text),round=known?apiDojoState.round:null,remaining=known?apiDojoState.remaining:null;if(parsed&&parsed.phase==="idle"&&(round===null||parsed.round===round)){round=parsed.round;remaining=parsed.remaining;}apiDojoState={confirmed:true,oneId:id.oneId,epoch:id.epoch,map:id.map,phase:settle?"settle":"idle",round:round,remaining:remaining,source:"current-named-dojo-npc-menu",menuFingerprint:m.fingerprint};known=true;}return known?{confirmed:true,map:apiDojoState.map,phase:apiDojoState.phase||"unknown",round:apiDojoState.round,remaining:apiDojoState.remaining,source:apiDojoState.source}:{confirmed:false,map:String(getMapName()||""),phase:"unknown",round:null,remaining:null,source:null};}
+  function apiMenu(){var live=npcSameScene(menuRecon)&&npcSameScene(npcDialog)&&npcDialog.naid===Number(menuRecon.NAID)&&npcDialog.generation===menuRecon.dialogGeneration&&apiUiVisible(requireDB("UI/Components/NpcMenu/NpcMenu")),items=live?(menuRecon.items||[]).slice():[],naid=live?Number(menuRecon.NAID)||0:0,time=live?Number(menuRecon.time)||0:0,generation=Number(menuRecon.generation)||0;return {naid:naid,items:items,time:time,generation:generation,fingerprint:generation+"@"+time+"|"+naid+"|"+items.map(function(x){return String(x).replace(/\s+/g," ").trim();}).join("|")};}
   function apiEquippedArrowItid(){try{var am=readEquippedAmmo();return am&&Number(am.count)>0&&Number(am.itid)>0?Number(am.itid):null;}catch(e){return null;}}
-  function apiSnapshot(owner){if(!apiLease||apiLease.owner!==owner)return null;var me=CLIENT.SS&&CLIENT.SS.Entity,entities=apiEntities(),target=zLock&&gidInt(zLock.gid),menu=apiMenu(),map=getMapName()||"";return {protocol:API_PROTOCOL,ready:clientReady(),map:map,player:me?{gid:Number(me.GID),position:me.position?[Number(me.position[0]),Number(me.position[1])]:null,hp:me.life&&Number(me.life.hp),maxHp:me.life&&Number(me.life.hp_max)}:null,mobs:entities.filter(function(e){return e.type===5&&!e.dead;}),npcs:entities.filter(function(e){return e.type===6||e.type===12;}),target:target||null,inDojoMap:/dojo|challenge|trial|道场|道場/i.test(map),dialogOpen:apiDialogOpen(),menu:menu,battleState:npBattleState(),busy:{assistantCombat:!!zRunning,bagClean:!!(bagClean&&bagClean.busy),movement:!!moveXY.busy},arrow:{enabled:arrowRules.enabled,status:arrowStatus,blocked:arrowBlocked,ready:arrowReady,target:arrowTarget?{mid:arrowTarget.mid,gid:arrowTarget.gid}:null,defaultItid:arrowPos(arrowRules.defaultItid),currentItid:apiEquippedArrowItid()}};}
+  function apiSnapshot(owner){if(!apiLease||apiLease.owner!==owner)return null;arrowSyncProfile();var identity=npcIdentity(),dialog=apiDialog(),dojo=apiDojoSnapshot(),me=CLIENT.SS&&CLIENT.SS.Entity,entities=apiEntities(),target=zLock&&gidInt(zLock.gid),menu=apiMenu(),map=getMapName()||"";return {protocol:API_PROTOCOL,ready:clientReady(),map:map,player:me?{gid:Number(me.GID),position:me.position?[Number(me.position[0]),Number(me.position[1])]:null,hp:me.life&&Number(me.life.hp),maxHp:me.life&&Number(me.life.hp_max)}:null,mobs:entities.filter(function(e){return e.type===5&&!e.dead;}),npcs:entities.filter(function(e){return e.type===6||e.type===12;}),target:target||null,identity:{oneId:identity.oneId||null,epoch:identity.epoch},dojo:dojo,inDojoMap:dojo.confirmed,dialog:dialog,dialogOpen:dialog.open,menu:menu,battleState:npBattleState(),busy:{assistantCombat:!!zRunning,bagClean:!!(bagClean&&bagClean.busy),movement:!!moveXY.busy},arrow:{enabled:arrowRules.enabled,masterEnabled:arrowProfileTrusted&&arrowManageOn(),selectEnabled:arrowRules.enabled,configuredByElem:JSON.parse(JSON.stringify(arrowRules.byElem)),configuredByMid:JSON.parse(JSON.stringify(arrowRules.byMid)),profileKey:arrowProfileKey,profileTrusted:arrowProfileTrusted,evaluated:!!arrowTarget,status:arrowStatus,blocked:arrowBlocked,ready:arrowReady,target:arrowTarget?{mid:arrowTarget.mid,gid:arrowTarget.gid}:null,defaultItid:arrowPos(arrowRules.defaultItid),currentItid:apiEquippedArrowItid()}};}
   // V2.38.13 FIX-14：release 后原属主在 250ms 窗口内重新 acquire，必须复位 released / 按新请求刷新 scopes / 递增代次；
   //   否则会拿到旧代次旧 scopes 且 released 仍为真，下一帧 apiBattleTick 会把刚到手的租约当成已释放的旧租约清空。
-  function apiAcquire(owner,scopes){if(!apiOwner(owner)||!apiScopes(scopes))return {ok:false,error:"invalid-owner-or-scopes"};if(!clientReady())return {ok:false,error:"client-not-ready"};if(apiLease&&apiLease.owner!==owner)return {ok:false,error:"owned"};if(apiLease){if(!apiLease.released)return {ok:true,generation:apiLease.generation};apiLease.released=false;apiLease.scopes=scopes.slice();apiLease.generation=++apiGeneration;return {ok:true,generation:apiLease.generation};}if(zRunning||bagClean&&bagClean.busy)return {ok:false,error:"assistant-busy"};apiLease={owner:owner,scopes:scopes.slice(),generation:++apiGeneration,selectedNpc:0,released:false,battle:{state:"none",initial:npBattleState()}};apiEmit("state",{owner:owner});return {ok:true,generation:apiLease.generation};}
+  function apiAcquire(owner,scopes){if(!apiOwner(owner)||!apiScopes(scopes))return {ok:false,error:"invalid-owner-or-scopes"};if(!clientReady())return {ok:false,error:"client-not-ready"};if(apiLease&&apiLease.owner!==owner)return {ok:false,error:"owned"};if(apiLease){if(!apiLease.released)return {ok:true,generation:apiLease.generation};apiLease.released=false;apiLease.selectedNpc=0;apiLease.dialogScene=null;apiLease.scopes=scopes.slice();apiLease.generation=++apiGeneration;return {ok:true,generation:apiLease.generation};}if(zRunning||bagClean&&bagClean.busy)return {ok:false,error:"assistant-busy"};apiLease={owner:owner,scopes:scopes.slice(),generation:++apiGeneration,selectedNpc:0,released:false,battle:{state:"none",initial:npBattleState()}};apiEmit("state",{owner:owner});return {ok:true,generation:apiLease.generation};}
   function apiGuard(owner,scope){if(!clientReady())return {ok:false,error:"client-not-ready"};if(!apiHas(owner,scope))return {ok:false,error:"lease-required"};return null;}
   function apiBattleTargetEntity(target){var mid=target&&arrowPos(target.mid),gid=target&&arrowPos(target.gid);if(!mid||!gid)return null;var rows=apiEntities();for(var i=0;i<rows.length;i++){var e=rows[i];if(e.gid===gid&&e.type===5&&!e.dead&&e.mid===mid)return e;}return null;}
   function apiClearBattleTarget(owner){var bad=apiGuard(owner,"battle");if(bad)return bad;if(apiBattleTarget&&apiBattleTarget.owner===owner){var old=apiBattleTarget,suppressed=apiBattleSuppressed;apiBattleTarget=null;apiBattleSuppressed={};if(old.owner===DOJO_OWNER){for(var id in suppressed)npOnlyTarget(id,lockList[String(id)]?1:0);npOnlyTarget(old.mid,lockList[String(old.mid)]?1:0);npSyncTargets();}}return {ok:true};}
@@ -23076,7 +23497,9 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   function apiBattleDrive(){if(apiCombat)return; // 契约 v2 外部代打期间由代打自己的定时器驱动，这里不得双份出手
     var now=Date.now();if(now-apiBattleAttackAt<250||zRunning||!apiLease||!apiBattleTarget||apiBattleTarget.owner!==apiLease.owner||apiLease.scopes.indexOf("battle")<0)return;var state=apiLease.battle&&apiLease.battle.state;if(state!=="owned"&&state!=="pending-on")return;if(!apiBattleTargetEntity(apiBattleTarget))return;apiBattleAttackAt=now;zAttack();}
   function apiRelease(owner){if(!apiLease||apiLease.owner!==owner)return {ok:false,error:"not-owner"};if(typeof apiCombat!=="undefined"&&apiCombat)apiCombatStop();if(typeof apiAllMobsRestore==="function")apiAllMobsRestore();if(typeof apiPickupReset==="function")apiPickupReset();if(typeof apiClearBattleTarget==="function")apiClearBattleTarget(owner);apiBattleTick();if(!apiLease)return {ok:true};var l=apiLease;if(l.scopes.indexOf("movement")>=0){moveXY.busy=false;moveXY.onArrive=null;}/* V2.38.37-arrow6 P2：租约声明了 arrow 域就必须清补给等待状态（MERGE-SPEC 5b），与是否还剩目标无关；只有本属主的目标才连目标一起清（属主不符时维持原行为）。 */if(l.scopes.indexOf("arrow")>=0){if(arrowTarget&&arrowTarget.owner===owner)arrowTarget=null;if(!arrowTarget){arrowPending=null;arrowSupply=null;arrowSelfPending=null;arrowReady=false;arrowBlocked=false;}}if(l.scopes.indexOf("battle")>=0&&(l.battle.state==="owned"||l.battle.state==="pending-off")){l.released=true;if(l.battle.state!=="pending-off"){var r=npRequestBattle(false,"external-release:"+owner,true,function(){return !!(apiLease&&apiLease.owner===owner);});/* V2.38.13 FIX-15：守卫放宽为「租约仍在且属主相同」——迟到的关闭包必须兑现，换属主/租约已清空仍被否决 */if(r==="sent"||r==="queued")l.battle.state="pending-off";else l.released=false;}return {ok:l.released,result:l.battle.state};}if(l.battle.state==="pending-on")npClearBattleIntent();if(l.scopes.indexOf("battle")>=0&&npBattleState()===true&&typeof npZeroBattle==="function")npZeroBattle("apiRelease");apiLease=null;apiEmit("state",{});return {ok:true};}
-  function apiContact(owner,gid){var bad=apiGuard(owner,"dialog");gid=arrowPos(gid);if(bad)return bad;if(!gid)return {ok:false,error:"invalid-gid"};var found=apiEntities().filter(function(e){return e.gid===gid&&(e.type===6||e.type===12);})[0];if(!found)return {ok:false,error:"npc-not-found"};try{var p=new (czp("CONTACTNPC"))();p.NAID=gid;p.type=1;CLIENT.NM.sendPacket(p);apiLease.selectedNpc=gid;lastTalkNpc={GID:gid,name:found.name,pos:found.position};return {ok:true};}catch(e){return {ok:false,error:"contact-failed"};}}
+  function apiContact(owner,gid){var bad=apiGuard(owner,"dialog");gid=arrowPos(gid);if(bad)return bad;if(!gid)return {ok:false,error:"invalid-gid"};var found=apiEntities().filter(function(e){return e.gid===gid&&(e.type===6||e.type===12);})[0];if(!found)return {ok:false,error:"npc-not-found"};try{var p=new (czp("CONTACTNPC"))();
+p.NAID=gid;p.type=1;CLIENT.NM.sendPacket(p);
+apiLease.selectedNpc=gid;apiLease.dialogScene=npcIdentity();lastTalkNpc={GID:gid,name:found.name,pos:found.position,oneId:apiLease.dialogScene.oneId,epoch:apiLease.dialogScene.epoch,map:apiLease.dialogScene.map};return {ok:true};}catch(e){return {ok:false,error:"contact-failed"};}}
   function apiWalk(owner,payload){var bad=apiGuard(owner,"movement"),x=payload&&Number(payload.x),y=payload&&Number(payload.y);if(bad)return bad;if(!payload||!Number.isInteger(x)||!Number.isInteger(y))return {ok:false,error:"invalid-position"};return {ok:!!walkToXY(x,y,null,"dsh-arrow-rules-status")};}
   // A2 契约 v2：对外传送（只复用 tpSend，不新造发包逻辑；失败一律 {ok:false,error}）
   function apiTeleport(owner,payload){
@@ -23094,13 +23517,15 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   }
   // V2.38.13：把服务器 2634 回执（0 受理 / 2 没卷轴或会员卡 / 3 地图不支持 / 4 未知地图）如实暴露成 error（带 code 与原文），只读，不发包
   function apiTeleportResult(owner){var bad=apiGuard(owner,"movement");if(bad&&bad.error==="lease-required")bad=apiGuard(owner,"fly");if(bad)return {ok:false,error:"lease-required"};try{if(tpLast.code==null)return {ok:null,code:null,error:"no-ack"};var cn=TP_ACK_WHY[tpLast.code]||"未知代码";if(tpLast.code===0)return {ok:true,code:0,error:""};return {ok:false,code:tpLast.code,error:"code="+tpLast.code+"（"+cn+"）"};}catch(e){return {ok:null,code:null,error:"no-ack"};}}
-  function apiChoose(owner,payload){var bad=apiGuard(owner,"dialog"),menu=apiMenu(),naid=payload&&arrowPos(payload.naid),index=payload&&Number(payload.index),fp=payload&&payload.fingerprint;if(bad)return bad;if(!payload||!naid||!Number.isInteger(index)||index<0||index>=menu.items.length||naid!==menu.naid||naid!==apiLease.selectedNpc||typeof fp!=="string"||fp!==menu.fingerprint)return {ok:false,error:"invalid-menu"};if(fp===apiMenuUsed)return {ok:false,error:"menu-already-used"};apiMenuUsed=fp;try{var p=new (czp("CHOOSE_MENU"))();p.NAID=naid;p.num=index+1;CLIENT.NM.sendPacket(p);return {ok:true};}catch(e){return {ok:false,error:"choose-failed"};}}
+  function apiChoose(owner,payload){var bad=apiGuard(owner,"dialog"),menu=apiMenu(),d=apiDialog(),naid=payload&&arrowPos(payload.naid),index=payload&&Number(payload.index),fp=payload&&payload.fingerprint;if(bad)return bad;if(apiLease.released||!npcSameScene(apiLease.dialogScene)||!payload||!naid||!d.open||d.naid!==naid||!Number.isInteger(index)||index<0||index>=menu.items.length||naid!==menu.naid||naid!==apiLease.selectedNpc||typeof fp!=="string"||fp!==menu.fingerprint)return {ok:false,error:"invalid-menu"};if(fp===apiMenuUsed)return {ok:false,error:"menu-already-used"};apiMenuUsed=fp;try{var p=new (czp("CHOOSE_MENU"))();
+p.NAID=naid;p.num=index+1;CLIENT.NM.sendPacket(p);
+return {ok:true};}catch(e){return {ok:false,error:"choose-failed"};}}
   function apiBattle(owner,on){var bad=apiGuard(owner,"battle");if(bad)return bad;if(typeof on!=="boolean")return {ok:false,error:"invalid-payload"};apiBattleTick();var b=apiLease.battle,s=npBattleState(),generation=apiLease.generation,current=function(){return apiCurrent(owner,generation);};if(on){if(typeof apiCombat!=="undefined"&&apiCombat)return {ok:false,error:"combat-owned"};if(s!==false)return {ok:true,result:s===true?"preexisting":"unknown"};if(b.state==="pending-on"||b.state==="owned")return {ok:true,result:b.state};var r=npRequestBattle(true,"external:"+owner,true,current);if(r==="sent"||r==="queued")b.state="pending-on";return {ok:r!=="failed",result:r};}if(b.state!=="owned")return {ok:true,result:"not-owned"};var r2=npRequestBattle(false,"external:"+owner,true,current);if(r2==="sent"||r2==="queued")b.state="pending-off";return {ok:r2!=="failed",result:r2};}
   function apiAssistCombat(owner,on){var bad=apiGuard(owner,"battle");if(bad)return bad;if(typeof on!=="boolean")return {ok:false,error:"invalid-payload"};if(on){var r=apiCombatStart(owner);if(!r||r.ok!==true)return r||{ok:false,error:"combat-start-failed"};return {ok:true,result:r.result};}apiCombatStop();return {ok:true,result:"stopped"};}
-  function apiSetArrow(owner,target){var bad=apiGuard(owner,"arrow"),mid=target&&arrowPos(target.mid),gid=target&&arrowPos(target.gid);if(bad)return bad;if(!target||!mid||!gid)return {ok:false,error:"invalid-target"};if(!arrowTarget||arrowTarget.owner!==owner||arrowTarget.mid!==mid||arrowTarget.gid!==gid){arrowPending=null;arrowSupply=null;arrowSelfPending=null;}arrowTarget={owner:owner,mid:mid,gid:gid};arrowTargetTick(Date.now());return {ok:true,enabled:arrowRules.enabled,blocked:arrowBlocked,ready:arrowReady,status:arrowStatus};}
+  function apiSetArrow(owner,target){var bad=apiGuard(owner,"arrow"),mid=target&&arrowPos(target.mid),gid=target&&arrowPos(target.gid);if(bad)return bad;if(!target||!mid||!gid)return {ok:false,error:"invalid-target"};arrowSyncProfile();if(!arrowTarget||arrowTarget.owner!==owner||arrowTarget.mid!==mid||arrowTarget.gid!==gid){arrowPending=null;arrowSupply=null;arrowSelfPending=null;}arrowTarget={owner:owner,mid:mid,gid:gid};arrowTargetTick(Date.now());return {ok:true,enabled:arrowRules.enabled,blocked:arrowBlocked,ready:arrowReady,status:arrowStatus};}
   function apiClearArrow(owner){var bad=apiGuard(owner,"arrow");if(bad)return bad;if(arrowTarget&&arrowTarget.owner===owner)arrowTarget=null;arrowPending=null;arrowSupply=null;arrowSelfPending=null;arrowReady=false;arrowBlocked=false;return {ok:true};}
   function apiFly(owner,payload){var bad=apiGuard(owner,"fly");if(bad)return bad;if(!payload||typeof payload.reason!=="string"||!payload.reason.trim()||payload.reason.length>120)return {ok:false,error:"invalid-payload"};return {ok:!!doFly()};}
-  function apiNoticeWatch(){if(apiNoticeObserver||typeof MutationObserver!=="function"||!document.body)return;apiNoticeObserver=new MutationObserver(function(ms){ms.forEach(function(m){Array.prototype.forEach.call(m.addedNodes||[],function(n){var el=n&&n.nodeType===1?n:n&&n.parentElement;if(!el||!el.closest)return;var box=el.closest('[id*="Chat"],[class*="Chat"],[id*="chat"],[class*="chat"],[id*="Announce"],[class*="Announce"],[id*="announce"],[class*="announce"]');var text=n&&n.textContent&&String(n.textContent).trim();if(box&&text)apiEmit("notice",{text:text});});});});apiNoticeObserver.observe(document.body,{childList:true,subtree:true});}
+  function apiNoticeWatch(){if(apiNoticeObserver||typeof MutationObserver!=="function"||!document.body)return;apiNoticeObserver=new MutationObserver(function(ms){ms.forEach(function(m){Array.prototype.forEach.call(m.addedNodes||[],function(n){var el=n&&n.nodeType===1?n:n&&n.parentElement;if(!el||!el.closest)return;var box=el.closest('[id*="Chat"],[class*="Chat"],[id*="chat"],[class*="chat"],[id*="Announce"],[class*="Announce"],[id*="announce"],[class*="announce"]');var text=n&&n.textContent&&String(n.textContent).trim();if(box&&text){apiDojoNotice(text,/announce/i.test(String(box.id||"")+" "+String(box.className||"")));apiEmit("notice",{text:text});}});});});apiNoticeObserver.observe(document.body,{childList:true,subtree:true});}
 
 
   // ================= V2.36.0 不可丢物品出口策略 / pushplus / 窗口注册门面 =================
@@ -23167,6 +23592,7 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
       if(typeof id!=="string"||!/^[A-Za-z0-9_-]{1,32}$/.test(id))return {ok:false,error:"invalid-id"};
       if(typeof getEl!=="function")return {ok:false,error:"invalid-getter"};
       fwReg(id,String(title||id),getEl);
+      apiScriptWindows[id]={sourceId:scrUsExecutingId||"",title:String(title||id)};try{scrUsRenderList();}catch(eList){}
       return {ok:true,id:id};
     }catch(e){return {ok:false,error:"register-failed"};}
   }
@@ -23352,15 +23778,8 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   }
   // ================= V2.38.13 结束 =================
 
-  // 独立无限挑战的入场前物品保护入口 —— 走唯一 dojoGuardCapture（只读，不发包）
-  function apiDojoGuard(owner){
-    try{
-      if(!clientReady())return {ok:false,reason:"游戏未就绪，读不到背包快照"};
-      var g=dojoGuardCapture();
-      return {ok:!!(g&&g.ok),n:(g&&g.ok)?dojoGuard.n:0,reuse:!!(g&&g.reuse),reason:(g&&g.reason)||""};
-    }catch(e){return {ok:false,reason:"背包快照采集异常，已按最保守处理"};}
-  }
-  var apiFacade={protocol:API_PROTOCOL,assistantVersion:VER,teleport:apiTeleport,teleportResult:apiTeleportResult,prepareCombat:apiPrepareCombat,requestPickup:apiRequestPickup,assistCombat:apiAssistCombat,dojoGuard:apiDojoGuard,handshake:function(request){return request&&request.protocol===API_PROTOCOL&&request.client==="ro-infinite-dojo"?apiFacade:null;},capabilities:function(){return {protocol:API_PROTOCOL,scopes:["dojo","battle","movement","dialog","arrow","fly"],modules:["dojo"],arrowRules:true,battleTarget:true,assistCombat:true,dojoGuard:true};},ready:function(){return !!clientReady();},snapshot:apiSnapshot,acquire:apiAcquire,release:apiRelease,contactNpc:apiContact,walkTo:apiWalk,chooseMenu:apiChoose,requestBattle:apiBattle,setBattleTarget:apiSetBattleTarget,clearBattleTarget:apiClearBattleTarget,setArrowTarget:apiSetArrow,clearArrowTarget:apiClearArrow,requestFly:apiFly,registerWindow:apiRegisterWindow,openWindow:apiOpenWindow,closeWindow:apiCloseWindow,bag:{plan:apiBagPlan,drop:apiBagDrop,busy:function(){return !!(bagClean&&bagClean.busy);}},mail:{send:apiMailSend},notify:{push:notifyPush,token:notifyLoadToken,setToken:notifySaveToken,configured:function(){return !!notifyLoadToken();}},items:{noDrop:itemNoDropState,outlet:itemOutletAllowed,note:ITEM_OUTLET_NOTE}};
+
+  var apiFacade={protocol:API_PROTOCOL,assistantVersion:VER,teleport:apiTeleport,teleportResult:apiTeleportResult,prepareCombat:apiPrepareCombat,requestPickup:apiRequestPickup,assistCombat:apiAssistCombat,handshake:function(request){return request&&request.protocol===API_PROTOCOL&&request.client==="ro-infinite-dojo"?apiFacade:null;},capabilities:function(){return {protocol:API_PROTOCOL,scopes:["dojo","battle","movement","dialog","arrow","fly"],modules:["dojo"],arrowRules:true,battleTarget:true,assistCombat:true,nextDialog:true,dialogBinding:true,dojoResume:true};},ready:function(){return !!clientReady();},snapshot:apiSnapshot,acquire:apiAcquire,release:apiRelease,contactNpc:apiContact,bindDialog:apiBindDialog,nextDialog:apiNextDialog,walkTo:apiWalk,chooseMenu:apiChoose,requestBattle:apiBattle,setBattleTarget:apiSetBattleTarget,clearBattleTarget:apiClearBattleTarget,setArrowTarget:apiSetArrow,clearArrowTarget:apiClearArrow,requestFly:apiFly,registerWindow:apiRegisterWindow,openWindow:apiOpenWindow,closeWindow:apiCloseWindow,bag:{plan:apiBagPlan,drop:apiBagDrop,busy:function(){return !!(bagClean&&bagClean.busy);}},mail:{send:apiMailSend},notify:{push:notifyPush,token:notifyLoadToken,setToken:notifySaveToken,configured:function(){return !!notifyLoadToken();}},items:{noDrop:itemNoDropState,outlet:itemOutletAllowed,note:ITEM_OUTLET_NOTE}};
   try{window.__DSH_RO_ASSIST_API__=Object.freeze(apiFacade);}catch(e){window.__DSH_RO_ASSIST_API__=apiFacade;}
   apiNoticeWatch();setTimeout(function(){apiEmit("ready",{protocol:API_PROTOCOL,assistantVersion:VER});},0);
   setInterval(function(){apiBattleTick();if(apiLease)apiEmit("state",{owner:apiLease.owner});},250);
@@ -23373,6 +23792,7 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   //   ② CharSelect 的 Cancel 按钮 → cancel() → UIManager.showPromptBox(msg17,'ok','cancel', onYes)
   //   ③ WinPrompt 里第一颗按钮（data-background=btn_ok.bmp）→ Component.onExitRequest() → 真正下线
   // 只在「活着 → 死亡」那一刻计一次；只统计助手或内挂在跑时的死亡（手动玩不计数，避免误下线）。
+  try { scrUsBootAutostart(); } catch (eUs) {}
   var DEATH_GUARD_WINDOW = 300000, DEATH_GUARD_LIMIT = 3;
   var deathGuardAt = [], deathGuardDead = false, deathGuardRun = null, deathGuardDone = false;
   function deathGuardOn() {
@@ -24463,7 +24883,8 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
         //   （Number("") === 0 曾让空售格命中背包 0 号）。合法时行为与本分支原口径完全一致。
         var siT = (si == null) ? "" : String(si).trim();
         var siOk = /^[0-9]{1,10}$/.test(siT);
-        var sItem = siOk ? itipInvMap()[Number(siT)] : null;
+      var soMapIt = siOk ? (itipInvMap()[Number(siT)] || null) : null;
+      var sItem = soMapIt;
         html = (isSell && sItem) ? itipBody(sItem, ITIP.sell[Number(siT)] || null) : itipShopRow(el);
       } else if (itipIsTrade(el)) {
         // V2.38.36 交易框：data-index 是客户端 _send/_recv 的下标，不是背包 index —— 不映射背包、不显示售价。
@@ -24494,7 +24915,10 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
         var sIdx = el.getAttribute("data-index");
         var sIdxT = (sIdx == null) ? "" : String(sIdx).trim(); // V2.38.77：空串/非数字下标一律非法（非法时不读背包）
         var sItem = /^[0-9]{1,10}$/.test(sIdxT) ? itipInvMap()[Number(sIdxT)] : null;
-        if (!sItem) { itipHide(); return; }
+        // V2.38.77-修法②：打包表没有这一格时，只有「全文档唯一 #Inventory」才按格号回退到该格实例
+        //   （回退结果还要与格子物品号一致）；多个 #Inventory 一律不按 id 认，维持 fail-closed。
+        if (!sItem && /^[0-9]{1,10}$/.test(sIdxT) && typeof upInvFallbackItem === "function") { try { var fbSel = upInvFallbackItem(Number(sIdxT)); if (fbSel) sItem = fbSel; } catch (eFB2) {} }
+        if (!sItem) {  itipHide(); return; }
         var sItid = (sItem.ITID != null) ? sItem.ITID : sItem.itemid;
         html = itipIsEquip(sItem) ? (itipBody(sItem, null) || itipItemLines(sItem, sItid, true)) : itipItemLines(sItem, sItid);
       } else {
@@ -24509,15 +24933,19 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
           if (eIdx != null && typeof gearEqItemByIndex === "function" && typeof gearEquipmentComp === "function") item = gearEqItemByIndex(gearEquipmentComp(), eIdx);
           if (item && !itid) itid = String(item.ITID != null ? item.ITID : item.itemid); // 只在格子没写 data-itid 时由组件补；写了就必须一致，否则上面那条核对会隐藏
         } else {
-          // 他人装备窗（旧端克隆 / 新端 PlayerViewEquip）与商店空售格都落在这里：没有 data-itid 就不显示，
+          // V2.38.77：他人装备窗（旧端克隆 / 新端 PlayerViewEquip）与商店空售格都落在这里：没有 data-itid 就不显示，
           //   绝不用 data-index 去背包回查（否则会显示本方同名号物品）。
           if (!itid) { itipHide(); return; }
           var inv2 = itipInvMap();
           item = (idx != null) ? inv2[Number(idx)] : null;
+          // V2.38.77-修法②：格号在这张表里查不到时，只有「全文档唯一 #Inventory」才允许按格号回退到该容器
+          //   对应格子的 data-itid/实例（回退结果还要与格子物品号一致）；多个 #Inventory（含他人装备窗克隆）
+          //   一律不按 id 认，维持 fail-closed。
+          if (!item && typeof upInvFallbackItem === "function") { try { var fbEq = upInvFallbackItem((idx != null) ? Number(idx) : null); if (fbEq) item = fbEq; } catch (eFB) {} }
         }
         // 装备/交易实例只能按 data-index 精确映射；同 ITID 可能有不同精炼与词条，禁止反查替代。
         if (item && String(item.ITID != null ? item.ITID : item.itemid) !== String(itid)) item = null;
-        if (!item || itid == null || itid === "") { itipHide(); return; }
+        if (!item || itid == null || itid === "") {  itipHide(); return; }
         // V2.38.77：装备槽位号不是背包索引，绝不按它回连背包实例（否则 ITIP.bagTarget 会指向别的物品）。
         html = itipBody(item, null, eqWin);
       }
@@ -25527,6 +25955,7 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   //   内容仍是上面那份结构诊断（无账号/角色名/物品实例/数量）；失败静默、绝不影响游戏。
   var diagReportAt = 0, diagLastKey = "", diagSent = 0;
   function reportDiag(kind, extra, done) {
+    if(done)done(false);return false; // Retired optional independent equipment POST.
     try {
       if (diagSent >= 300) return false;
       var o = null;
@@ -25566,29 +25995,8 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
   //   原因：V2.38.60 的写法每 60 秒无条件做一次全文档 [id*=quipment] 扫描，
   //   在游戏页面的大 DOM 上可能造成周期性卡顿 —— 改为「变化才深采集」，把开销降到接近零。
   var diagAutoProbeOn = false; // Optional equipment scan is off at startup; safety guard reporting stays active.
-  function diagAutoTick() {
-    try {
-      if (!diagAutoProbeOn) return;
-      var now = Date.now();
-      if (now - diagReportAt < 300000) return;
-      diagReportAt = now;
-      var L = diagLightProbe();
-      if (!L) return;
-      var key = [L.got ? 1 : 0, L.how, L.conn ? 1 : 0, L.reason, L.realm, L.map].join("|");
-      if (key === diagLastKey) return;
-      diagLastKey = key;
-      try { gearDiagCollect(); } catch (eC) {}
-      reportDiag("auto", {
-        identityReason: L.reason,
-        identityKnown: !L.reason,
-        realm: L.realm,
-        map: L.map,
-        arrowEnabled: (function () { try { return !!arrowManageOn(); } catch (eA) { return null; } })()
-      });
-    } catch (e) {}
-  }
+  
   // 复用既有 1s masterTick 注册：V2.5.0 起规定「不新增定时器」，同时避免污染测试对 setTimeout 的调用计数。
-  try { masterTickReg(diagAutoTick); } catch (eT1) {}
   try { masterTickReg(itemEvidenceTick); } catch(eItemTick) {}
   try { arrowEquipHookTick(); } catch(eAmmoTick) {} // 已载入组件立即接入；未就绪则由主循环重试
   var gearSwFillAt = 0;
@@ -26232,6 +26640,7 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
         var nx = dv.getUint16(18, true), ny = dv.getUint16(20, true);
         worldPkt.map = nm; worldPkt.mapAt = Date.now(); worldPkt.mapOp = op; worldPkt.src = "packet";
         worldPkt.x = nx; worldPkt.y = ny; worldPkt.posAt = worldPkt.mapAt; worldPkt.posOp = op;
+        
         identityLogLine("world-pkt-map op=" + op + " map=" + nm + " x=" + nx + " y=" + ny);
         return;
       }
@@ -26456,13 +26865,7 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
     } catch (e) { L.push("诊断异常：" + (e && e.message ? e.message : e)); }
     return L.join("\n");
   }
-  function gearReadDiag() {
-    var txt = "";
-    try { txt = gearDiagText(); } catch (e) { txt = "读取诊断生成失败：" + (e && e.message ? e.message : e); }
-    try { var box = $id("dsh-gear-diagbox"); if (box) { box.style.display = "block"; box.value = txt; box.focus(); box.select(); } } catch (e0) {}
-    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt); } catch (e1) {}
-    gearLog("已生成读取诊断（已尝试复制到剪贴板；下方文本框可手动全选复制）");
-  }
+  
   function gearSigEqual(a, b) {
     if (!(a && b && Number(a.itid) === Number(b.itid) && (Number(a.refine) || 0) === (Number(b.refine) || 0) && (a.cards || []).join(",") === (b.cards || []).join(","))) return false;
     if (Object.prototype.hasOwnProperty.call(a, "options") && JSON.stringify(a.options || []) !== JSON.stringify(b.options || [])) return false;
@@ -26900,9 +27303,8 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
     if (h) { renderGearAll(); return h; }
     h = document.createElement("div"); h.id = "dsh-fw-gear";
     h.innerHTML = '<div class="sec">一键换装 · 卡册</div>'
-      + '<div class="row" style="gap:4px;flex-wrap:wrap"><button id="dsh-gear-read" class="green" style="flex:0 0 auto">读取当前配置</button><button id="dsh-gear-refresh" class="ghost" style="flex:0 0 auto">刷新</button><button id="dsh-gear-diag" class="ghost" style="flex:0 0 auto">读取诊断</button></div>'
+      + '<div class="row" style="gap:4px;flex-wrap:wrap"><button id="dsh-gear-read" class="green" style="flex:0 0 auto">读取当前配置</button><button id="dsh-gear-refresh" class="ghost" style="flex:0 0 auto">刷新</button></div>'
       + '<div id="dsh-gear-cur" class="st" style="font-size:11px"></div>'
-      + '<textarea id="dsh-gear-diagbox" readonly style="display:none;width:100%;height:110px;font-size:11px;font-family:monospace;margin-top:4px"></textarea>'
       + '<div id="dsh-gear-list"></div>'
       + '<div id="dsh-gear-log" class="st" style="font-size:11px;color:#444"></div>'
       + '<div class="log">用法：游戏里穿好一套装备、在「卡片典藏 → 我的卡组」激活好卡组，点「读取当前配置」存成预设（可改名、可配快捷键），之后点「应用」或按快捷键切回。预设按角色分开保存。</div>'
@@ -26911,7 +27313,6 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
     if (!dock) { dock = document.createElement("div"); dock.id = "dsh-gear-dock"; dock.style.display = "none"; document.documentElement.appendChild(dock); }
     dock.appendChild(h);
     onId("dsh-gear-read", "click", function () { gearReadCurrent(); });
-    onId("dsh-gear-diag", "click", function () { gearReadDiag(); });
     onId("dsh-gear-refresh", "click", function () { renderGearAll(); gearLog("已刷新（角色：" + ((gearP() || {}).name || "未识别") + "）"); });
     renderGearAll();
     return h;
@@ -27612,6 +28013,7 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
     } catch (e) { return null; }
   }
   function questSyncTick() {
+    return; // Retired optional account-key quest emitter; operational NPC/core controls unchanged.
     try {
       if (typeof fetch !== "function") return;
       var snap = readQuestSnapshot();
@@ -27627,10 +28029,7 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
       }).catch(function () {});
     } catch (e) {}
   }
-  setTimeout(function () {
-    try { questSyncTick(); } catch (e) {}
-    setInterval(function () { try { questSyncTick(); } catch (e) {} }, 5000);
-  }, 4000);
+  // Optional questSync timer retired: unified default-OFF snapshots own recording.
 
   // ================= V2.34.5 黄金副本（本机 8899 显式读写 · 该键严禁加入 KV_KEYS）=================
   // dsh_ro_profiles_v2.golden 不参与 5 秒轮询自动同步（一旦进 KV_KEYS 会导致两个入口自动互相覆盖）。
@@ -27754,6 +28153,427 @@ if(ammo&&pick&&Number(ammo.itid)===pick.itid){arrowSupplyStart(pick.itid,now,amm
     } catch (e) { try { setStatus("恢复配置失败: " + (e.message || e), "err"); } catch (e2) {} }
   });
   setTimeout(function () { try { goldenAutoRecover(); } catch (e) {} }, 6000);
+  // === RO_NEWUI_BEGIN === 新UI设置；只展示/导航，不接管战斗与保护。
+  var roExpCfg = null, roExpRail = null, roExpRing = null, roExpToolbar = null, roExpSettings = null, roExpRingOpen = true, roExpOldBall = "";
+  var RO_EXP_KEY = "dsh_ro_newui_exp_v1";
+  var RO_EXP_MON = ["dps", "boss", "tgt", "ztip"];
+  var RO_EXP_ACTIONS = ["gear", "tp", "zhu2", "zskill", "boss", "dps", "item", "scr"];
+  var RO_EXP_SKILLS = { gear: 40, tp: 26, scr: 142, arrowrules: 46, zhu2: 5, zskill: 14, combat: 5, aid: 29, party: 28, dps: 5, boss: 10, item: 50, tgt: 10, znear: 10 };
+  function roExpOn() { return !!(roExpCfg && roExpCfg.enabled); }
+  function roExpModule(id) { return RO_MODULES.filter(function (m) { return m.id === id; })[0]; }
+  function roExpLoad() {
+    var c = {};
+    try { c = JSON.parse(localStorage.getItem(RO_EXP_KEY) || "{}"); } catch (e) { console.warn("[RO新UI] 选择读取失败", e); }
+    if (!c || typeof c !== "object") c = {};
+    function valid(a, fallback, allowed, max) { return (Array.isArray(a) ? a : fallback).filter(function (id, i, all) { return allowed.indexOf(id) >= 0 && all.indexOf(id) === i; }).slice(0, max); }
+    return { enabled: c.enabled !== false, monitors: valid(c.monitors, ["dps", "tgt", "ztip"], RO_EXP_MON, RO_EXP_MON.length), petals: valid(c.petals, RO_EXP_ACTIONS, RO_MODULES.filter(function (m) { return m.kind === "fw" && !m.noToggle; }).map(function (m) { return m.id; }), 8) };
+  }
+  function roExpSave() {
+    if (roExpCfg) roExpCfg.petals=(roExpCfg.petals||[]).filter(function(id,i,all){var m=roExpModule(id);return m&&m.kind==="fw"&&!m.noToggle&&all.indexOf(id)===i;}).slice(0,8);
+    try { localStorage.setItem(RO_EXP_KEY, JSON.stringify(roExpCfg)); }
+    catch (e) { roFeedback("新UI选择未保存：本地存储不可写", "err"); console.error("[RO新UI] 保存失败", e); }
+  }
+  function roExpButton(parent, text, action) {
+    var b = document.createElement("button"); b.type = "button"; b.textContent = text;
+    b.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
+    b.addEventListener("click", function (e) { e.stopPropagation(); action(); }); parent.appendChild(b); return b;
+  }
+  function roExpRoot(id) {
+    var el = document.createElement("div"); el.id = id; el.className = "ro-exp-ui";
+    isolateEl(el); document.documentElement.appendChild(el); return el;
+  }
+  function roExpClamp(el) {
+    if (!el || el.style.display === "none") return;
+    var sc = roScaleOf(el) || 1, vw = roVw(), vh = roVh();
+    el.style.maxWidth = Math.max(1, (vw - 8) / sc) + "px";
+    el.style.maxHeight = Math.max(1, (vh - 8) / sc) + "px";
+    el.style.minWidth = "0"; el.style.minHeight = "0";
+    var r = el.getBoundingClientRect();
+    el.style.left = Math.max(4, Math.min(r.left, vw - r.width - 4)) + "px";
+    el.style.top = Math.max(4, Math.min(r.top, vh - r.height - 4)) + "px";
+    el.style.right = "auto"; el.style.bottom = "auto";
+  }
+  function roExpCloseOthers(keep) {
+    if (!roExpOn() || !fwSingleOn()) return;
+    for (var id in fwState) if (id !== keep && fwActualOpen(id)) fwClose(id);
+    if (keep !== "menu" && roMenuEl) roMenuEl.style.display = "none";
+    if (keep !== "panel") applyCollapse(true);
+    if (keep !== "newui" && roExpSettings) roExpSettings.style.display = "none";
+    roExpRingOpen = false; if (roExpRing) roExpRing.style.display = "none";
+  }
+  function roExpCloseAll() {
+    fwCloseAll(); if (roMenuEl) roMenuEl.style.display = "none"; applyCollapse(true);
+    if (roExpSettings) roExpSettings.style.display = "none";
+    roExpRingOpen = false; if (roExpRing) roExpRing.style.display = "none";
+  }
+  function roExpStatus(id) {
+    if (!CLIENT.SS || !CLIENT.SS.Entity) return "等待角色状态";
+    if (RO_EXP_MON.indexOf(id) < 0 && id !== "np" && id !== "zhu") return "";
+    if (id === "dps") return dpsSource === "waiting" || !dps.sessionAt ? "等待伤害数据" : dpsNum(dpsRate(dps.total, dpsActiveMs(Date.now()))) + " DPS";
+    if (id === "boss") return bossList.length + " 只";
+    if (id === "tgt") { var t = document.getElementById("dsh-tgt-nm2"), h = document.getElementById("dsh-tgt-hp2"); return t ? t.textContent + (h && h.textContent ? " · " + h.textContent : "") : "等待目标状态"; }
+    if (id === "np" || id === "zhu") { var q = document.getElementById(id === "np" ? "dsh-qs-nei" : "dsh-qs-zhu"); return q ? q.title : "状态未知"; }
+    var s = document.getElementById("dsh-status"); return (zMon && zMon.action ? zMon.action + " · " : "") + (s && s.textContent ? s.textContent : "等待已有状态");
+  }
+  function roExpDecorate(id, win) {
+    if (!roExpOn() || !win || win.__roExpIsland) return;
+    var bar = win.querySelector(".ro-fw-title"), body = win.querySelector(".ro-fw-body"); if (!bar || !body) return;
+    win.__roExpIsland = { body: body, size: null };
+    var value = document.createElement("span"); value.className = "ro-exp-live"; bar.appendChild(value);
+    var mini = roExpButton(document.createElement("div"), "", function () {}); mini.className = "ro-exp-mini"; // V2.38.77.3：不再提供「收成岛」，展开页只留关闭
+    win.__roExpIsland.value = value; win.__roExpIsland.button = mini; win.__roExpIsland.id = id;
+    isolateEl(value);
+    if (!roUi().win["fw-" + id]) { var rect = win.getBoundingClientRect(); win.style.left = Math.max(4, (roVw() - rect.width) / 2) + "px"; win.style.top = Math.round(roVh() * 0.35) + "px"; }
+    roExpClamp(win);
+  }
+  function roExpIsland(win, expand) {
+    var st = win.__roExpIsland; if (!st) return;
+    var opening = expand === true || !!st.size;
+    if (opening && st.size) {
+      win.style.width = st.size.width; win.style.height = st.size.height; st.body.style.display = st.size.bodyDisplay;
+      st.size = null; st.button.textContent = "收成岛"; win.removeAttribute("data-ro-island");
+    } else if (!opening) {
+      st.size = { width: win.style.width, height: win.style.height, bodyDisplay: st.body.style.display };
+      st.body.style.display = "none"; win.style.width = "min(360px,calc(100vw - 8px))"; win.style.height = "auto";
+      win.setAttribute("data-ro-island", "1"); st.button.textContent = "展开";
+    }
+    roExpClamp(win); roExpPaint();
+  }
+  // V2.38.77.3：图标页不再使用 RO 现成技能图标，也不用 emoji——全部为脚本自绘的线性图标（内联 SVG，无外链）。
+  var RO_EXP_ICON = {
+    gear: '<path d="M9 3h6l4 3-2 4-2-1v12H9V9L7 10 5 6l4-3z"/>',
+    tp: '<circle cx="12" cy="12" r="8.2"/><path d="M8.6 15.4 15.4 8.6M15.4 8.6h-4.2M15.4 8.6v4.2"/>',
+    zhu2: '<path d="M12 3l7 2.6V12c0 4.1-2.9 6.9-7 9-4.1-2.1-7-4.9-7-9V5.6z"/>',
+    zskill: '<path d="M12 3.4l2 5.6 5.6 2-5.6 2-2 5.6-2-5.6-5.6-2 5.6-2z"/>',
+    boss: '<path d="M4 19l1.6-11 4.6 4.4L12 5.6l1.8 6.8L18.4 8 20 19z"/>',
+    dps: '<path d="M5.5 20.5v-7M12 20.5v-13M18.5 20.5v-9"/>',
+    item: '<path d="M5.5 7.5h13l1 13h-15z"/><path d="M9 7.5V6a3 3 0 0 1 6 0v1.5"/>',
+    arrowrules: '<path d="M12 3.5v17M12 3.5l-4 4M12 3.5l4 4M12 20.5l-4-4M12 20.5l4-4"/>',
+    combat: '<path d="M4.5 19.5 19.5 4.5M15.5 4.5h4v4M4.5 15.5v4h4"/>',
+    aid: '<path d="M12 20.5s-7.5-4.6-7.5-9.6A4.4 4.4 0 0 1 12 8a4.4 4.4 0 0 1 7.5 2.9c0 5-7.5 9.6-7.5 9.6z"/>',
+    party: '<circle cx="9" cy="8.5" r="3"/><circle cx="16.5" cy="10" r="2.4"/><path d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5M15 14.8c2.8 0 5 1.7 5 4.7"/>',
+    arrowrules2: '',
+    znear: '<circle cx="12" cy="12" r="3.2"/><path d="M12 3v3.4M12 17.6V21M3 12h3.4M17.6 12H21M5.6 5.6l2.4 2.4M16 16l2.4 2.4M18.4 5.6 16 8M8 16l-2.4 2.4"/>',
+    tgt: '<circle cx="12" cy="12" r="7.6"/><circle cx="12" cy="12" r="2.2"/><path d="M12 2.4v3M12 18.6v3M2.4 12h3M18.6 12h3"/>',
+    _default: '<circle cx="12" cy="12" r="7.6"/><path d="M12 8.4v4.2M12 15.6v.1"/>'
+  };
+  function roExpIcon(button, id, name) {
+    try {
+      var png = (typeof RO_EXP_ICON_IMG === "object" && RO_EXP_ICON_IMG) ? RO_EXP_ICON_IMG[id] : null;
+      if (png) {
+        var ib = document.createElement("img");
+        ib.className = "ro-exp-ico-img"; ib.alt = ""; ib.src = png;
+        button.appendChild(ib);
+        if (name) button.title = name;
+        return;
+      }
+    } catch (eImg) {}
+    try {
+      var body = RO_EXP_ICON[id] || RO_EXP_ICON._default;
+      var box = document.createElement("span"); box.className = "ro-exp-ico";
+      box.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + body + "</svg>";
+      button.appendChild(box);
+    } catch (eIcon) {}
+    try { if (name) button.title = name; } catch (e0) {}
+  }
+  // 波利花瓣用的彩图图标（内嵌 base64，不依赖外部文件；没有对应 id 时仍用上面的描边图标）
+  var RO_EXP_ICON_IMG = {
+    "gear": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAABk5SURBVGhDzZp3VNXZvfbNSnKzbjIl49iVsSsKiEjvTbr0Lk16B0G6SkdEehdFmqCA0kRRQREUkC52sNcRx4plxtHhfN6lWbk3cd28yX1zc9f7+eecP37r7Of5nbX3/n6fvadM+RdgOcXy1+tUPaapSnpMW6caPO3jdw/J2dPA8tefP/v/Cf8+57upmubyohYZiqus22VWGo8qr7aaWCvnMqEp7TShKmE9IbVUdsJeWmj0eLxJe0NBYoZA8MFcIBDM+fyX/tcAfhMTlm/WvcujqS5Ze2KdgjLCs5VYOluFZXMVEVmgisxKQxTETJBarsu3X0hgKLmQ3uz11BRkMPn2Djm+JhP568WbUk2WmsWoqv7m8zH+ZZysTXdOCIu8kBxdzBafGI4UhjLUEsL+nZuI9NuAuZYW8qJyLJwhwoIZK1k2Tww/K0X68taSE76JEB9/kl20iVk7j0jtRcTqLKI+SutCa6y68+dj/Y/y7E674jZ3ky5fO1tCfBJwtw0h0C2anKRiOhoaGOs/yvW+Gq52ZnC9cyslyev57a++ICPKnB9OBJO/0YXQTXvQll+Lp9RU7CTnsWLGVOSEvuFAkBqX8k1INFnZ1VSaofj52P80gvcnogUfxiaPZ7uiNH85xqqOOFtswtcplLzkQrpaWnn+4C7Pv7/H0Mk2WvPDeNBsi/giIXZ4SFETto6U6Azi4/ahp2mPzKyvWT79K5ZP/4Jl074kzUacWzXulPspsNnJcrI0OSj6cw3/T9TGxHzRWlVc/fbRMSZHC3jevQVD0XmsmrUSE2VLtgRuI21rOvXFZdy7NMTE+B0udXfQkurC4zozPAzEiLGXoylMnh0b/QlwT8DKNAjJeUsQmyXEKiEhvvvidwSvFeLl6RhaM62JcPEm0ceV7Ej3auCLzzX9wwgEL6e+GL8/8GDsGg35CdwqM+TJEW8qQ1URn7UagzVqmKgYUpxWzIlDbQyd6eTmhWEG2o5Ql7aVujBNjiUpcShOlW3ma4j1jyM6KA19DXuk5y1HfZkUGiKyrJozHxepP/LTuTTOHU0iwTeQ1IhoYj02UJsXPSAQCKZ+ru3v8vDhw9/D5CDAg7GL1JVV07LNkmt7rLhSaoHachFMlaxYJ6fP4m8W4GPlQk1pLYNdvfSdaufEoeNkxSRQ6SdDrv0qor02UrijHFebIJZMnYGhhBImkrporliD/DJp7GVmc7vKmqPZtgy2HedwRTnpW+PZ6rqeBxdbP+r4+nON/1cEAsGBj+LfvfyBh2MXqa84QEaQB23h0ozkGuCqugzxpToYyZtSmuxBWbgaGzTl8bZ0JmFTItlx2ezOLKamuJptEWl4u0SjsEYXleXz2W4jRn2sBRZrJJFdsBipxZJ4aiykL12NdFclLvf18/TOdSpz83E3s6C3uQTBTzebPtf4N3k5fif6o/ifJx7z6PolRgf6qCwoJ9DBnTzr5XQlqJLjLM7iWTKEW6siGIjk0GZVTmTbMHgoiv3ZQcT52hNga4ObkQXm6jqoCy8i1EiUw6FSJJqsIM9Rll0bRJERmonwbGGijFfQEiVHtP1aGvdWc+HMaarzcnA3t2FHuC8wzstbvX9/Ygvev5T+6dUPjPW18/j2KDfPn6MyL5/E4CA2OgeTYSdPS4gcRS4rURVZzd4wQxoDREjzd+RY+S4GDqZy73QKd1sCudnowZ1WD+72b+NMjBoVHjJs22BE3KYEgh09CTPXRWWlFCu+nUFNqDL1QVKEGKyiPESN6m1+lKamE+joSrirA6/v9fPz04u8vdcv/bnm/wD49S9vnvbz7gXnTzZTtyuf8sxM2io3M7LPmnx/Y663RDFabERbkhb2WtrEh2xni/sGrg2cZfLtKwQf39W9h9y+OELXwb3UJJrxuMuZg75SxLmtZ2d6OfsKytgelY6nfQA263xRn/N7ujPNuFxsyt4wU8q22LDPX5bChO0EOXniZWHGncEmeHuNV3d6+6H2v66pBII3DvAjd851c67tMIVJOwgw16UtVobSTeY050bxptUJwcgWurJMcZITJnFLAY2V1bx7ch8mP3D/cj8jTak8vtLK9c5K7pz2ZPT4dnaFuVIdLE1HgSnlYeuoLKhga3ACmzwTkJ27AB/pWTSEqtKb70xFsD7JZmKkhETiZGiOtbY+5RmbYeIKvBll4k63w+faP/Lb82dOjj29eYVLPaep3bWbxNB4vMzMyDf5khIHUTqyPHncGU/DZkOslnyFp6kzOzMrOVpbw0/PHn6cNjy5f4crdd6cLd9Axx43hhuT6Du0n9bKLMJtNNnhrkBlmD7DZ/pIi00jKiAJhRUqLP56Oi4SM2n0X02ozircDNYR5x+Em5ktoZ7h+FhZ09O0C95e5+Xt7jEY/O1fqX/1FpObY7doqaujvKCI1Ng0kiJ24G7lgYuuBp6Ki2kMUWWvnwpK3/4K7SUryIgrZ1fWHgY72vnx+Q+AgF8mYaQums6KzXQdPUJPfRGDHY08v7qX8ghTKsKsqY21ZmxwhLzkHDzWB6ErZ8mcL2cw7w9fEKk5l9LNbkT5x7AnZxd7skoItXMg2kKeWDcjJl+OwutRXt3uNvkrA+/Hzx6GF7x6+ozjTSdIiU3F18mfQLdAMrftxt8xkCiNhSTqCrH8y9/hbWBDWlwJaXGpjJw5w6PrV3j/5vmnf+Fa+2669oVwf/Q8w1V+PBvI4efbBzgeqcz+aE+akmy40HGawu0FmOk4YaUfyKLp81n41dfYiM8k3VkdfV07vDwCOFUYQpLhAqzEvuVkdR6/PLsME1d5dqPr8H+ID9BYOPNAkOyb87vMuXQwhPbqIqqLq9mdW0pJXhn5O0oo8LJEd9FMZBYsQEVoDhGuMYT7JJC2NYn2+kYudXcyPnaByffvuH32IO2FDvR2nKa+fD+VQWo8OGBPiqMxBVvDaIw3ZeDYcXKSCrFa546tUQgiQsIIfzWV1YvECUvdSXjbddSlJdmoNBM/PWn2pQQzcb2DN/cHeff9MBO3et6M3zwx85MBKeFVZopLl2EsMp04g1kcipThZKY9VRk7KN15iLrUKBzEp7Nw2nyEp32LpaIerlbheK33Iy8plaayKrqamxnt7eLlw7tcONVIT6EJ+xJc2GSqTaqvOVf3bSDJyZw9njJUBinTVLKPpKhMnBy3YWa2nZl/+A4jY1dy+26R/AZUd3Yw59+mo75cgYqkQO73VPH8Wgev7/by+m4fPL/E4ysnzT4Z0FEyz9RTsUJeXAuJBSuxXDmTTDMhWiLlOb1nGymWYiz88kuWfPMNGiJrsNJyw1zLiYLkAqoKiynNzqelpo7Ow4cZ7e/l9sXz1OwIoMRLhBJ/DbIjghgsssPf0oJc22VkB/lQllVOWGAqWmZZaOhHkLWnhqLH4DgGdpfAcV8vsur2LPtODZd1+vDwDG/unmXidg+vPhqYuMKzsfbMTwZcNBROhTq44ucYjomSBkbCsxCbNgNzkenkW8xHa/l8tBRMUV4ph56cEQbKZriae5EclsyRygOUZeVRmlVATXE5nYeaP9UyPcda2blRj2OxymR5mXButzNehtokW0myKzmXkvRdGJmFYuEUz8GLt8h+CS6XwOXcJPaDk7hfhLBR8G4YQdMxjNDAYF7c6OaXxyNM3OlD8PQCz8Y6Tk1ZuXLlvzkor7mRbq9InLksW03W4Cq/GOn5qxGbI4qk0CK0xYUx1rBBW3YdKqtUMF9rjZOxGxEekezLK+FUfTPF6TnsLyqho6mZM83NDJ5spyZnBy0RqzmTps/+LTYkWUmy1c6QiuxSPGy8ULLezIAAvG+B08gkHhcmcR6exHFgEtveSSx7BNiPwKYbYFt4DFO7IB5e6uTDkwu8Hz/H09FTN6bortadnhGd9bogMYc0ewVSbdagtVISJWF5ZBZLoi4qQVmMP3pySrjabEFTUgd9RUNs9OwJdAxi944Cjuyt5Wh1HVU7izlZ18DJ+gbOHjtG99E2cj21uVooT2OKJdtMlhAfGEbRjp34O29iocR6bAr7iBsH22EBjoOTOAwIsOubZP3ZSdb3TGLXLcC8E9wugEnJICY2fry9P8j78RGejra/nhLjETOtNG33RPH2IraYqZBjI4qasDTaUroorlDAVl2J9j1pBFgZYGe6ERNNJ9QkNLDVd8DTypvksCSqC8toLt9PSVYOB3bt4di+ak43NdF95Ah1xSXUhshzq1yDECNV0mKzyIzPINQ7hvWGPsxYoM3arC423gHr3knW9wqwGwTHEbA7C7ZnBFh3CDBt/WgMFKIPkBIXD2/HeDLaPjHlXnPQ3KtdBW+u1PmwP0CCXOvlrF+zBHVRZTTFZahJj6K/oYTi2EAstAxxsQpBcZUqRqof54EHIa6hFGzL4uCuMvZm51GWkc2hsgpOHjhAZ2MDZ5qP0L6/gIpNimx28yc7IZPtkduI8k/EzjwcIwNXZk3/Dvn0PrzHwGkIdPfdQzS2C/MOcOoDq5OTmB+bZF2jAIvjv6BqF8bjy6eYuNk5MWW0ynbaUJHNRM8OdTItF+EjPwc/hVXYia/GTlOF66cOcP7IXpoLErFeq4m9mS9KqzXQkNLCQssSDws3EoJj2F+wh/15BexO+bis7uXovn10NtTRUlHGvfP91O4sJMo7jOSweGKDYgj3jkdfzREFWT0qfFRQkpBjVUoHfvdAIrwR2SXCLFwbiHzxQ2xPg8mhSQwOTGJQD6LeJRwsTuf9g+6JKRarv5i+dt5Xr+VmT0dizlyWfzuTNXPnYC8hhr64KCfKc+ioyGOrmw1mKkp4mDmhL6eJsaoxVjrrCfcIIy8hjdSIGPJj48mOjae+dC+ttQforD9IS+lu7g510li+lwAHX7b6RRIbFI+vYyiG6o5oyuuRuUGNKxmWqEtJIZ59ke/cdlMXoUXLVj3mrzZBKvd7jJpBq2wSjd2wIuIM8Zs38fPdztefViHtZfNuqC5dgbKIDMrC4qycNQ+JGd/iqKFIbXoC1WnxWKlIEaS/BruVX+ApPYsY3eVsXidJqK0FCUFxFCYXkRu3nZiNwezfuZuWfTU0lpRytLKMFzfPU5qVj7uFG4GO/gQ4BeLnEomVmj5RuhJ4Ki9nKMWC0RQdVBRU+XdhLQaLPHh3JpWdXgr8dlUEyhUCNHeBSg4IR14kKiKYN1eP3Pi0D4SozTm1VWsxjrKrUBeRQHrBIgxEFlGyJYD6xE1UxYXjri2H1NTfYCgyi3D9JUSqzqLefQU3K8zo2etBus96ChIyOFRZT058MtnRiexJyeR4dRUv716hKC0XV3MXPG3cCPfbTKCVJTnWovjJCxGkI05/vBFXErXoC5Gmwl2CxyfSmbzWTGWMHVOmubAk/C5qeaC0HZZu7CVhsz/Ph6pPfTKwxVI2M8lclEDl73CXX4aB8Fwc1KTIDfGg3EuVCk89/LVk2e5lQP9uKx7Vm+Iu+yVq878i1lSY3vx1fF9rQrmfJNmh/hzZ30BdWQXluQWUpKZwZ7iLlC1J+Nl7kRiWgLuVE5UB0mzVX4LY1N8RqLmcJBNh0kyXcTVpLd/vsefZcA2M97At2J5vZxnyR/M2ZFMmkUuCBfY1lKX483J4/5924rGjmWZDlVtJ9zLAVU0MByURkjxtSA90xlNyKrnua7nRngTng7ixS4PWFGPCdRcw+8s/Mvv3XyE54xsSDRfRHS1GgZcO7YeOMzbQy9sf7nO+q4MT9QdJjogjJjCaxJBE4oOiiDdZiej0r1kyQwgbiXkcDFzFHrflVPmo8PzENl5dbeLR5RbsVUQIkhLjK619SCW+R34HCOuHc6Y0nFcjB/5UC908sXvmtda8N0P746lPDaQmJZj6zCji7AzIj/JF8L6TD5d9qYtRJ8zenK0+YWQGOSM7fybSCyRQWCLPmpkLCJT4EicVafKT0ulva+Pt+F3ePrrNj8/GKUrdSYRHBDlxqdho6KK2WBjR+TJIrViLpvQ6og0WU2A9h9JAfX48X8mHW0eI8LYmTGoGxbqrmau5C7FYASs3P2WdvjY3jma9eX2h6U/V6EdeXDt5+MfrrfQdzOR0VRrpfvZUJH1MA85z//xuyiJsaSjZT2FyDtH+oVTlZpPla46esAjyi+TQE9dBeuFqZv/+G5ZOE8JYQZOU0EhOH27hxfgjjtQcItTZC5llosz+w3TkF8thrmrPOhUH1soaYq2mj5+SEKdzPeBmE6kRrgQpTKXJdhX52mIsUt6OaBp8Z5xBRfwGng7U/Gc/8MnA9dMmPB7g8UgjtRnhxHuawYcyHg3EcjA5imePnnLn0gXq9hTRvLeSvblFNJTsIs9TB0Ph2WiLayEuJIPMIhnWfKqjVrB67nLUhNfga2VPsIMzMgtFkVoqj9QcYTxlRQldu4oYMx1cDDfgYx+ChYIi+7eYEW6vTaqVEE8zpDjhLk7m2uUs0Mlh8ebbaCnJ8Kx/L+PnDv11R/axx3w+2jr28vJhNtkb8mQ4khe9LuwK96Hz0NFPDftwZzvP7t3g4dWLdB06zN68XeyM2czRNGcaEk3YoCaLpqguumvWoS9pjMJSZcTnrUZstjCr565EW9IIYzF14g0VeDKUwFaDuSRY6hPmlYiNvjuaorLoi06lIWwpk2VyjKfIcDd6Fem6YsxxbGahqivHc325f7ZyjMHPeuKPCCZGHJoKo6lPteFDlwPVCX7EBsd82oSGTxzl0Y2rvHt6n9cPr3NzuI9TjY2UZuZQkVPM2eZ9lPvKo7hYDt01JrjqBmAsY47BGmNMZa1RFFZHd5ksObZa/HQzBx44Ear+LSpzlmMpp46Prgz1yeq8OaoDtdK8zpXiaboUr9Ml8DfU5VfLbUkPNOfn0WZudVf+l6nElFr4dU6Udf+PHQEcjTbG09yRIBd/0qKiqS/M59G1iwg+/AiT7/jl5WOuDZ6l93gLJ5sOU7/dH1dJIRRWaKO3xggPg2C8jYLx1A/EWS8Uk2USFLga8vPdXBgzRXDJhOM79KiIMOJClQGT3WbQbQD1Svy8V44f9yjwfrc8r/JlEV20GC8LdcZPF3HrdEU/tX8jF/rI990R0l25phwI1yTa2R4fe2/C3IJpKK5gtP8srx7fZ/L9GxC84cZwD68f3+dCZwsl7rKYSa1DT9IEcwVbvA1D8DUOxd88Gn9VAxq2uMGTSrikw+SAOoJBHRhzgGtW0K2IoEWSySZ5BPXKfNinBFUKvCsRJ1j1GyIcdbnSnMadzlJuthX97WTuz0QqTYsO0VhIjPkaSkIsSA8PJjZoK7VFe7h0pp3x0WFePLrNw1vXPqUQV5u2EaaxBCe9MIxkTXHQ9MDXKBxvwwi8FfVo2e4FzyvgsiGTwzpMDusxOaDFZK86gm51BJ1qCI4rIWhWgEPKcFyLJ0Wr8Jf/A6E2axk6sI0X5+q41l7697PRP6MsvOCAurQq6+XEyFsvRlNWGMWZhRyqrGLgxHH6W1v48PM7fnp+n8YIOcyk1PE3i8ZEzgx3/UACLWJxVzbiaKYbvM6FEU0EI8YIRgwRDOkx2a/F5FlNBF2a0KEOJ1ThlDIckqJt0zw8JaeTEWBNb1UsP/RVcbOz/B9Ppz8xe/bvrTXkBk3XGmGlrkeSqSgt6V7sKy4hKz6Z3rY2Ht8c48KBELyVZuOgGUC4dRym8uZ4rdvERst4PNRMKPSW53G/Gzx0hgt6n8QzpI+gTxt6NGBYC/rU+alhDafCZhOi+AWeaiJUJ3kzVJvM4/793OupGrzZVvTfOx/4iEBwbGpO0PpBL2M9NCWV8FX5juJNpuwpKKGt8TgDTQVU+KzEWMKASJtUvPQ2oiWmjYtOAP4mm/E2jsBBwYoARTFa07SZvOEKNyygX+uTgXcnVOnZKkS+2df4SX2Dr7oYBcE2nCwIprcyhufDB3jQVz146dju//4JzZ8R9NRMbUrxqd/mYYayqCihWkJ01xZQV5xHZ7IOViLTUV2qgrvORkxkzFFcLoudhg9eRlG46W/CSSeA9WsDMVwsSpz2dM6Vq8MlQxjRYbxaDneRaSRtMGBPpAPHcgI5syeSS03pvLrYwIP+mvqef0b8X3J6z+bonRHOk1FGIpxO1uHWQX+C5b4kxl6b7W4GeOgp4qwtT6CpKhvWKuKoroatijJ2qnI4qCvgb6LJDmd9NmuvJM1qDvcOykG7PFt1F3EkeyMdRWH0V8Xx6GwF48MHJx8M1vzjE/YfZfRIjmKim1FXqvVSdpjNJcxUniMZfrQWhNFWEMaRrI20ZAdxoiicE0WRtO2M4MTOCI7lBnM8L4i2/BCOZgWQ42lImOYiqtxn4Sv/Le3FUdzvKOLFSB2Phg503emp/p8/J/5LHNXFnbMDzC9cbcrg6XAdzy42c6+7ijtnKrl7tpp7fXU8GKjnwcDHz4M8GKxj/FwTj4YbudVZztWWXHoq4khz1iXL14gn/VU8Gjp44cFQ7b/2pP4v+XhX4vFIk9lPD/ua3j04O8GL8/D6Mry4hOBj8PRoiPePPuY3Q3wYH+Ln7wf58GiAXx728O5GK+O9lVxqzpy4017Y9HSk3uzUqVP/e3clPkfwZGjOu/tnzX+8dzbjzZ3u9je3z4xOXG+feH61deLJ5WMT4+ebJx6da5j4frBu9F5fTfu9s3szvu+vMhc86fqnb6v8H0sh9mCPZQzUAAAAAElFTkSuQmCC",
+    "tp": "data:image/png;base64,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",
+    "scr": "data:image/png;base64,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",
+    "arrowrules": "data:image/png;base64,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",
+    "mlock": "data:image/png;base64,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",
+    "zhu2": "data:image/png;base64,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",
+    "zskill": "data:image/png;base64,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",
+    "combat": "data:image/png;base64,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",
+    "aid": "data:image/png;base64,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",
+    "party": "data:image/png;base64,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",
+    "dps": "data:image/png;base64,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",
+    "boss": "data:image/png;base64,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",
+    "item": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAABsdSURBVGhDzZp3UFdplv6tmp2t7d3pbrVbG0yoZCXnHL7knDNIkpyjkjMICAgKKBIkKyKIgAgICBJE29DaYtu2tra5EbNwn3P1e39lT83ujBtma3dm6/epev+7dd/nuffc9573nHfZsr8DHR0dv+Pz+asOHDjwdayu4tffZgR+zT+Zt4rjuN99eu3/F/DnL65hHs3YLz0+t3vx0bnhD8+/vf7Dhd4FBy3ZZ9u1xJ55qog889MQXYg1kble6Ko5PJHvt5sdKbafLPRb8+m9/s8YG8v4B+bJtN3Sg+nupYfTz7mFSxz36juOY37gOO4uV5AaySl888+c+saVnMLa5ZyW0NecmYQAZyP5DbddXYTrSLDjruwNfH4y0a77eKSFHTc29g+fzvF3Y+nBjM/Sg3PfcQuXOe7ZRe7tL2c5enKe5TO36fTxOor3tCYnTWlyUhamYJ4URRlKU5C2JKVaKFBTiBmF6m4lpdV/YCN4Ulx/vB13OMiUq3TVulLhpOrz6Vx/U17dndJ492D2LPfiCkePL3Cv7ky9f3tvlmV/vcjOTXdQ/Z4MclYWpyQdSUo2kqcqTx6GE+0xlOSInmQnKvbUp/3bTagr3o6yrFWhv+EreMgLodpLj7Is5blSBxWuyF51IsVYTuPTuf/XvLw7nrr4cIZln17gFn4aZV/+PE6v706yb+5fYCvSI1lvdQmK0Bang94G1BFlS/3JrpgqDsBojhdG010xmedFQ6ku1B7njDxnLVR66CHZWA46a7+kBAMJFDkqI0pfEsmmMlw0T5zdrrk59VMN/yPGxjr+8OLO2Tbu+RXu+e0z/IfXB2j+x2F6fnuU3j+Zoonj1azhpq9Ze6l1ZCIhQGZb18BGdgN8NERR4m2A/hxPzJb60Fi2B3VGWOF4lDXawiwQy5OiMB1xcpbbQLxNX1GWhTRF8yTgp74RfhobP7gorefUNq5q27Js2R8+1fTf5uW9syvuXe449+LOIPf89gR7f26Qbn/XR49vDNKb+2eJv3iVyrIiWIkv/4l1ld9E4doSiNWThr+yGLyVhOEguQ5661fCXnoD1QSb0Vi2Dxr9jFDuqoNCew14KGyEi/wGkhNcQWYS31CojjA8VDbAWWkdLKUFyUBUgHOS33SuIERrxafa/ir8X375bOGnM7P3r3dzV6aa6OHcKfpupp2+nzlML34+Qzcv91JMkBurI7qWDdOUoHIHLap100e9Fw/NvoY4EWn1W+yXu2nBXU4I+kIrEawticZAE5S76SHNQpmJ0tsKCwkBaG9YRbKCy8lDcR3MtgrCSEIQBuKC4G0VpDB7ac5KX2x22bJlX36q8b/kydzQ4aVHs9zlcy24dK6Nrl88RtcuddBP33dRw940slPfSh7S6ynHXJmqXHlU62FIDV48nIiyxGCcLU4nOWIk1QX9MVboDDZGpZMq4yK9ljEUXY1sWxWE6koxboobYSYhCD2h1SQjsJxc5deTpdRaMhQVJEOptSQn+iUpSwlQYUoAd/9KX9enGv9Trs00p7y+e4a7ebGTzk/VYWaygeauddHZsUOU4G9Lrls3UJmVMtvsY8w2eptQs48pHQ01o4E4SwzvdMBYmhtGkp3RG2WJY2EWTK2nLrPHQZ3JslRmNIVWQXXdcgRpSTBW0uuhK/INVNZ/BaV1K8hGeh3ZyAnBSWMTWWivIWdrPZruqyF6MM5yz2a5X2+cTPlU679jdrJW6cJ07Ycr51ren59qwOREJX13pYkqdseQlYIERatLUr0Lj476m9NhfzO2I8iceuOsaSTVgSayXDGe5Y6xdHecjLfDsTAzHA01Z2q36TNVbjrMLhs1JlBVFKprv4SDzFrGXXEzoycqAPmNKyC15ksYSK6Fu4kYYoK2kKPVFnp8fZDYJzM0f3P44/jw8vbIh5c3hpQ+1fyvfMxhZqcbpi5eqOfOjFViZqaexsb2UaS/FVmKr6dccxVq8DKiOg8javU1pWOhZtQba0Vjma40W+RN0/meNPoxbGJtcTTMgmkLNEarP4/pDrdkjgSbLpU7aCzFa0sxjlvWMFpCKxg3eSHGWHoNNKVXQXjVF7DUFiJdjZWko7SaWioz2cXHF9iHNwbo6c0henJziF7fHed+vnh8iuM6/uOcanqyxuPyxUZubGwfM3F2P86MHyQ/Gx0KUhalOh8jOhJsihoPHmo8eeiJtaTT6Y40VeDJTud5slO57jS405Z6Ij6GjeVHA2jyN0JLgDFzLNSCOeSlv1Rio7oUobplyV1mEyMn8DljIbkO9joiUNi8ApZyq8lGfyX5ORvTbG81Pb91iv35ahc7d76FfrlynJ7ODeD6TDs9vHGSe3L1lMen2pcFHlD8/fDpwmtDp3dzfQOFzPS5GoT7WlKi9lYaz3Cj4WQn2u+miyZ/E4xmumEs04Em81zp4h4/djTVie2JsKDOYBMcCTZDc4Axajz1sNdZG8ejbT5+B6h112ZKrJWXwtQkl1xkNzESX3/OaEkIwNdFHPqKQvAwkqScRE96fmeUHs2doNuXu9m5S63s7MR+ujXbiUsTDRgZ2IO5bw9zP8x2XOO+/fb3f2Hg3p0y65kLuVx3byZ6+vIxMFhGNmpbKN9chfpi7ancRZcKrdQwnu2Gm83xmC70wkSOKwYSbelwsDHqvHnY76GPYntNpthGlSkyU8R+V210hprjaLAJDvnoocRalYnWkmGcFDYzChu+gh1vLWxN1mOsvYjuX+qkZ7dP071r/bg404zZ6SY6P1lDZ8fKcXmqBcOD5RgdKmUunK3Fjctt3HczzdZ/YYDPn+menz/I9Q1kYmi0HLW1yeQks4n2OepQo5cxhWtLU5a5MnrCTXAm0xljma7oT7DD4UBjHHTTQY6JIhL0ZJCgK8NEam5hEvSkUWyrhgpHTXSFmqHFz5AqHbWRwlOEt5o4w1NcA1Xxf8KejAD69Yd+ujnbjKszh/DtTD1Ca01gVSSFzv40TJ7Zh9GRfegeyGPGxgqZybFS5vzUPu7SVOO/LatVTcGrf7xV8uLM2UR+e1cqzp6rQYS/FYUoCVOTrwkV22qSt5IYVTiooTfCFKcTbdEXbYlyZy1kmykjiSePnQaySNCXRJyuJHyVhBGgJgZ/FTGkGCqiI9icTiY6ULuvMWUZKcFVaTO0FASQGeGOu1eO0dRkPY2dqcT4mVK4V6gj9Ig3SoZzYVQojr7BfHT15TAtnfHMiZMJONYTh97+dP7kaNWLK1PHVv9moLE92abnVArX0B6JxiM70d6ZDWtFMdS661NvlC1tVxEjTzlh6ggypuk8d4wmO/721HfobIW/kij81CXhrfYxfdiEbQpCcJBaCw+5DfCU34Qd+vJo8jalwwEWVOmgQzt05eCmsgkWPBGcG67Ehcn9GBguQe9QAfzLdcmkQpfeMLfB599B8GFHuFWooqMng2loj2KaO4Nw8VIazp9LpomxQm5ytMbmNwP76qKKmzoSuQONUTg+kI2Q7RYIUZFAb7QNeqMd4CUnjFwLZXxc68+kOdIRfyPkGMjBT2kj/NU3wEttHRTWrYDuxpVksHE5LERWwXDT17TTUIaKrNSo2cuQ9jnoIMtIGYEqYvA12ghXGxk6M1iK7r5MZmisFNHN1qRfoUr3np+jpfcn8AqH8fTdeRjsVUZ0pQXT3B7LNB4NxM9383DzRi5GTxdww4N7in8zUFwZOlRRG8o1tEWiuT0JLqqSaPIxxJkUF+RYqcNHSQQnwi1wNseTTsbaIMtYEX7KwrCWE4SJ3HLwxFdAfPm/wEBDlMKCjchaV5JEln9GkdoSVOGgSScirKk9wBRpBgrwUtoEQ5WViA62wNmzpTjSm8pktrpAs0Kabvw6Q+CP0qPFBtxdbGSe8fsxfucY1PJEmdJGf6auNZzpOOHDdPZEM13dWVxvd87Qso6OjH8srw2bq2wI5fpHdiA23ALJutIYindAX7QtnKU3It1EEUNx9hhLcUeLjyHitLbCTWUDZNd/jnUrP4fk6hUwUhXF4EgBJs6V49TpAgoPMCcT4W+o3FGLTsbZU3e4JdINFeAoJQhd+fXoO5GD/sFMFDZ7QSZzPYZ/aMEif5zuLjXhFnMIV5l65sJSFR7z+1E+kgmVhM3M3obtzMGW4KXa5iCm9XAi192ZNbesrs53VW1r8EJHXxTX1h0DexUJ2u+sRwOxDrTLUhUeMpuoM8AUwwnOOBpsgQILdQRrSjImsqshKvAFVIVXQ11EADoyGxEfY4NTwwWYmCxD3cEYMhEWoAJLFeoKt6KecHNkmyjAWnQV3K1VMT1dQg09wVDJF8b+qQK85vfj+mI1ri/W4uJSLb5dOojpxWqcWSrFHHXCo8KeMUqUYqoPhTFVDUFMU2ss/1hX1sKyAwfcvq5vD5jvGYnlgrbrI1x1K/VE2lNnkAV5yG6iPHNlmkz3oOEER1Q7aiNETRpeWhsZObHl0FRbDzs1QTgqC8FVRQSmCoKoaQjBzIVStDRGktGmVVRmq0FDCfZ0JMiMUgzlYCP+DbZ76mFkPJnMdm+l/NGd9I4/QpeoAtOLFZhdrMb04n5MLVZhfHEfc+ptEQbYQmb2VQejn6vK+OXqM9X1QcyBQ8H8tiOJ88tKqretbToa/KKtK5TvqCGJCmtNnE50p2JrNXKW2UT1XkY0uMOJjgaZI9tQEaHaGxgzxeUQF1oBPaXN0JZdTZ4aAvCRXwFvc2EcOR6FC1eLkBxlSEEKItTgaUjFdloUqb2VQtTF4KMqRMX5bpTeYklBLW705v0s3VhspPMvG3BxsZGZXqpizizuZU4vljE97/KZ8bf78O1SK+b4JzD1uBu66XJIK3PG3prtXENT+Pyy1tbAr9uPR84fOR7NOWhIIklXGvVuPApQFSMryfVUYKVGdZ4GVO2ghRA1cXjrfQWFzV/AXlEYNnLipCEuSKk7dKkgxQxH2v1xeiwa/YNRcFMVRZ27Hpq8jbBDX5acpYRom8IaOPI20+DpnRRfZ0KGFXJkVqlOqrkypJImj+E7tczM+ypm4O1upuddEXPqfRlz4EIaTMr04FhrhuhOb2jnK8I3l4fKmgCu7lDI/LLyOt9V1Y3BC8cHozkvVyVYiQgigSdLXipiZCwmSNnGSnTQTQ/5RgqMn/JGyAn/AXKiq+GvIYQgjc3kLfklm5fIY89fS6XBwQCcPxeC3bmG8N66Hr2hFtjvrIsY7a0IUt8MU7mVKC41p96hCKpu8kXiPnNElRlTVJkh5CI2o22uGMeZIhx+nce0vspj+t9XIW0kAqIxa2CTogqDGGnYJKhgZ6E9Cvd6clW1PgvLMjKc/rGuxXuuZyiAK93rAD2RNYjQlEK0vjxspdah1EINDR68j2s4s01pPfRlV8JCfSPyIpSpOWYrxWiuZvub3djvLwfTzJgL3boeTqmhWpSuLYFaTx4S9WQRqCoMbzlBuFiIYXTEHxUHXFG8zw17qrahZJ8nSqs9oJ8kj+afitD8LhcNz7NQ/zKLOUrl2DEYBu1YCcra7YykQtvfRnKxHXL2uHIle93nfvsPtHS5D3WccOcGh7xhpS0Cf/nNiNSRhoP0BhRbqKDRywB5pmrwV1sLE8XVsFZdB29LKTqYa0tHyqxo7JALjR90oJsnnOjl00zKDTekHN3NVGCphjhdOWxX2cwYbl6B2kp79Pf4MpWVtkzxXhvmQK0D8nbbUnqpFQyzFNH2oIipeZXB7HuWioqFNDQs7UJ0jy+pR4pRUpEtReSYIanYHPH5FsgoceTyS5yGfzNwvNejeGLCizs/44kdMTpwEFuPME0JOMhuQIG5CurcP74BRbjKrcI2axFKtRKj4Rp3WvrZn317yZZdmPSnR7NZNNcTRpfbQygv1oFS1AVor4sm0oyV4bRlNeNjJsbMTIThQI0dDjVYY7DfGXv2WSGz0Ao5FTYwy1dF/cMcpnAhjdn1LIPJnU9lSt5kwu+YG2nHb6WdRdYorbPG2XPbkJxvRKmF9lxuqcPu3wxMjnvZnBl15U6dcsbQkA8cVIURqCgCMzFBRGiIY4+tFmWZKNFOHUHylvyM5updif/Cj71TK8HerZRkn7ZIsI+PatHTfid6NuPP5mxTYUPlvqGDzjJIMpaDvfhyZlecOjM55MVUVdugdI85qqotkZxtjB1ZZthZZAHDbBXsfZDJpP+awaQ9SmZ2PIhncheS4NXpCN1EKSTuMkfBPkt09TkjOoVH8dnWXFqB7R9zoZ9+8lzd1eX8ou2IDX9k3APBrvJwE1sLHaFV5Ku0+bc9QZapMpuovppKDASJfz+XnR/WY5+N2rD8X7xZXA1lP9zgsQtHNtL8MV26c8aVtdqyiiLkv0aM7L/AS02AGWqyY5pKtZmjtWYo2W2C9Bwj7EzSR1y8PqJT9WGYp4KyB9lIeJCEmJ/jmNCfwpnkp4mMc4s1dCPFEZVqjJBEE0Sn6CNshyE/Lt34ZUax3R+z0Y+0tQV0dx7bzo2OBqC6whoWoivJessq8lcWoRIrdcowVKBQ2S+oK0Se+M8r2F9PGrPsozAWt4JY5v5u9t1le5am1WmhSZSYa9vZwXI9qkjSQUmcFk60uDHDnS7MYLU5U5Kmg9goLSTt1EN8nC6iwrSRkKRFFiWatOdxPkLvJML/ZhTcvw9hoh/tYGxaLKEXLonAWCMExbshIM4DsZkWXFy6Qfe/iv9IUHKpzY7iWi4iNZ0amiKQHiNPFrJfUJy+LOWaqVK8hii5in1GfZHSxP8ljV0Y0GFxUZVdvOjO4tcy9sNzP3bpti/7ul2CfX1Si53rMWUn643o8pgHakoNmF3pWszebB6zK9sAaSkGiI/VQVSEJpLitJjCXE2yK9KivEfp5PZDFFznIuF6LQKRD1Jg3mgF01gFeIVZw3m7A3xjnGlHgTkXn2Xwx/D5E99y3O9rT/3y/YETt7n47FoMDqegJEsNEeriSDaQpRil1eQq+c80G7WRfTHlzb6e4LGvT8qxizfS2cXbwSx7z4ldOKbAvh1QYt90y7J3B03Z5gxlunjUAIPlqjiUpouCBH3kxWuhME4NydvlkRSrweRkGTApKepwyNKksscFFHM3leJ+TkfM3WSkzxfCuNwcOtuUyclvG7kGZcItwI2LyTT+/sABxb/cE3+k/NiPHsWNV7mA2Hbs2teO1tYActT9Bq4yX8KPJ0QJNpvpXOgq9nyhKrF3A9gXfQYsTqvSqyMS9OKiI/u8R5GlczyWGTFn7/frU12yMs01GtD5IhU0Rqojy1UGA7u0cbveCBO7rVAWroWkKFUmN18X21NkyaVAh1wqTMi63AwGhQbQyzGASpQCTAPV4RgYDp+EFnIODOD8ovX+fVXiIx97WHG5vVP2Pvs518AqpO8qQUutI47Wu+HmdAR6Km2ozfMrGgkRoHvDvsT/0ZZeHJOlpX4pWqgXpleHNrOvW6VZdi6EvdWtwR4vNKDZWhuqDVPFHm8pXGywAv9WNp6cisP8dAVudCWhIdGI2RWviZoKNewpVkBsigpcYnRhFKoOqygVuCRoICpVF7Z+NnDw8+LsvXWnly1b9h/XhT5i6JCr5B5a+T445ch75+35SE+1Q/dBR3SWGODSYQfqiNxCV1M2UI+XAN07acayN3TY5ye12BddRuyrLg32zTkrln/Xkj0cI8Keb3Om7w5ZoiFMFoP5ilgcc8HPR8MZ3D/O0KNeLM7VM0tXqpgfj+xAaxIP+cESiI9WQFiaObyjeMgrNkJith4yc7ThEaD03jtE+UNYgsZ/Xpn7E3YeScmW9sGcpaEOqqO0cL3WBbd7ffF40JNunfCkdudv6ITL59Tv9RX9UC3Fvh3XZulJNrt4x4N9e16RHQj8nO3NVmPvD5jT+SIF9MeJ47tyZVzYbYxnE7mg++14eXk/Fu8ex9K9E8zrq03M09NFmNwbgtIgPewM0cSOGF3kFehi3wFdFBZrUVqOJheRqPjXa6N/YneQXntvgho3GCWLgXhF3DkRgNdXM4jOWdLVWiU6Zr2CHhaupIUqAXbEZQU7HbqGvZm2jr3o+QV7vsCW5b+OZTGrTY/rZGl8hySdSVOh4WQT3OwMxZPhODwb2YnF6/uxdO8YFn8ZwKsfe/FqrhOPpuowcSAW+yKNsDNQEZmJqijK1uAKC7WPfarxv4TP53/2/lLq7HynHXcmXgRtgRswmrgOTzuUiP80gJ6PG9KDVit6WCzNXnBczt7yXU6PC2RovsuL6G4V+27cjX3UZMDe3KnOfh/Fo0vpznQlYzsdNuHR4TAePeoJo6enk/Dq2zIs3juJpSdT9PaXEXr700n8croMc4cTcaktBd+1JnFVESazEaYiX3yq8a/CcVdXPD1qM/twryJ395g1+0ObBdGtSGLfthB/qZz4H/po8Ukr++Z2Prv4aD+9/j6NXehxpV/3yLOLZ3zYpfE4lmmPZ/l9RfSyLJ3uewRT01otypKQxtjBMLrYGk/XOlPowXQDvbxxnN7+1IsHs430cLYeuDdA/J86uPnJvbMfdXyq7b9NgfSyFbMZsp2vDutxY0my/BdDtsTO5xL7/kei9y/YD/w7LPu0kX03vp1e9jjTy1ZLerPHgH130Id9272Lfd3WwD4OTqBxMRPqFjakIkF1lK1RRpmfMfUWBtBQVTxNtWbQ3dN76dyhWLrRl0evr7dy3Ovz3PO53s57Z6v+5+L/nCbX1akDwSLs+yED7v3jWPY9/yp94C+xby9lsQsVkuzjXUr0NIVH80ku9Karhn031M2+js1mnzuG0682IfTML45OyFnSHkE9qt5oQlm6CjiaYIXmJA+0ZXmjb3cw9RX70P3hIu7hUB77ZKrqb9Ol/HMWu401PvycdZb70MNx93dyeJDA3ijRoRsxhtQmK0OnVDXwpuUQvR0eIdp9iGWTytm3MRn00ieBHoYk4KCQFmo3GFKdsBnixGSRaieNPA9NVITZ0MFoG647252bqIk5e+1oyt++T/znvBp38Vk4yrtys96E+zHOlDtv68Gd1HagS4a+GFa0RqWwFg1oWdEP26PoeUYOvW/bT2M2rsj5Ugbl6zSQL6iKHWuV4KghzNlrrOdibFW52mjbKwWe2n/fTv2f07HM6XdHXEXtbjp5dD/yzHz+LDCXm9by5KrXqXNV69W4hrXy3NENUlyrsAr3IiGGm7N15XavUuIaN+lyyQJKXJKAMrddX+G5j7dKl6makF2Gru7/3VmJT+GH1a65YhVlX7NWd3f7ZpOhJhGj7w9s1n42qWE6P6lk/mxK03yhWlJjoXSd+vUuMZOh5LVKu6MElOz9xOX/16dV/h9SOChUHG1krAAAAABJRU5ErkJggg==",
+    "bagclean": "data:image/png;base64,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",
+    "tgt": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAABX7SURBVGhDzZl3VNRZlseZ1Dt/TO/sTG/vmdSzPd1txoABBBHURkCQjCIikjOoKGojihmQDJJFC1FyEFHJsUCKnJPknEGooqjA+/7eHnC7p4fZne2Z0/bs55x73qlf/X73fu/9vffqnlcSEu+BoYrrv/7wgw/WN6e6bvQ1lN0Y6Wqy8bqh4sac6/q/Xnvv/wuYGc4m8Vj5eeFIeXxvfnBLS/KF6YIom2VOtA0JsFQiDZleCDmrQlJu682m3tTNXfv8P4WFkfyPxGOv7YUjZWzhSNkyXWqllNtI5ztz6UChL22KsaJeRtI07JwW5TX405QbmvS+3SHaHH+Whl3USpOQkPjdWp8/CNMdGR+KJzhuotHyMbrQQOl0FRUOselsSwaGyyMxVOKLl/f0yX0HFZIVYgf2QzuMFrqiIf4MsgLMEH1eFaXBp+gTd70+Hdkte9b6f68IRyu1xOMVb+hiEyVjr+liXzFWjD9QisGSCHQkXSSt8Y4k0O4giXXVIhUPLJF/TxuNsZaoDDNEeagpguyVSKjdIaYx3Iie3v+569oY74X+YtbPhaOcCDrfQOlUFeX1FmGxtxgrI69nxYrB72OTiaoY0pvrTXqzb5DUu0bETXc3/C0PkP60M+SxsxL5Snsnyfc5RV/d1KbHd/3WR0JC4mdrY33v0NHafxdNVFVSfgsVDJRSfl/JatW/SaK7CNyuAvB7S8hSP5sMlj0kHYkudCjzEk1y14XHyT2kkeVIwhyUSNRFTSbpK03+jn/7QGttnPfCk7BbG6Z7Stoov43yB94JX7XV6hdjseed+MXeEsy1Z6Mv14d0J5+nofYHZ6wPrH/1OtyCPjinitsn5YiXjTKpfmhHz6puyVgb573A7WJ/LBiv6qDcZrrYX4rF/j8nsCKe210EXnfB6ht425mPlme30RjjSK/pyxRKSEh8seLjxsm9Ca1xTjTlpjatibGnD88fmf/DzyQk18b63qGUfrA801hNhV1UMMKBYLSSCIYrydJQBQTDHCwNV4A/UA5+fxkEI1VozfRGbYQVdVBare5Pv+XqJw5K691Trx2t9TopnfqxhMSOb333fqCU/rg56UoCvyGGDhcG0aF8PzqY508Hcnxpf7YP7c/2pYN5vnQw35sO5HrRvhwv2p/qQr1O7++VkJD4xVp/PziWipt3+FsfrPa1UGT7WCiU+FsolPhZKpZ6m+4r9TKRK/U8Lcv2NpUr9THbx/Y2kWH7WcqV+1sf4qhu/1R5ra9/Crt2/eNbW1rQpT9wkn3lq58Hn6rLDHZuyAy52vgi5FrtsyCX6vQg87JEb6WsCLfPf5Dt87tw/ZjiL16nBB5tK3z4oLcioaW/Kpk71vCMznW8orzubLrYk0t5PTl0oesVnet4Sccb0+hAVRK/uyyusyUvOq76WYCBp538r9b6/d6hlP5oxb7+nBJydUtzfnRAf2XS0GxHFuUPllDuAJsu9JdT7lAlszhSA8FMG0TcNxDNd0Aw1YzFkWpwhzhYGHhNeQNldGmwhL7tyKK9rxPGm3Miol+GuLz/BZ7k5/z7tsLHIUM1KcKl/nzK7Sul3MFKLE00EdFMG5ZnO97ZfBcItwfj50wxbGsA8Ww7CLdrdRTPdBDRVDsRTDQR7gCHWfGx1F9I+zlxy03Z4QkJHg7r18b9Gioh8aMVW3v9O1GXE+U0XJM6xe/OpW97CuniaC0RT7eT5ZkOIp5qgXimBeK5dojfdmIZI5iJ9cewhRF6j2lhPNITy8I+iOc7IJ7rgGi6FaLpFizPtkE80074Y/VkrqeIcrtyaF957ELt86CVHumDlbiU/oOCvybE5dhvOtmxabyeXDrfU0i5w9VkpYorgUXTbUQ800ZWxAimG8GfbASvoxTzrx6jXX4HpmIeYjrID+1y2zAScAOTOXHgdpdDMNUE0ar4VggnmyF+5we8kRoy111AF7uzaXtuRNkjN9NP1ur5u0gJubSl93Vcz1JfHp3rKQbmuwgjHCTMUt+qcMF4I1kcriH80RosNuRj3OMyerWUMWJiiEEXZ7yt5YDHKcW4+yX0HddCi/Q2dFsaYvJFLBa6yrA4WgPhRCNEM+/eyEpCK4nM97HB68ymvSWsvmdBl+TW6vqbfL1YXwRfke4rj5/k9eZTMtdGGPEoxns5qClMQnV+CnhDleCP1BDBeAMWcpLxRlkBXWanMF+Uh/nsFxj3u4f5SjZm87Iw7OuNuZxXeJufjTeGx9EisxPjYd5YaC4Cd5iDxeEqCCebwPC6wSz1gnnbBu4gB2/bXtKuomjBs4BLKmt1/k3SAl0l+8qeTIuGiilvqoXUVeQQlu8d3LUyw0UtbRgrH8TCWA3IQje4ealo2y+D4SB/cCs5eHNcB/WyW1H1x19hLvkJxnzvIe+X/4LSDZ+ixdgQvJYmjAb4oVFyAybDvLDUV0X4o9VYGuagrfwZ2M8fYaApF8xS32oi8x3ZtKf0ES/Jz1l6rc5vWFkoX1fe30rnt93FrB4yXkYbyjJJkKsLuaxngDPK6riqrovT+xTRXJH5bhq1sUmXxmEMeN4Ft7AADV/8EbXqMqTBxRDlarLotTqFjlO6KNaWR5mpGimW3UzYW9djvr4WQx530Ca9DTPJURCMNYFZ6kLkrfO4oKUB1xPHccfBEnkZMeBNtULUX0jb8iLGoi6c+tOq3rU70bdXektWeJZwsIA+CboN12MGcDyoiuNb90Dpiy2wkDkAb2dHMMwYlofrybSXG2k7pgN+cxOat29C7QklUudygpQ6auG1jTYSpTcTL8kNJPbYYRTZaBK2hRopUJYBZ68U+N1v0PblQfSaHsNcVRaW59sxP9mCM8d0cVbpKBwPHoHjQWVcsTiN4swY0NEyWvciOO8vhH/N1wlUJPs78bqy6P2v7OGgpAYrmQNw2qMA+937iNbmnXA4pIbIu1fAMOOYy0tFpdRWTKYkYfTKZVQe2YcKFyOS56RJcm01EH50LwLN9NHlcw/Xdsniob4SXpqrkRJzDWTv3ICOG1cxFfcE9ds3YpwVgMXh+lW/rMBbMJDcQ5TXSRLNrbuJk6IKzqgcRcR1Z+ZtRyatiPexXat/lcjr1n8cqk3iRl4/S+0UlMm5vYrwPHgEnkrqxEX2ADHfKUs8TpmSswY6WCh/hSZrC9RISWLxNRtVG75AgbIcssyP4rGBPHE/IEl8tQ+BnxSFceeLuCWtisuKe0mmpTZ5aaiG+B2bkLNlI3iVr1G76TO8MdHDbGkGGNEAUlkBMNujSAy37iZa6ySJ7sbtMJZWhO2+w/B2OE07ix9wswMuf7pWv0RvWWx4eUoQtZBWJJd3yZMHKpqIPqqHa18ewd0DR4iRlAxY511gsV8Bz1UPodvaDKN+HhD0dqPb3g6tpkbIVN6HxGsXkH7bDdPJMVgK9EGjkSWSdE1xef8BOMvtwmMpSdSbmKLD+RwWuzox4n0Hg07W6D9rDma6DSG3LsNW7hC0N2wjZlKyuLBbgZyU3AmD7TKrSURfc6A1Gf5hfyGek+D5aWsxi39W9Qg98bkkrsgrIFBRGcEqmvA4rIboo8egLSmFEFt7uB3VRPi6z8FlRYBbXgrRzDRm01IwFeCDWctTYPJfgclMhzglAYLwUCx5eGHE7Raazrkh+bgZMqSkMBsdAu6LdAgmx8EvK8ZUZBje6KhguCITN82M4aKqCY0vJGG4Yy8cpOXhc/AIXGUVYbpDFibSitTvvCmP35T2h28SGK14cvt58FWqvX0X8tOiMThQjyBne7jt3odHarq4r6oNtU3b4aKhg/umFjCX3Aqvj36Jmj27wX9djs7PPkWfpirmH4ZCkJsB0Yr42BgsRYZDEBYKQVAgpq+4o9P2ArJ0TiJp82awv/gTeJxy1G9ch+p9uzDk54q7NicR5eQEM/kvYbBxO5z2KsBeWh7RKlqIUNHCtb0HiNGWPeSMihoNc7O+8k0C/WWsqr6KeDrRwwGzPLS6yxSmP8CJT9fj5gEl3FZQgt7WXdCR2osLaprwNDmNEAMDlGzaBG5xAcasTTF96zJEo60QcvIgfBIDQWIsESTHQfiUBWFIMJb9fTFw8waSzK2Rsv8AWhxsMZf9CmEf/Qcy7I3hb2MET1Mj4m9qRfb/5zriJCVDApTUydk9+0mgiga5r6SO81IyOL1uM4y3ylFbVaXuYpbJz1cTGOQ8TaGztZRZeAPR1EqT1Yr++izkpT9CbzcHl/V1oPq7z/Dlug24ZXAMic7OaLkfgBEzI4x6XAO3KB8De3ZiMeo+hHEsIkiJJcJncWTpcTT4oUEQhAZDFB6KuQAf5Bkb49W6dVjglKP3jBPufLYBJ3bvRri9LUm/fp1oSe4i8r//E/lKRoE8VNclbvsOkat7FclNA31wcp+iMOMRHLU0GM11ktT5uILauwRqEs5T/hsqnmohoqkm8IersDzdDEbYBwbDqC1Ohc6urSi84YqF1ETw6jhgBtogiH+ILgUZzLGLMHHVDcN7pMD39SDC9DiyGB5IRvW1MaymDN6dWxCxHkJw8xr6du3AcFAAZl48R+mnnyNe9yQiLGzgfeI0Tu/aR5Q/20CMN0sR931f4sGho/Der0LMNm4jZS9ZYJgRMMsDmOspRLS7NY28bmW/msBCL3v98myHWDzZxAgn6sDrfw3hZCNEkw1gBD3IZfmAHRkApo4DdDaAkLcQzQ5BXJqDuYtn0b1fBoutjZgO8EG/7E5MOVhgXEMVMz5emLjtjqEjhzFldByDe3diIvQ++LWVaJXajvIDR1Bn7gT3w+rQ2SYN9fVbYbRpO7kuf5ic3SUHNz0t3DQ8Tk7s3k1Gml4Cs80QjtdBNMqhsy3py9zOzI3frAPRZCOHLnbQlWMSbn85RNNtYHhdeMN5jghbMzANHJCacizPDkI01QdBbTlE7AIs57/EnLM9+g/JYvZZMt7mZ2HC4yYGVQ6AmxyHmahwdMnLYezODXAryzGdFI+WjRvRo3oU3TZn0GTsQHJ1TWC4bQ/2f/I5bCR3E5vPtpCz6ipkYboO/Ml6dFS/Am+gAiuNo3CsCnShhY7WPav8RvwKgtEaJ0r66dJwJfhDnNXWlvC68dDFBsPJT8GUF4GXkwlx/kuIOMUQ1pVCyCmGqKwQ4uxnmHe7jEF5aQxanMJMPAuzGalY6u8Gr70Vs+nJmH0Sjf4TumiXlMSAoTFm3W9g5NJXaLU+g5rjNqRYy4q4SCmSa5aGJDXcixSnRhGG10VEE/WrTd3i4GsIRmuwck5FhW8ob6DC8S8SmJ8v+5V4umlKPFZDuX1sMPwuNOQ8RZqrC5hKNpjSfFS5XUH8qZNgmqohel0EUWkuERZmQVScDVF2BgSPH2D24lmMqB1C5ye/wexTFsYD/NDx+ScY1FTBuI0l3t65A15QEBb9/DDj7o43tk6k5qQNqT3hRJ6bXiH3z1mv7IKE4XWTpdG61SmzYvNdReD2lgJzTVQ0UTdF5wf/+jCA21t+hc7U09m2HIhnGpDqeQW9MSwgKxNMWRFeXrmMdRIS6H4YAaa+EsL8FxBmZUCYm0kEuc8hynsB0YtUiJ+yMHlCD+N3r2HIyRET5qZgMlLApCaAz4oGL3glAX/Me3ii08wOjSetCEfPglS73SdfqemgJDUIzEIrRBN1q1Wf7y7FTFsOplteYWWaCyea/vwb8G1ai5N/sdCZ1ysaKqeT7QUkwcUJoqREiJMTQIry4Ci9A9ZHDsBBQQ5LeS9BirIhfJX+zl6kQZiZAlFGMpafp2ApNgpjRjqY1dUA8yASHJdLuK94COOenuCHhYDr7Yv5mx7oNLVD/XEzvNY8hTrXAHifsMf5/ep4nRkNRvAGzGwzZtvzMdueC1F/KZ1ry+mdLE7+308Ap5qz1el8C+2tz0GisyNhkhIhSooD93k68ZBbT2KN9mP9TyXgrXQYzPPU1akjzEyFMD0JwrREiNISIM7OAMMuAFOYi+ZrbriwdSv+JCGBIGUViEJCsRgcjPl7vphzu4lOYyvUHzNFhZYJqq3dcd/MBTH6Z/DQ7ByCztijoSgF4tkmzHcWMHSihi70lKqv1fxXgNcZOdVWQFPOnQGTlARB/OOVqUJe2OqQR7t+Qi5KbyItQf4QryTwMn216qK0RIjT44k4I5EsPWWRyls3cVZODjqbN8D2sDx2/0QCacanwUQ/Ai8gAFwff8xcvYlOU2s0GJihXOM0qqzdEeHgDj+5I6g1/go5epdwRVsPvDEO6FIHXegtj1yr9X9k5XS6Me9pda77VUpYsRA+YYGkxpHpqFDCcTtHZh5Fgnn1fLXiq5VPT4AwNQGitDiynPKEzN8PIoHq6mTbjyXgrSaDglu2MPr4A2Ta2IJ5EI0FHz9wPbzIkPNF0mpqQyr1zVCmYYxKu2uIcnJHiNopvNBzhpusFlg3nUF57XRpkFPV2np99ajlO+HqpP9xjI1NB41LojwfXwijwon4URRhUhIISYxbbdiWEp+ASU0EniVBkBIH8UrvExON1fvSUsgTfS1E7/xXZCj/BmFHpTHu7w9+QCDmPb3ImNtV0m5tT6oNLVCqbbK6BqovesPD0A52CodwTU8bYedOksnqBDrRktvBHav/eK3G/5MwI/MNC49i20SuN+mCny94kaFYCA3GcsxDUnPrKro976LC9SJavT3ApCdjPjIUi1ER4EdHQhgdhYWICORZmyDztC6G7gdAnPQYb73vYPz6FdJh70hqja0JW88UbH1zsPUtUeoRDduDqghz0kFJ1DXSmx1Oe0oet3UUJm1Yq+07M5aU9XHfOfeqSWc3OnrHk076+WEh0J/UXbxAonS18czKHPEmxihyckCikQF4/oGYCw7CXFAA3gYGYDEwGIuB98ELDsR08D0Mu11Es7k1qdS3IMVa5qRY6zRKTp1F0VdB8Ldyw8UjiqQq5g7TkxdFu9hPq+rZSX9/5dfCYrF+XnzCPCLP2JQWOdrRPFtrUuRgiwJ7K9RePo8iZ0fcPfIl4o0NUGhrjVwbK+TZWiPP2hL5FuYosLNCvp0VXhgcQ5KWDuKP6iJGWRtP1fWRqGOIWLOziDh3C/rbdyLS2YjmBF6mZTG3w4tZrHft8veF/+WTWlnRF95khjjSWG8LGu1lgrDbhoi4a4xYXytEe1si4p4VIu5ZIPSuCcI8TBDpZYbwu8YIvKqP0FsnEXXPAivPxfua48m9d2OCrznivEzpsyAbmh198Y33ZeP39y+mueZHH5op73J7ZKM3lmN3jKaZa9EYEw3KMtPEEzMNxJpo4LGJJmLMtBFroYc4Kz08MdNC7Gl1PDXVQKK5NkINVLFz82Zs2rCBbt28me6QlKSb168b277ud27mchIfro35XmDy0z9irE84MMc02Iyu+jI9oU3pcU1K9dXf2bGjlOr/t+mqU6qzcv0opQZaVKijRQ/uV6W7ZZWX98gqle+RVTmz8Uvjj9bG+MEQyihsEu9XdFzcpxA/JyffMrVXbmZcWhZje/Yyo7v3MuPScsy4jBymZORmFuXkW/r27o9XlD7kKKWgtGmtr7+X/wJ+sISj5hw9AwAAAABJRU5ErkJggg==",
+    "znear": "data:image/png;base64,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",
+    "perf": "data:image/png;base64,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",
+    "memclean": "data:image/png;base64,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",
+    "profins": "data:image/png;base64,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",
+    // 专属一级图标退役；注册脚本窗口不占花瓣。
+  };
+  function roExpLayout() {
+    if (!roExpOn()) return;
+    if (roExpRing) {
+      var r = ball.getBoundingClientRect(), vw = roVw(), vh = roVh(), buttons = roExpRing.querySelectorAll("[data-ro-petal]");
+      var radius = Math.min(64, Math.max(24, (vw - 48) / 2), Math.max(24, (vh - 48) / 2));
+      var cx = Math.max(radius + 28, Math.min(vw - radius - 28, r.left + r.width / 2));
+      var cy = Math.max(radius + 28, Math.min(vh - 28, r.top + r.height / 2));
+      roExpRing.style.left = cx + "px"; roExpRing.style.top = cy + "px";
+      for (var i = 0; i < buttons.length; i++) {
+        var a = (-175 + (buttons.length > 1 ? i * 170 / (buttons.length - 1) : 70)) * Math.PI / 180;
+        buttons[i].style.left = (Math.cos(a) * radius * (r.left < vw / 2 ? -1 : 1) - 18) + "px";
+        buttons[i].style.top = (Math.sin(a) * radius - 18) + "px";
+      }
+    }
+    // 已有浮层仍挂 documentElement，绝不移进游戏的输入/HUD 宿主。
+    if (roExpToolbar) { roExpToolbar.style.left = "max(4px,calc(50vw - 4px))"; roExpToolbar.style.top = "8px"; roExpClamp(roExpToolbar); }
+    // V2.38.77.4：目标状态栏与战斗提示条各自有拖动 + 位置记忆（dshFloatDrag / dsh_ztip_pos），
+    //   新UI 不再每次布局强制写回它们的位置——这正是「拖完自动弹回」的原因。
+    for (var id in fwState) if (fwActualOpen(id)) { roExpDecorate(id, fwState[id].win); roExpClamp(fwState[id].win); }
+    if (roExpSettings && roExpSettings.style.display !== "none") roExpClamp(roExpSettings);
+  }
+  // 互斥四项：行只在「对应详细窗口关着」时显示；浮窗用 fwActualOpen，悬浮层(tgt/ztip)用 roModIsOpen。
+  var RO_EXP_MON_SOLO = ["dps", "boss", "tgt", "ztip"];
+  var roExpMonRows = {};
+  function roExpMonOpen(id) {
+    if (id === "tgt" || id === "ztip") return roModIsOpen(id) === true;
+    return fwActualOpen(id) === true;
+  }
+  function roExpMonSync() {
+    try {
+      if (!roExpRail) return;
+      for (var i = 0; i < RO_EXP_MON_SOLO.length; i++) {
+        var id = RO_EXP_MON_SOLO[i], row = roExpMonRows[id];
+        if (!row) continue;
+        var open = false;
+        try { open = roExpMonOpen(id); } catch (e0) { open = false; }
+        var want = open ? "none" : "";
+        if (row.style.display !== want) row.style.display = want;
+      }
+      try {
+        // 标题行只允许有文字：任何串进来的透明度滑块一律清掉（幂等，不新增元素）。
+        var tl = roExpRail.querySelector(".ro-exp-title");
+        if (tl && tl.querySelectorAll) { var st = tl.querySelectorAll(".dsh-alpha"); for (var k = 0; k < st.length; k++) tl.removeChild(st[k]); }
+      } catch (eT) {}
+    } catch (e) {}
+  }
+  function roExpPaint() {
+    if (!roExpOn() || !roExpRail) return;
+    var values = roExpRail.querySelectorAll("[data-ro-monitor]");
+    for (var i = 0; i < values.length; i++) { var text = roExpStatus(values[i].getAttribute("data-ro-monitor")); values[i].textContent = text; values[i].title = text; }
+    // 只有取到非空状态文字才写标题栏；空值把那颗小字清空并隐藏（不留空胶囊、不加新文字、不加新定时器）。
+    for (var id in fwState) {
+      var w = fwState[id].win, s = w && w.__roExpIsland;
+      if (!s || !fwActualOpen(id)) continue;
+      var st = roExpStatus(id);
+      if (st) { s.value.textContent = st; s.value.title = st; s.value.style.display = ""; }
+      else { s.value.textContent = ""; s.value.title = ""; s.value.style.display = "none"; }
+    }
+    roExpMonSync();
+    roExpLayout();
+  }
+  function roExpRebuild() {
+    if (!roExpRail || !roExpRing) return;
+    roExpRail.textContent = ""; roExpRing.textContent = "";
+    roExpRail.style.display = roExpOn() ? "flex" : "none"; roExpRing.style.display = roExpOn() && roExpRingOpen ? "block" : "none";
+    // 标题行只留文字「快速监控」：不挂滑块；文字占满整条横栏、超出省略号、字号不变。
+    var title = document.createElement("div"); title.className = "ro-exp-title";
+    var titleText = document.createElement("span"); titleText.className = "ro-exp-title-text"; titleText.textContent = "快速监控";
+    titleText.style.cssText = "flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px";
+    title.appendChild(titleText); roExpRail.appendChild(title);
+    roExpMonRows = {};
+    var rows = document.createElement("div"); rows.className = "ro-exp-rows"; roExpRail.appendChild(rows);
+    roExpCfg.monitors.forEach(function (id) {
+      var m = roExpModule(id), b = roExpButton(rows, "", function () { if (id === "np" || id === "zhu") roMenuToggle(); else roModToggle(id); });
+      var label = document.createElement("span"); label.textContent = m.name; b.appendChild(label);
+      var value = document.createElement("span"); value.setAttribute("data-ro-monitor", id); b.appendChild(value);
+      b.setAttribute("data-ro-monitor-row", id);
+      if (RO_EXP_MON_SOLO.indexOf(id) >= 0) roExpMonRows[id] = b;
+    });
+    var ctl = document.createElement("div"); ctl.className = "ro-exp-controls"; roExpRail.appendChild(ctl);
+    roExpButton(ctl, "全部功能", roMenuToggle); roExpButton(ctl, "全部收回", roExpCloseAll);
+    roExpButton(roExpRail, "＋ 添加监控项", roExpOpenSettings);
+    roExpCfg.petals.forEach(function (id) {
+      var m = roExpModule(id), b = roExpButton(roExpRing, "", function () { roModToggle(id); });
+      b.setAttribute("data-ro-petal", id); b.title = m.name; b.setAttribute("aria-label", m.name); roExpIcon(b, id, m.name);
+    });
+    if (!roExpOn()) {
+      ball.style.cssText = roExpOldBall; ball.title = "点击展开功能菜单";
+      try { document.documentElement.removeAttribute("data-ro-newui"); } catch (eNU) {}
+      ["dsh-tgt-bar", "dsh-ztip"].forEach(function (fid) { var float = document.getElementById(fid); if (float && float.__roExpStyle) { var display = float.style.display; float.style.cssText = float.__roExpStyle.css; float.style.display = display; delete float.__roExpStyle; } });
+      for (var id in fwState) { var w = fwState[id].win, st = w && w.__roExpIsland; if (st) { if (st.size) roExpIsland(w, true); st.value.style.display = "none"; st.button.style.display = "none"; } }
+    } else {
+      ball.style.left = "auto"; ball.style.top = "auto"; ball.style.right = "min(120px,20vw)"; ball.style.bottom = "min(96px,18vh)"; ball.title = "点击收放花瓣；侧栏全部功能打开原完整菜单";
+      // V2.38.77.4：实验版新UI 下不要「战斗监控横条」（左侧监控板已替代它）：强制关掉并隐藏。
+      try {
+        if (roMods()["zhud"] !== false) { roMods()["zhud"] = false; localStorage.setItem(RO_MOD_KEY, JSON.stringify(roMods())); }
+        var zhudEl = document.getElementById("dsh-ro-z-hud"); if (zhudEl) zhudEl.style.display = "none";
+      } catch (eZH) {}
+      try { document.documentElement.setAttribute("data-ro-newui", "1"); } catch (eNU) {}
+      for (var fid in fwState) { var fw = fwState[fid].win, fs = fw && fw.__roExpIsland; if (fs) { fs.value.style.display = ""; fs.button.style.display = ""; } }
+    }
+    roExpPaint();
+  }
+  function roExpSettingsBody() {
+    roExpSettings.textContent = "";
+    var bar = document.createElement("div"); bar.className = "ro-exp-title"; bar.textContent = "新UI设置 · 选择自动保存"; roExpSettings.appendChild(bar);
+    roExpButton(bar, "关闭", function () { roExpSettings.style.display = "none"; });
+    var body = document.createElement("div"); body.className = "ro-exp-choices"; roExpSettings.appendChild(body);
+    function choice(parent, label, checked, change) {
+      var line = document.createElement("label"), cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = checked;
+      cb.addEventListener("change", function () { change(cb); roExpSave(); roExpRebuild(); });
+      line.appendChild(cb); var text = document.createElement("span"); text.textContent = label; line.appendChild(text); parent.appendChild(line); return cb;
+    }
+    choice(body, "启用新UI（取消即可恢复旧波利球入口）", roExpOn(), function (cb) { roExpCfg.enabled = cb.checked; });
+    var mt = document.createElement("div"); mt.textContent = "侧栏：只显示所选监控"; body.appendChild(mt);
+    RO_EXP_MON.forEach(function (id) { choice(body, roExpModule(id).name, roExpCfg.monitors.indexOf(id) >= 0, function (cb) { roExpCfg.monitors = roExpCfg.monitors.filter(function (k) { return k !== id; }); if (cb.checked) roExpCfg.monitors.push(id); }); });
+    var pt = document.createElement("div"); pt.textContent = "花瓣：最多八项，未选功能仍在全部功能菜单"; body.appendChild(pt);
+    RO_MODULES.filter(function (m) { return m.kind === "fw" && !m.noToggle; }).forEach(function (m) {
+      choice(body, m.name, roExpCfg.petals.indexOf(m.id) >= 0, function (cb) {
+        if (cb.checked && roExpCfg.petals.indexOf(m.id) < 0 && roExpCfg.petals.length >= 8) { cb.checked = false; roFeedback("花瓣最多八项，请先取消一项", "warn"); return; }
+        roExpCfg.petals = roExpCfg.petals.filter(function (k) { return k !== m.id; }); if (cb.checked) roExpCfg.petals.push(m.id);
+      });
+    });
+    roExpButton(body, "全部收回", roExpCloseAll);
+  }
+  function roExpOpenSettings() {
+    if (!roExpSettings) { roExpSettings = roExpRoot("dsh-newui-settings"); roExpSettings.setAttribute("data-dsh-win", "1"); }
+    roExpCloseOthers("newui"); roExpSettingsBody(); roExpSettings.style.display = "flex"; roExpClamp(roExpSettings);
+  }
+  function roExpInit() {
+    if (roExpCfg) return;
+    if (!ball || !panel || !fwState || !RO_MODULES) throw new Error("新UI初始化次序错误：现有UI实例未就绪");
+    roExpCfg = roExpLoad(); roExpOldBall = ball.style.cssText;
+    var style = document.createElement("style"); style.id = "dsh-newui-style";
+    style.textContent = RO_SKIN_CSS + String.raw`
+.ro-exp-ui{position:fixed;z-index:2147483000;box-sizing:border-box;border:1px solid #8e8e8e;border-radius:3px;background:#fff;color:#111;font:11px/1.5 'Microsoft YaHei',Arial,sans-serif;box-shadow:1px 2px 3px #555;display:flex;flex-direction:column;overflow:hidden}
+.ro-exp-ui button,.ro-exp-mini{min-height:22px;border:1px solid #a9a9a9;border-radius:4px;background:linear-gradient(#fff,#f2f2f2 35%,#dcdcdc 55%,#f9f9f9);color:#3f3f3f;font:11px/1.4 'Microsoft YaHei',Arial,sans-serif;padding:2px 4px;cursor:pointer}
+.ro-exp-ui button:hover,.ro-exp-mini:hover{background:linear-gradient(#f7fbff,#dfe8f6 35%,#c0d0ee 55%,#f0f6ff)}
+.ro-exp-ui button:active{background:#cdd8eb}.ro-exp-ui button:disabled{color:#999;cursor:default}
+.ro-exp-title{background:#fff var(--dsh-tb) repeat-x;background-size:auto 17px;min-height:20px;padding:2px 4px;font-weight:bold;display:flex;align-items:center;justify-content:space-between}
+#dsh-newui-rail{left:4px;top:22vh;width:min(148px,calc(100vw - 8px));max-height:50vh}
+.ro-exp-rows{overflow:auto;min-height:0}.ro-exp-rows>button{display:flex;flex-direction:column;text-align:left;width:100%;border-radius:0}.ro-exp-rows>button>span:last-child{font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.ro-exp-controls{display:flex}.ro-exp-controls>button{flex:1;min-width:0}
+#dsh-newui-petals{border:0;box-shadow:none;background:none;overflow:visible;width:0;height:0;pointer-events:none;display:block}
+#dsh-newui-petals button{position:absolute;box-sizing:border-box;width:36px;height:36px;min-width:0;pointer-events:auto;border-radius:50%;padding:2px;font-size:9px;overflow:hidden}
+#dsh-newui-actions{left:calc(50vw - 4px);top:8px;max-width:calc(50vw - 8px);flex-direction:row;flex-wrap:wrap;gap:4px;padding:4px}
+#dsh-newui-actions button{box-sizing:border-box;width:36px;height:36px;min-width:0;padding:2px;font-size:10px;overflow:hidden}
+#dsh-newui-actions img,#dsh-newui-petals img{width:28px;height:28px;object-fit:contain;image-rendering:pixelated;margin:auto}
+#dsh-newui-settings{left:calc(50vw - 170px);top:26vh;width:min(340px,calc(100vw - 8px));max-height:70vh}.ro-exp-choices{overflow:auto;padding:8px}.ro-exp-choices label{display:flex;align-items:center;gap:4px;padding:3px 0}
+.ro-exp-live{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;flex:1}.ro-fw-title:has(.ro-exp-mini){height:auto!important;min-height:24px!important;flex-wrap:wrap}.ro-exp-mini{flex:none;min-width:40px}
+[data-ro-island] .dsh-grip,[data-ro-island] .dsh-alpha{display:none}
+`;
+    document.documentElement.appendChild(style);
+    // V2.38.77.2：内/助 两个字挪到波利下面（只在实验版新UI生效；旧UI的 CSS 一律不动）
+    try {
+      style.textContent += "\nhtml[data-ro-newui=\"1\"] .ro-fw-title{height:23px!important;min-height:23px!important;padding:0 4px!important}\nhtml[data-ro-newui=\"1\"] .ro-fw-close{width:19px!important;height:19px!important;min-width:19px!important;background-size:19px 19px!important;border-radius:50%!important;margin-left:3px}\nhtml[data-ro-newui=\"1\"] .ro-fw-close:hover{filter:brightness(1.25)}\n.ro-exp-ico{display:flex;align-items:center;justify-content:center;width:100%;height:100%;pointer-events:none}\nhtml[data-ro-newui=\"1\"] #dsh-ball .qs{left:auto;top:auto;right:auto;bottom:-36px;width:30px;height:30px}\nhtml[data-ro-newui=\"1\"] #dsh-ball #dsh-qs-nei{left:-5px;right:auto;top:auto;bottom:-36px}\nhtml[data-ro-newui=\"1\"] #dsh-ball #dsh-qs-zhu{left:31px;right:auto;top:auto;bottom:-36px}";
+    try { style.textContent += "\n#dsh-newui-petals button img.ro-exp-ico-img{width:27px;height:27px;border-radius:50%;display:block;margin:0 auto}"; } catch (ePetalImg) {}
+      style.textContent += "\n#dsh-newui-petals button{transition:transform .12s ease-out,box-shadow .12s ease-out}\n#dsh-newui-petals button:hover{transform:scale(1.34);z-index:9;box-shadow:0 3px 10px rgba(0,0,0,.6)}";
+    } catch (eStyle) {}
+    roExpRail = roExpRoot("dsh-newui-rail"); roExpRing = roExpRoot("dsh-newui-petals"); roExpRing.setAttribute("aria-label", "波利展开：常用功能图标");
+    window.addEventListener("resize", roExpLayout); window.addEventListener("dsh-ro-assist-anchor", roExpLayout);
+    roExpRebuild(); roMenuRender();
+  }
+  // === RO_NEWUI_END ===
+  // V2.38.77.4：快速监控板可拖动 + 松手吸附屏幕边 + 可收成侧边竖标签（位置与收放状态都记在本机）。
+  var RO_EXP_RAIL_KEY = "dsh_newui_rail_pos_v1", RO_EXP_RAIL_COL_KEY = "dsh_newui_rail_collapsed_v1";
+  var roExpRailTab = null;
+  function roExpRailSave() {
+    try { var x = Math.round(parseFloat(roExpRail.style.left)), y = Math.round(parseFloat(roExpRail.style.top)); if (!isFinite(x) || !isFinite(y)) return; localStorage.setItem(RO_EXP_RAIL_KEY, JSON.stringify({ x: x, y: y, vw: roVw(), vh: roVh() })); } catch (e) {}
+  }
+  function roExpRailPlace(x, y) {
+    var r = roExpRail.getBoundingClientRect();
+    var w = r.width || 148, h = r.height || 120;
+    var nx = Math.max(2, Math.min(Math.max(2, roVw() - w - 2), x)), ny = Math.max(2, Math.min(Math.max(2, roVh() - h - 2), y));
+    roExpRail.style.left = Math.round(nx) + "px"; roExpRail.style.top = Math.round(ny) + "px";
+    roExpRail.style.right = "auto"; roExpRail.style.bottom = "auto";
+    return { x: Math.round(nx), y: Math.round(ny), w: w, h: h };
+  }
+  function roExpRailSnap(save) {
+    try {
+      if (!roExpRail || !roExpOn()) return;
+      var p = roExpRailPlace(parseFloat(roExpRail.style.left) || 0, parseFloat(roExpRail.style.top) || 0);
+      var dL = p.x, dR = roVw() - (p.x + p.w), dT = p.y, dB = roVh() - (p.y + p.h);
+      // V2.38.77.4：贴边阈值 96 → 24 像素。96 像素时几乎任何落点都被吸到边上，看起来「拖了像没动」。
+      var best = Math.min(dL, dR, dT, dB), TH = 24;
+      if (best <= TH) {
+        if (best === dL) roExpRailPlace(4, p.y);
+        else if (best === dR) roExpRailPlace(roVw() - p.w - 4, p.y);
+        else if (best === dT) roExpRailPlace(p.x, 4);
+        else roExpRailPlace(p.x, roVh() - p.h - 4);
+      }
+      if (save) {
+        roExpRailSave(); roExpRailTabSync();
+        // 松手保存后回读一次：确认这次落点真的被记下了；没记下就再写一次（幂等，不新增可见元素）。
+        var back = roExpRailSaved();
+        var cx = Math.round(parseFloat(roExpRail.style.left)), cy = Math.round(parseFloat(roExpRail.style.top));
+        if (!back || !isFinite(back.x) || !isFinite(back.y) || (isFinite(cx) && isFinite(cy) && (back.x !== cx || back.y !== cy))) roExpRailSave();
+      }
+    } catch (e) {}
+  }
+  function roExpRailSaved() {
+    try { var s = JSON.parse(localStorage.getItem(RO_EXP_RAIL_KEY) || "null"); return (s && isFinite(s.x) && isFinite(s.y)) ? s : null; } catch (e) { return null; }
+  }
+  function roExpRailRestore() {
+    try {
+      var s = roExpRailSaved();
+      if (!s) return;
+      var rx = (isFinite(s.vw) && s.vw > 0) ? roVw() / s.vw : 1, ry = (isFinite(s.vh) && s.vh > 0) ? roVh() / s.vh : 1;
+      roExpRailPlace(s.x * rx, s.y * ry);
+    } catch (e) {}
+  }
+  function roExpRailIsCollapsed() { try { return localStorage.getItem(RO_EXP_RAIL_COL_KEY) === "1"; } catch (e) { return false; } }
+  function roExpRailTabSync() {
+    try {
+      if (!roExpRailTab) return;
+      var s = roExpRailSaved();
+      var cx = s ? s.x : parseFloat(roExpRail.style.left) || 4;
+      var cy = s ? s.y : parseFloat(roExpRail.style.top) || Math.round(roVh() * 0.22);
+      var onLeft = (cx + 40) < roVw() / 2;
+      roExpRailTab.style.left = onLeft ? "0px" : "auto";
+      roExpRailTab.style.right = onLeft ? "auto" : "0px";
+      roExpRailTab.style.borderRadius = onLeft ? "0 6px 6px 0" : "6px 0 0 6px";
+      roExpRailTab.style.top = Math.max(8, Math.min(roVh() - 76, cy)) + "px";
+    } catch (e) {}
+  }
+  function roExpRailSync() {
+    try {
+      if (!roExpRail) return;
+      if (!roExpRailTab) {
+        roExpRailTab = document.createElement("div"); roExpRailTab.id = "dsh-newui-rail-tab";
+        roExpRailTab.style.cssText = "position:fixed;z-index:2147482500;width:17px;min-height:54px;padding:6px 0;display:none;align-items:center;justify-content:center;writing-mode:vertical-rl;letter-spacing:2px;font:11px/1 'Microsoft YaHei',Arial,sans-serif;color:#3f3f3f;background:linear-gradient(#fff,#f2f2f2 35%,#dcdcdc 55%,#f9f9f9);border:1px solid #8e8e8e;cursor:pointer;user-select:none;-webkit-user-select:none;box-shadow:1px 2px 3px rgba(0,0,0,.25)";
+        roExpRailTab.title = "点击收起/展开快速监控板";
+        roExpRailTab.addEventListener("click", function () {
+          try { var col = roExpRailIsCollapsed(); localStorage.setItem(RO_EXP_RAIL_COL_KEY, col ? "0" : "1"); roExpRailSync(); } catch (e) {}
+        });
+        document.documentElement.appendChild(roExpRailTab);
+      }
+      if (!roExpOn()) { roExpRailTab.style.display = "none"; roExpRail.style.display = "none"; return; }
+      var col = roExpRailIsCollapsed();
+      roExpRail.style.display = col ? "none" : "flex";
+      roExpRailTab.style.display = "flex";
+      roExpRailTab.textContent = col ? "监控" : "收起";
+      roExpRailTabSync();
+    } catch (e) {}
+  }
+  function roExpRailDragBind() {
+    try {
+      if (!roExpRail) return;
+      var title = roExpRail.querySelector(".ro-exp-title");
+      if (!title || title.__roExpRailGrip) return;
+      title.__roExpRailGrip = true;
+      title.style.cursor = "move";
+      // 只保留「顶部横栏可拖」：整板可拖会误操作（用户明确否掉）。
+      // 横栏整体是拖区；行按钮/滑块仍由 dragEl 自身跳过（button/input/... 不触发拖动）。
+      dragEl(title, function (x, y) {
+        var tr = title.getBoundingClientRect(), rr = roExpRail.getBoundingClientRect();
+        roExpRailPlace(x - ((tr.left || 0) - (rr.left || 0)), y - ((tr.top || 0) - (rr.top || 0)));
+      }, function () { return 1; }, function () { roExpRailSnap(true); });
+    } catch (eDB) {}
+  }
+  function roExpRailBind() {
+    try {
+      if (!roExpRail || roExpRail.__roExpRailBound) return;
+      roExpRail.__roExpRailBound = true;
+      roExpRailDragBind();
+      roExpRail.style.cursor = "default";
+      window.addEventListener("resize", function () { roExpRailSnap(true); });
+      roExpRailRestore(); roExpRailSync();
+    } catch (e) {}
+  }
+  // 收放/位置变化后同步标签：包一层 roExpRebuild，避免每次重建都把标签丢掉。
+  var roExpRebuild0 = roExpRebuild;
+  roExpRebuild = function () { roExpRebuild0.apply(null, arguments); try { roExpRailSync(); } catch (e) {} try { roExpRailDragBind(); } catch (eRD) {} };
+  roExpInit(); // 实例与状态全部登记完成后启动，初始化错误交给原启动错误边界报告。
+  try { roExpRailBind(); } catch (eRail) {}
   init();
   } // roAssistMain 结束：启动引导整体在 try/catch 内，助手异常绝不冒泡到宿主页面
 })();

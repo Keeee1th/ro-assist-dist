@@ -12,9 +12,10 @@
       "id": "assist",
       "name": "RO 助手",
       "channel": "stable",
-      "version": "2.38.78",
+      "version": "2.38.79",
       "url": "https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist.user.js",
-      "sha256": "523e40563b4e47175e2a6b1577fd96c279b0c10f2c5692438d3a0f21e8790b01"
+      "status": "published",
+      "sha256": "28d78442bf187141c49501cc1d1c7cc3191aa3a31f53bb47e879e06ebdde6602"
     },
     {
       "id": "assist-exp",
