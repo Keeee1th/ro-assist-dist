@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         仙境传说 · 脚本入口（独立版）
 // @namespace    dsh.ro-plugin
-// @version      1.0.14
+// @version      1.0.15
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-infinite-dojo.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-infinite-dojo.user.js
 // @description  无限挑战（独立脚本）：到报名点报名，服务器确认本轮出怪后才代打；无怪不猜结算，付费选项需手动确认；需要先启用 RO 助手。
@@ -119,7 +119,7 @@
 
   /* ==================== 常量 ==================== */
 
-  var VERSION        = "1.0.14";
+  var VERSION        = "1.0.15";
   var API_PROTOCOL   = 1;
   var OWNER          = "ro-infinite-dojo";      // 控制权属主，全程一致
   var SCOPES         = ["dojo", "battle", "movement", "dialog", "fly"];
@@ -152,7 +152,7 @@
     entryMap: "prontera",
     entryX: 148,
     entryY: 147,
-    npcName: "荣誉管理员",                            // 报名点管理员（旧默认值「荣耀管理员」是错名，见 applyCfg 里的迁移）
+    npcName: "荣誉管理员",                            // 报名点管理员；两种默认别名均有效，历史配置可覆盖
     entryNpcAliases: ["荣誉管理员", "荣耀管理员"],    // 报名点 NPC 别名表：任一命中即算，可被配置覆盖
     dojoNpcAliases: ["喵达人", "猫达人", "白猫", "白猫达人"],
     challengeKeywords: ["无限挑战"],
@@ -207,9 +207,6 @@
         if (typeof v === "string" && v) c[k] = v;
       }
     }
-    // 旧档迁移（仅对已知的旧默认错名生效）：旧默认值「荣耀管理员」不是本图 NPC 的名字，一律改回正确名；
-    // 用户自己配的名字（如「别的管理员」）原样保留，不被本行覆盖
-    if (c.npcName === "荣耀管理员") c.npcName = DEFAULTS.npcName;
     if (src.npcName && !Object.prototype.hasOwnProperty.call(src, "entryNpcAliases")) c.entryNpcAliases = [c.npcName];
     if (!/^(basic|middle|advanced)$/.test(String(c.difficulty))) c.difficulty = DEFAULTS.difficulty;
     return c;
@@ -347,18 +344,16 @@
       if (w && al.indexOf(w) < 0) al = [w];        // 直传了别名表外的名字：只认这一个
     }
     if (!al.length) return null;
-    var list = (s && s.npcs) || [];
+    var list = (s && s.npcs) || [], hits = [];
     for (var k = 0; k < al.length; k++) {
       for (var i = 0; i < list.length; i++) {
         var n = list[i];
-        if (!n) continue;
-        if (!npcNameHit(norm(n.name).replace(/\s/g, ""), al[k])) continue;
-        if (e) { e.npcName = al[k]; e.npcNameIndex = k; }
-        return n;
+        if (!n || !npcNameHit(norm(n.name).replace(/\s/g, ""), al[k])) continue;
+        if (!hits.some(function (x) { return x.gid === n.gid; })) hits.push(n);
       }
     }
-    if (e) { e.npcName = al[0]; e.npcNameIndex = 0; }
-    return null;
+    if (e) { e.npcAmbiguous = hits.length > 1; e.npcName = hits.length === 1 ? norm(hits[0].name) : al[0]; e.npcNameIndex = 0; }
+    return hits.length === 1 ? hits[0] : null;
   }
   // 报名点邻近兜底（防 NPC 以后再改名）：别名全都不命中时，
   // 取报名点周围 12 格（切比雪夫距离）内、名字含「管理员」的 NPC，只有恰好 1 个才用它
@@ -579,17 +574,19 @@
   // 仅本轮已受理入场可换代；同图重登与未知落图不得借同角色放宽。
   function acceptEntryEpoch(a, s) {
     var e = run.stage === "entry" && run.entry, old = run.identity && JSON.parse(run.identity);
-    if (!e || !old || String(s.identity.oneId) !== old[0] || s.identity.epoch !== old[1] + 1 || sameMap(e.map, s.map)) return false;
-    var landed = !e.signedUp && e.tpAt && sameMap(s.map, cfg.entryMap);
+    if (!old || String(s.identity.oneId) !== old[0] || s.identity.epoch !== old[1] + 1) return false;
+    var exited = (run.stage === "battle" || run.stage === "settle") && run.cycleEnd && run.rewardChosen && sameMap(s.map, cfg.entryMap) && !sameMap(s.map, run.challengeMap) && run.scene && run.scene.identity === run.identity && sameMap(run.scene.map, run.challengeMap);
+    if (!exited && (!e || sameMap(e.map, s.map))) return false;
+    var landed = e && !e.signedUp && e.tpAt && sameMap(s.map, cfg.entryMap);
     var scene = dojoEvidence(s);
-    var entered = e.signedUp && e.gid && !sameMap(s.map, cfg.entryMap) && scene && /^(active|idle|settle)$/.test(scene.phase);
-    if (!landed && !entered) return false;
+    var entered = e && e.signedUp && e.gid && !sameMap(s.map, cfg.entryMap) && scene && /^(active|idle|settle)$/.test(scene.phase);
+    if (!landed && !entered && !exited) return false;
     var released = call(a, "release", [OWNER]);
     var acquired = released && released.ok === true && call(a, "acquire", [OWNER, SCOPES.slice()]);
     if (!acquired || acquired.ok !== true) return false;
     run.identity = identityKey(s);
     run.scene = null; run.lastMenuFp = ""; run.lastNextFp = ""; run.noNextSince = 0;
-    e.map = s.map; e.gid = 0; e.tpAt = 0; e.tpCount = 0;
+    if (e) { e.map = s.map; e.gid = 0; e.tpAt = 0; e.tpCount = 0; }
     prepareCombat(a);
     logLine("本轮入场换图已确认，旧现场与对话绑定已清理");
     return true;
@@ -768,7 +765,7 @@
         applyDojoScene(a, s, scene, now);
         return;
       }
-      if (dialogOpen(s)) pressNext(a, s, now, "报名确认");
+      if (dialogOpen(s)) return dialogTick(a, s, now);
       if (!run.on) return;
       if (now - (e.gotoAt || now) > 15000) {
         e.gotoRetries++;
@@ -818,9 +815,14 @@
     // 找入口 NPC：先按别名表匹配；全不命中才走报名点邻近兜底
     e.npcNameText = entryNpcNameText();
     var npc = findNpc(s, null, e);
-    if (!npc) {
+    if (!npc && !e.npcAmbiguous) {
       npc = findEntryNpcNear(s, cfg.entryX, cfg.entryY);
       if (npc) logLine("按报名点邻近兜底选中了 " + norm(npc.name) + "（12 格内只有这一个「管理员」）", "warn");
+    }
+    if (e.npcAmbiguous) {
+      if (now - e.startedAt >= cfg.findNpcTimeoutMs) return doStop("报名点识别到多个候选 NPC，无法确定该找哪一个（npc-ambiguous）", "npc-ambiguous");
+      setPhase("报名点 NPC 不唯一，请手动确认", "");
+      return;
     }
     if (npc && e.npcNameIndex > 0) logLine("别名命中：「" + norm(npc.name) + "」（别名表第 " + (e.npcNameIndex + 1) + " 项）");
     if (!npc) {
@@ -835,41 +837,13 @@
     }
     if (e.gid !== npc.gid) {
       e.gid = npc.gid; e.walkAt = 0; e.walkTries = 0; e.walkTarget = null;
-      e.contactAt = 0; e.firstContactAt = 0; e.arrivedLogged = false; e.walkWarned = false;
+      e.contactAt = 0; e.firstContactAt = 0; e.contactErr = ""; e.failStreak = 0; e.arrivedLogged = false; e.walkWarned = false;
     }
     if (dialogOpen(s)) return dialogTick(a, s, now);
     var d = cheb(p, npc.position);
     run.dist = isFinite(d) ? d : null;
 
-    // 走到相邻格（绝不站 NPC 自己那格），每 2 秒重试
-    if (!isFinite(d) || d > 1 || d === 0) {
-      var adj = adjacentCell(npc.position, p);
-      if (!adj) {
-        setPhase("读不到「" + e.npcName + "」的坐标", "");
-        return;
-      }
-      if (e.walkTarget && (e.walkTarget[0] !== adj[0] || e.walkTarget[1] !== adj[1])) e.walkAt = 0;
-      if (now - e.walkAt >= cfg.walkRetryMs) {
-        e.walkAt = now; e.walkTries++; e.walkTarget = adj; e.walkIssuedAt = now; e.walkWarned = false;
-        var wr = call(a, "walkTo", [OWNER, { x: adj[0], y: adj[1] }]);
-        logLine("走向「" + e.npcName + "」相邻格 (" + adj[0] + "," + adj[1] + ")，当前距离 " + (isFinite(d) ? d : "未知") +
-          "（第 " + e.walkTries + " 次）" + (wr && wr.ok === false ? "｜助手返回 " + wr.error : ""), e.walkTries > 1 ? "warn" : "");
-      }
-      if (e.walkIssuedAt && now - e.walkIssuedAt > 3000 && !e.walkWarned) {
-        e.walkWarned = true;
-        logLine("走路没有靠近（距离 " + (isFinite(d) ? d : "未知") + "），继续重试", "warn");
-      }
-      setPhase("走向「" + e.npcName + "」相邻格", "距离 " + (isFinite(d) ? d : "未知"));
-      if (now - e.startedAt >= cfg.findNpcTimeoutMs * 2) {
-        return doStop("走不到「" + e.npcName + "」的相邻格（walk-failed，距离 " + (isFinite(d) ? d : "未知") + "，在找的名字：" + e.npcNameText + "）", "walk-failed");
-      }
-      return;
-    }
-    if (!e.arrivedLogged) {
-      e.arrivedLogged = true;
-      logLine("已到达「" + e.npcName + "」相邻格（距离 " + d + "），准备对话");
-    }
-
+    // 本服扫描到正确 NPC 即可 CONTACT；距离仅展示，不走位。
     // 接触
     setPhase("接触「" + e.npcName + "」", "距离 " + d);
     if (!e.firstContactAt) e.firstContactAt = now;
@@ -1069,12 +1043,12 @@
       return;
     }
     var n = run.dojoNpc;
-    if (!n || !list.some(function (x) { return x.gid === n.gid; })) {
+    if (!n || (list.length === 1 ? n.gid !== list[0].gid : n.gid !== 0)) {
       run.dojoNpc = { gid: list.length === 1 ? list[0].gid : 0, first: now, walkAt: 0, tries: 0, contactAt: 0, failStreak: 0 };
       n = run.dojoNpc;
     }
     if (list.length > 1) {
-      setPhase("副本内 NPC 不唯一，请手动靠近", "");
+      setPhase("副本内 NPC 不唯一，请手动确认", "");
       if (now - n.first >= cfg.findNpcTimeoutMs) {
         logLine("本图识别到的 NPC：" + npcDigest(s.npcs), "warn");
         return doStop("副本内识别到多个候选 NPC，无法确定该找哪一个（npc-ambiguous）", "npc-ambiguous");
@@ -1083,39 +1057,9 @@
     }
     var npc = list[0];
     var nm = norm(npc.name) || "?";
-    if (!npc.position) {
-      setPhase("接触副本内 NPC「" + nm + "」", "读不到坐标");
-      if (now - n.contactAt >= 1000) {
-        n.contactAt = now;
-        var cr0 = call(a, "contactNpc", [OWNER, npc.gid]);
-        if (!cr0 || cr0.ok !== true) logLine("接触副本内 NPC 失败：" + ((cr0 && cr0.error) || "unknown"), "warn");
-      }
-      if (!dialogOpen(s) && now - n.first >= cfg.contactTimeoutMs) {
-        logLine("本图识别到的 NPC：" + npcDigest(s.npcs), "warn");
-        return doStop("读不到副本内 NPC「" + nm + "」的坐标，也点不开对话（contact-failed）", "contact-failed");
-      }
-      return;
-    }
     var d = cheb(s.player && s.player.position, npc.position);
     run.dist = isFinite(d) ? d : null;
-    if (!isFinite(d) || d > 1 || d === 0) {
-      var adj = adjacentCell(npc.position, s.player && s.player.position);
-      if (!adj) {
-        setPhase("读不到副本内 NPC 坐标", "");
-        return;
-      }
-      if (now - n.walkAt >= cfg.walkRetryMs) {
-        n.walkAt = now; n.tries++;
-        call(a, "walkTo", [OWNER, { x: adj[0], y: adj[1] }]);
-        logLine("走向副本内 NPC「" + nm + "」相邻格 (" + adj[0] + "," + adj[1] + ")，距离 " + (isFinite(d) ? d : "未知") + "（第 " + n.tries + " 次）", n.tries > 1 ? "warn" : "");
-      }
-      setPhase("走向副本内 NPC「" + nm + "」相邻格", "距离 " + (isFinite(d) ? d : "未知"));
-      if (now - n.first >= cfg.findNpcTimeoutMs * 2) {
-        logLine("本图识别到的 NPC：" + npcDigest(s.npcs), "warn");
-        return doStop("走不到副本内 NPC「" + nm + "」的相邻格（walk-failed，距离 " + (isFinite(d) ? d : "未知") + "）", "walk-failed");
-      }
-      return;
-    }
+    // 本服扫描范围即对话范围；无坐标、同格或邻格不可走均不阻塞 CONTACT。
     setPhase("接触副本内 NPC「" + nm + "」", "距离 " + d);
     if (now - n.contactAt >= 1000) {
       n.contactAt = now;
@@ -1170,6 +1114,7 @@
     run.roundActive = false;
     if (run.combatOn) { call(api(), "assistCombat", [OWNER, false]); run.combatOn = false; }
     call(api(), "requestPickup", [OWNER, { on: false }]); // V1.0.2：结算阶段收起自动拾取
+    run.dojoNpc = null;
     run.stage = "settle";
     run.settleUntil = now + cfg.settleWaitMs;
     run.settleSeen = false;
@@ -1222,6 +1167,7 @@
       return settlePick(a, m.items.slice(), m, now);
     }
     if (dialogOpen(s)) return pressNext(a, s, now, "结算");
+    if (!run.settleSeen && now < run.settleUntil) return dojoNpcTick(a, s, now);
     if (now < run.settleUntil) {
       setPhase(run.settleSeen ? "结算完成，等下一层" : "等待结算菜单", "");
       return;

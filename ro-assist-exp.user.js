@@ -2,7 +2,7 @@
 // @name         仙境传说 · 原站插件模式（游戏助手 · 实验版）
 // @namespace    dsh.ro-plugin
   // CLEANUP-RELEASE-BEGIN version-header ORIGINAL:Ly8gQHZlcnNpb24gICAgICAyLjM4Ljc3Ljk=
-// @version      2.38.79.1
+// @version      2.38.79.2
   // CLEANUP-RELEASE-END version-header
 // @updateURL    https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/Keeee1th/ro-assist-dist@main/ro-assist-exp.user.js
@@ -763,7 +763,7 @@
   var LS_KEY = "dsh_ro_plugin_v1";
   var VERSION_RE = /\?([0-9.]+)/;
   // CLEANUP-RELEASE-BEGIN version-runtime ORIGINAL:ICB2YXIgVkVSID0gIjIuMzguNzcuOSI7IC8vIOmdouadv+agh+mimC/liqDovb3mj5DnpLov5pel5b+X57uf5LiA54mI5pys5Y+377yIYnVtcCDml7bkuI4gQHZlcnNpb24g5ZCM5q2l5pS577yJ
-  var VER = "2.38.79.1"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
+  var VER = "2.38.79.2"; // 面板标题/加载提示/日志统一版本号（bump 时与 @version 同步改）
   // CLEANUP-RELEASE-END version-runtime
   try { window.__dshCombinedActive = true; } catch (e) {} // V2.30.0 防双浮层让位旗标：独立版词条色脚本见旗标即让位
   // ==================== 统一采集器注册表（dsh-collect v1 · 内部命名空间，不新增 window 全局）====================
@@ -8097,6 +8097,7 @@ function createRoItemCapture(env) {
       if (!profileTrusted(activeProfileKey())) profUIApplied = false; // V2.38.6：档不可信（未识别）→ 依旧不许落盘
       try { effOnProfileApplied(); } catch (eEff) {} // V2.38.26：面板/换档到位后发布一次生效值（无头端单一数据源）
       try { loadItemList(); } catch (eIL) {} // V2.38.53：物品使用列表随角色档装载
+      try { pushSitToBot(); } catch (eSit) {} // 当前角色档/预设应用后同步五项；不经过内挂DOM
     } catch (e) {}
   }
   // V2.38.4-身份修复：旧档认领（复制语义）
@@ -11256,12 +11257,7 @@ function createRoItemCapture(env) {
       syncBotVal(".MinSpValFly", "dsh-minspfly");
       syncBotVal(".MinHpVal", "dsh-minhpout");
       syncBotCheck(".bossfly", "dsh-bossfly");
-      syncBotCheck(".opensit", "dsh-opensit");
       syncNeiAddiFromPanel(); // V2.8.0：辅助技能多槽逐槽回填
-      syncBotVal(".AutoUseSit_reHpVal", "dsh-sithplo");
-      syncBotVal(".AutoUseSit_reHpUpVal", "dsh-sithphi");
-      syncBotVal(".AutoUseSit_reSpVal", "dsh-sitsplo");
-      syncBotVal(".AutoUseSit_reSpUpVal", "dsh-sitsphi");
     } catch (e) { out.push("读取异常: " + e.message); }
     if (!out.length) out.push("未找到内挂窗口（游戏内打开智能手机会话后重试）");
     return out.join(" | ");
@@ -11278,55 +11274,93 @@ function createRoItemCapture(env) {
       if (el) { var t = $id(id); if (t) t.checked = !!el.checked; }
     } catch (e) {}
   }
-  // V2.16.5 助手坐下关联内挂：用户改助手坐下设置（开关+HP/SP四阈值）→ 直接写入内挂 DOM 字段，
-  //   内挂原生坐下（.opensit/.AutoUseSit_*）与助手自实现共用同一套值，不再两套判定打架。
-  //   内挂 DOM 不存在（未开内挂窗口）→ 静默跳过，助手自实现兜底。
-  var sitSyncGuard = false; // V2.16.8：防回环——pushSitToBot 触发内挂 change 时不回读助手（避免无限循环）
+  // 坐下五项只有这一条写入路径；旧/新内挂窗口均不作为配置回执或写入中转。
+  var npSitState = null;
+  var NP_SIT_FIELDS = [
+    [14, "AutoUseSit", "dsh-z-sit"],
+    [15, "AutoUseSit_reHpVal", "dsh-z-sithplo"],
+    [16, "AutoUseSit_reSpVal", "dsh-z-sitsplo"],
+    [17, "AutoUseSit_reHpUpVal", "dsh-z-sithphi"],
+    [18, "AutoUseSit_reSpUpVal", "dsh-z-sitsphi"]
+  ];
+  function npSitContext() {
+    if (!npBattleIdentityValid() || !npBattleTransportReady()) return null;
+    if (!npSitState || !npSourceValid(npSitState.source)) npSitState = { source: npCaptureSource(npServerAutoAtk.socket), sent: {}, failed: {}, values: {}, want: null, report: "" };
+    return npSitState;
+  }
+  function npSitPaint(note) {
+    var z = $id("dsh-z-sit"); if (!z) return;
+    var el = $id("dsh-sit-native-state");
+    if (!el && z.parentNode) { el = document.createElement("span"); el.id = "dsh-sit-native-state"; z.parentNode.appendChild(el); }
+    if (el) el.textContent = " · 内挂坐下：" + note;
+  }
   function pushSitToBot() {
     try {
-      sitSyncGuard = true;
-      var fire = function (el) { try { if (el && typeof el.dispatchEvent === "function") el.dispatchEvent(new Event("change", { bubbles: true })); } catch (e) {} };
-      var setV = function (sel, v) { var el = document.querySelector(sel); if (el && el.value != null) { el.value = String(v); fire(el); } };
-      var setC = function (sel, c) { var el = document.querySelector(sel); if (el && el.checked !== !!c) { el.checked = !!c; fire(el); } };
-      var zsit = $id("dsh-z-sit");
-      setC(".opensit", zsit ? zsit.checked : true);
-      setV(".AutoUseSit_reHpVal", ($id("dsh-z-sithplo") && $id("dsh-z-sithplo").value) || 30);
-      setV(".AutoUseSit_reHpUpVal", ($id("dsh-z-sithphi") && $id("dsh-z-sithphi").value) || 80);
-      setV(".AutoUseSit_reSpVal", ($id("dsh-z-sitsplo") && $id("dsh-z-sitsplo").value) || 10);
-      setV(".AutoUseSit_reSpUpVal", ($id("dsh-z-sitsphi") && $id("dsh-z-sitsphi").value) || 70);
-    } catch (e) {}
-    sitSyncGuard = false;
+      // 档还没填完/旧角色 UI/身份未知：不把默认值或前角色的值送给当前角色。
+      if (!profUIApplied || profMemKey !== activeProfileKey() || !profileTrusted(activeProfileKey())) { npSitPaint("角色配置未就绪，未确认"); return; }
+      if (!clientReady() || !CLIENT.PS || !CLIENT.PS.CZ || typeof CLIENT.PS.CZ.NOTIFY_UPDATEINFO !== "function" || !CLIENT.NM || typeof CLIENT.NM.sendPacket !== "function") { npSitPaint("协议模块未就绪，未发送"); return; }
+      var st = npSitContext(); if (!st) { npSitPaint("身份/连接未就绪，未发送"); return; }
+      var want = {}, outside = false;
+      for (var i = 0; i < NP_SIT_FIELDS.length; i++) {
+        var f = NP_SIT_FIELDS[i], el = $id(f[2]);
+        if (!el || (i && String(el.value).trim() === "")) { st.want = null; st.values = {}; npSitPaint("配置缺项，未发送"); return; }
+        var v = i ? Number(el.value) : (el.checked ? 1 : 0);
+        if (!isFinite(v) || Math.floor(v) !== v || v < 0 || v > (i ? 100 : 1)) { st.want = null; st.values = {}; npSitPaint("配置越界/非整数，未发送；保留原值"); return; }
+        want[f[0]] = v;
+        if (i && (i < 3 ? v > 60 : v < 30 || v > 90)) outside = true;
+      }
+      // 仅变化字段的旧观测失效；新完整有效帧是当前观察，不是请求因果ACK。
+      if (!st.want || NP_SIT_FIELDS.some(function (f) { return st.want[f[0]] !== want[f[0]]; })) {
+        if (st.want) NP_SIT_FIELDS.forEach(function (f) { if (st.want[f[0]] !== want[f[0]]) delete st.values[f[0]]; });
+        st.want = want;
+      } else want = st.want;
+      for (var j = 0; j < NP_SIT_FIELDS.length; j++) {
+        var id = NP_SIT_FIELDS[j][0], value = want[id];
+        if (!npSourceValid(st.source)) { npSitPaint("身份/连接已变，停止余项发送"); return; }
+        if (st.want !== want) return; // 新期望（含无效/缺项）已接管，保留它的提示。
+        if (!profUIApplied || profMemKey !== activeProfileKey() || !profileTrusted(activeProfileKey())) { npSitPaint("角色配置已变，停止余项发送；未确认"); return; }
+        if (st.sent[id] === value || (st.sent[id] === undefined && st.values[id] === value)) continue;
+        // sent 只是去重的尝试值，不是 ACK；先登记防同步回调重入，失败也不周期补发。
+        st.sent[id] = value; delete st.values[id];
+        var sentOk = npSendUpdate(id, value);
+        if (st.want !== want) return; // 同步 change 的校验结果不可被旧批次覆盖。
+        if (!npSourceValid(st.source) || !profUIApplied || profMemKey !== activeProfileKey() || !profileTrusted(activeProfileKey())) { npSitPaint("身份/角色配置已变，停止余项发送；未确认"); return; }
+        // 同步回包可能已更新真实观测；返回值不覆盖它，也不成为ACK。
+        st.failed[id] = !sentOk && st.values[id] !== value;
+      }
+      var failed = NP_SIT_FIELDS.some(function (f) { return st.failed[f[0]]; });
+      var same = NP_SIT_FIELDS.every(function (f) { return st.values[f[0]] === want[f[0]]; });
+      npSitPaint((failed ? "发送失败，未确认" : same ? "真实配置回读一致（非坐姿/动作确认）" : "已请求，等待真实配置回读；不自动补发") + (outside ? "；超出旧UI低0..60/起身30..90范围，服务器支持未确认，未改阈值" : ""));
+    } catch (e) { npSitPaint("通道未就绪，未确认"); }
   }
-  // V2.16.5 助手坐下控件 change → 写入内挂（幂等，控件存在才挂）
+  function npSitOnFrame(bytes, op, source, complete) {
+    // 固定协议完整帧才读取：绝不采用 LoadInfo.readOrZero、DOM、发送true或battle snapshot。
+    if (!complete || (op !== 2805 && op !== 2806) || !npSourceValid(source)) return;
+    var st = npSitContext(); if (!st) return;
+    var dv = new DataView(bytes), values = {};
+    if (op === 2805) {
+      if (bytes.byteLength !== 58 || dv.getUint16(0, true) !== 2805) return;
+      for (var i = 0; i < NP_SIT_FIELDS.length; i++) values[NP_SIT_FIELDS[i][0]] = dv.getUint8(34 + i);
+    } else {
+      if (bytes.byteLength !== 7 || dv.getUint16(0, true) !== 2806) return;
+      var id = dv.getUint8(2); if (id < 14 || id > 18) return;
+      values[id] = dv.getInt32(3, true);
+    }
+    for (var key in values) {
+      var v = values[key]; if (v < 0 || v > (key === "14" ? 1 : 100)) return;
+    }
+    for (var k in values) { st.values[k] = values[k]; if (st.sent[k] === values[k]) st.failed[k] = false; }
+    st.report = op === 2805 ? "loadinfo-2805" : "reloadinfo-2806";
+    // 回读只记录观察，不覆盖期望档/本地条件；不因旧快照不符自动重发。
+    var same = !!st.want && NP_SIT_FIELDS.every(function (f) { var el = $id(f[2]); return el && (f[0] === 14 || String(el.value).trim() !== "") && st.values[f[0]] === st.want[f[0]] && st.want[f[0]] === (f[0] === 14 ? (el.checked ? 1 : 0) : Number(el.value)); });
+    var outside = NP_SIT_FIELDS.some(function (f, i) { var el = $id(f[2]), v = el ? Number(el.value) : NaN; return i && (i < 3 ? v > 60 : v < 30 || v > 90); });
+    npSitPaint((same ? "真实配置回读一致（非坐姿/动作确认）" : "收到真实配置；与期望不一致或仍缺项，未确认") + (outside ? "；超出旧UI低0..60/起身30..90范围，服务器支持未确认，未改阈值" : ""));
+  }
   try {
-    ["dsh-z-sit", "dsh-z-sithplo", "dsh-z-sithphi", "dsh-z-sitsplo", "dsh-z-sitsphi"].forEach(function (sid) {
-      var el = $id(sid);
-      if (el) el.addEventListener("change", function () { try { captureAll(); } catch (e) {} pushSitToBot(); });
-    });
-    pushSitToBot(); // 启动时同步一次（内挂窗口未开则静默）
-  } catch (e) {}
-  // V2.16.8 内挂坐下控件 change → 回读助手（双向同步，对齐怪物锁定 .onlyattack_block 的做法）
-  try {
-    document.addEventListener("change", function (e) {
-      if (sitSyncGuard) return;
-      var t = e.target;
-      if (!t || !t.matches) return;
-      try {
-        if (t.matches(".opensit")) {
-          var zsit2 = $id("dsh-z-sit");
-          if (zsit2) zsit2.checked = !!t.checked;
-          captureAll();
-        } else if (t.matches(".AutoUseSit_reHpVal") && $id("dsh-z-sithplo")) {
-          $id("dsh-z-sithplo").value = t.value; captureAll();
-        } else if (t.matches(".AutoUseSit_reHpUpVal") && $id("dsh-z-sithphi")) {
-          $id("dsh-z-sithphi").value = t.value; captureAll();
-        } else if (t.matches(".AutoUseSit_reSpVal") && $id("dsh-z-sitsplo")) {
-          $id("dsh-z-sitsplo").value = t.value; captureAll();
-        } else if (t.matches(".AutoUseSit_reSpUpVal") && $id("dsh-z-sitsphi")) {
-          $id("dsh-z-sitsphi").value = t.value; captureAll();
-        }
-      } catch (e2) {}
-    });
+    NP_SIT_FIELDS.forEach(function (f) { var el = $id(f[2]); if (el) el.addEventListener("change", function () { try { captureAll(); } catch (e) {} pushSitToBot(); }); });
+    pushSitToBot();
+    // 复用已有master拍，只等初始化/角色档/连接到位；请求值去重，不新增定时器或重试频率。
+    masterTickReg(function () { pushSitToBot(); });
   } catch (e) {}
   // V2.16.5 解围技能下拉填充：独立函数，无论内挂 DOM 是否存在都执行（角色已学技能，保留已选值）。
   //   根因：旧实现只在 fillSkillSelects 的 DB 分支（domSynced=false 时）填充 dsh-z-qoaskill，
@@ -20817,6 +20851,7 @@ function createRoItemCapture(env) {
     try {
       if (typeof op !== "number") { try { op = new DataView(bytes).getUint16(0, true); } catch (e0) { return; } }
       identityPktHook(bytes, op, receiptSource); // V2.38.6：手机端 char_id 包流来源（113/2757 记录身份、107 清身份）
+      if (typeof npSitOnFrame === "function") npSitOnFrame(bytes, op, receiptSource, lenTblOk === true);
       if (op === 142) { npChatFrameCount++; npRawBattleNotice(bytes, op, receiptSource); } // 只记总帧数与到达时间，不读取/记录聊天内容
       // V2.38.7：装备整表 / 穿脱确认包流（只读；单帧异常只丢该帧）。
       //   typeof 守卫：局部切片测试环境里这个函数可能不在同一段代码中，缺了就当没有（绝不抛、绝不影响分帧与身份）。
